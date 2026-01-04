@@ -128,6 +128,9 @@ If you want to modify the code or build the image locally instead of pulling it 
 ## Roadmap
 
 - [x] **v0.1.1 Beta:** Core PVR functionality and library scanning.
+    - **Optimization:** IGDB Rate Limit handling (batching + delays).
+    - **Feature:** Hardlink Support (Atomic Move) with fallback to Copy.
+    - **Integration:** qBittorrent UrlBase support for Reverse Proxies.
 - [ ] **Bazzite Support:** Researching compatibility with Lutris and Proton.
 - [ ] **DBI Protocol Integration:** Advanced USB file transfer and management for Portable Consoles environments.
 - [ ] **CasaOS Official App:** Direct integration into the CasaOS App Store.
