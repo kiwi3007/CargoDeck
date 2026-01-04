@@ -26,14 +26,14 @@ Inspired by the workflow of Radarr and Sonarr, Playerr is designed to be the def
 
 | Library | Game Details |
 |:---:|:---:|
-| ![Library](screenshots/Library.png) | ![Game Details](screenshots/Details.png) |
+| ![Library](https://raw.githubusercontent.com/Maikboarder/Playerr/master/screenshots/Library.png) | ![Game Details](https://raw.githubusercontent.com/Maikboarder/Playerr/master/screenshots/Details.png) |
 
 | Settings (Indexers) | Library Grid |
 |:---:|:---:|
-| ![Settings](screenshots/Indexers%3ATorrents.png) | ![Library Grid](screenshots/Library%20Games.png) |
+| ![Settings](https://raw.githubusercontent.com/Maikboarder/Playerr/master/screenshots/Indexers%3ATorrents.png) | ![Library Grid](https://raw.githubusercontent.com/Maikboarder/Playerr/master/screenshots/Library%20Games.png) |
 
 <p align="center">
-  <img src="screenshots/SteamProfile.png" alt="Steam Profile Integration" width="600">
+  <img src="https://raw.githubusercontent.com/Maikboarder/Playerr/master/screenshots/SteamProfile.png" alt="Steam Profile Integration" width="600">
   <br>
   <em>Steam Profile Integration</em>
 </p>

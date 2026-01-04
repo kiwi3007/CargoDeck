@@ -38,6 +38,7 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './frontend/src/index.html',
       filename: 'index.html',
+      favicon: './frontend/src/assets/app_logo.png',
       hash: true
     })
   ],
@@ -49,12 +50,12 @@ module.exports = {
     port: 7878,
     hot: true,
     proxy: [
-        {
-            context: ['/api'],
-            target: 'http://localhost:5001',
-            changeOrigin: true,
-            secure: false
-        }
+      {
+        context: ['/api'],
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+        secure: false
+      }
     ]
   }
 };
