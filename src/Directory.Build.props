@@ -1,0 +1,108 @@
+<Project>
+  <!-- Common to all Playerr Projects -->
+  <PropertyGroup>
+    <AnalysisLevel>8.0-all</AnalysisLevel>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
+    <RuntimeIdentifiers>win-x64;win-x86;osx-x64;osx-arm64;linux-x64;linux-musl-x64;linux-arm;linux-musl-arm;linux-arm64;linux-musl-arm64</RuntimeIdentifiers>
+
+    <PlayerrRootDir>$(MSBuildThisFileDirectory)..\</PlayerrRootDir>
+
+    <!-- Specifies the type of output -->
+    <PlayerrOutputType>Library</PlayerrOutputType>
+    <PlayerrOutputType Condition="$(MSBuildProjectName.Contains('.Test'))">Test</PlayerrOutputType>
+    <PlayerrOutputType Condition="'$(MSBuildProjectName)'=='Playerr'">Exe</PlayerrOutputType>
+    <PlayerrOutputType Condition="'$(MSBuildProjectName)'=='Playerr.Console'">Exe</PlayerrOutputType>
+
+    <!-- Specifies whether it's one of our own libraries -->
+    <PlayerrProject>false</PlayerrProject>
+    <PlayerrProject Condition="$(MSBuildProjectName.StartsWith('Playerr'))">true</PlayerrProject>
+
+    <!-- A test project gets the test sdk packages automatically added -->
+    <TestProject>false</TestProject>
+    <TestProject Condition="$(MSBuildProjectName.EndsWith('.Test'))">true</TestProject>
+
+    <!-- XML documentation comments are needed to enforce rule IDE0005 on build -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!--
+        CS1591: Missing XML comment for publicly visible type or member 'Type_or_Member'
+    -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)'==''">Release</Configuration>
+    <!-- Centralize intermediate and default outputs -->
+    <BaseIntermediateOutputPath>$(PlayerrRootDir)_temp\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <IntermediateOutputPath>$(PlayerrRootDir)_temp\obj\$(MSBuildProjectName)\$(Configuration)\</IntermediateOutputPath>
+    <OutputPath>$(PlayerrRootDir)_temp\bin\$(Configuration)\$(MSBuildProjectName)\</OutputPath>
+
+    <!-- Output to _output and _tests respectively -->
+    <OutputPath Condition="'$(PlayerrProject)'=='true'">$(PlayerrRootDir)_output\</OutputPath>
+    <OutputPath Condition="'$(PlayerrOutputType)'=='Test'">$(PlayerrRootDir)_tests\</OutputPath>
+
+    <!-- Paths relative to project file for better readability -->
+    <EnableBaseIntermediateOutputPathMismatchWarning>false</EnableBaseIntermediateOutputPathMismatchWarning>
+    <BaseIntermediateOutputPath>$([MSBuild]::MakeRelative('$(MSBuildProjectDirectory)', '$(BaseIntermediateOutputPath)'))</BaseIntermediateOutputPath>
+    <IntermediateOutputPath>$([MSBuild]::MakeRelative('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)'))</IntermediateOutputPath>
+    <OutputPath>$([MSBuild]::MakeRelative('$(MSBuildProjectDirectory)', '$(OutputPath)'))</OutputPath>
+
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+  
+  <!-- Test projects need bindingRedirects -->
+  <PropertyGroup Condition="'$(PlayerrOutputType)'=='Test'">
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <!-- Set the Product and Version info for our own projects -->
+  <PropertyGroup Condition="'$(PlayerrProject)'=='true'">
+    <Product>Playerr</Product>
+    <Company>playerr.app</Company>
+    <Copyright>Copyright 2025-$([System.DateTime]::Now.ToString('yyyy')) playerr.app</Copyright>
+    
+    <!-- Should be replaced by CI -->
+    <AssemblyVersion>0.1.0</AssemblyVersion>
+    <AssemblyConfiguration>$(Configuration)-dev</AssemblyConfiguration>
+    <NeutralLanguage>en</NeutralLanguage>
+
+    <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+    <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    
+    <Deterministic Condition="$(AssemblyVersion.EndsWith('*'))">False</Deterministic>
+
+    <PathMap>$(MSBuildThisFileDirectory)=./</PathMap>
+  </PropertyGroup>
+
+  <!-- Set the AssemblyConfiguration attribute for projects -->
+  <ItemGroup Condition="'$(PlayerrProject)'=='true'">
+    <AssemblyAttribute Include="System.Reflection.AssemblyConfigurationAttribute">
+      <_Parameter1>$(AssemblyConfiguration)</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <RootNamespace Condition="'$(PlayerrProject)'=='true'">$(MSBuildProjectName)</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Standard Packages for Test Projects -->
+  <ItemGroup Condition="'$(TestProject)'=='true'">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="NUnit.Analyzers" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+</Project>

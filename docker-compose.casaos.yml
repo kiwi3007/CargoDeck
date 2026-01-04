@@ -1,0 +1,20 @@
+version: '3'
+
+services:
+  playerr:
+    image: playerr:latest
+    container_name: playerr
+    network_mode: bridge
+    ports:
+      - "2727:2727"
+    volumes:
+      - /DATA/AppData/playerr/config:/app/config
+      - /DATA/Media:/media
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_URLS=http://+:2727
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      - PUID=1000
+      - PGID=1000
+    labels:
+      icon: "https://raw.githubusercontent.com/Maikboarder/Playerr/main/frontend/src/assets/app_logo.png" # Placeholder icon URL

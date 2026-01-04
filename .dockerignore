@@ -1,0 +1,35 @@
+# Version Control
+.git
+.gitignore
+
+# IDE & System
+.vscode
+.DS_Store
+Thumbs.db
+
+# Build Artifacts (Local)
+**/bin/
+**/obj/
+_output/
+build_artifacts/
+_temp/
+
+# Dependencies (Installed inside container)
+node_modules/
+
+# Logs
+*.log
+scanner_log.txt
+
+# Configuration (Secrets - Mounted at runtime)
+config/
+# Note: We do NOT exclude src/config/ just in case it's needed for build, 
+# but root config/ contains live secrets and should never be in the image.
+
+# Documentation & Assets
+screenshots/
+README.md
+CONTRIBUTING.md
+SECURITY.md
+DISCLAIMER.md
+LICENSE

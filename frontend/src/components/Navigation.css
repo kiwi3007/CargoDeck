@@ -1,0 +1,66 @@
+.navigation {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background-color: #171a21;
+  /* Steam's distinct dark blue-grey header color */
+  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: none;
+  /* Steam usually doesn't have a border here, just shadow or distinct color */
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.nav-logo-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-decoration: none;
+  transition: transform 0.2s;
+}
+
+.nav-logo-link:hover {
+  transform: scale(1.02);
+}
+
+.nav-logo-eye {
+  height: 32px;
+  width: auto;
+}
+
+.nav-logo-letters {
+  height: 24px;
+  width: auto;
+}
+
+.nav-links {
+  list-style: none;
+  display: flex;
+  gap: 2rem;
+}
+
+.nav-links a {
+  color: #cba6f7;
+  /* Steam's inactive text color */
+  text-decoration: none;
+  font-family: 'Inter', sans-serif;
+  /* Close to Motiva Sans */
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: color 0.2s;
+}
+
+.nav-links a:hover {
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  /* Subtle glow */
+}
+
+.nav-links a.active {
+  color: #f9e2af;
+  /* Playerr Yellow */
+}

@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  playerr:
+    build: .
+    container_name: playerr
+    ports:
+      - "2727:2727"
+    volumes:
+      - ./config:/app/config
+      - ./games:/media
+      - ./downloads:/downloads
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+    restart: unless-stopped
+    networks:
+      - arr-network
+  # Optional: Include Prowlarr if not running separately
+  # prowlarr:
+  #   image: lscr.io/linuxserver/prowlarr:latest
+  #   container_name: prowlarr
+  #   environment:
+  #     - PUID=1000
+  #     - PGID=1000
+  #     - TZ=Europe/Madrid
+  #   volumes:
+  #     - ./prowlarr-config:/config
+  #   ports:
+  #     - "9696:9696"
+  #   restart: unless-stopped
+  #   networks:
+  #     - arr-network
+
+networks:
+  arr-network:
+    driver: bridge
