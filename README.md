@@ -156,3 +156,111 @@ Playerr is an open-source project for educational and personal library managemen
 
 ---
 *Developed by Maikboarder*
+
+---
+
+# Playerr v0.1.0-beta
+### Gestor de Biblioteca de Videojuegos & PVR (Self-Hosted)
+
+[![Ir a la web](https://img.shields.io/badge/Website-playerr.app-6366f1?style=for-the-badge)](https://playerr.app)
+[![Licencia: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![Soporte Docker](https://img.shields.io/badge/Docker-amd64%20%2F%20arm64-2496ed?style=for-the-badge&logo=docker)](https://hub.docker.com/r/maikboarder/playerr)
+
+Inspirado en el flujo de trabajo de Radarr y Sonarr, Playerr está diseñado para ser la solución definitiva para los entusiastas de los videojuegos que gestionan sus bibliotecas en local. Playerr conecta tus archivos digitales con el mundo del metadato gamer.
+
+---
+
+## Características principales
+
+*   **Escaneo inteligente de biblioteca:** Reconocimiento recursivo y automático de plataformas de videojuegos en tu almacenamiento, mapeando archivos locales a sus títulos correspondientes.
+*   **Integración de metadatos:** Conexión nativa con IGDB y Steam para obtener imágenes, descripciones, valoraciones y fechas de lanzamiento.
+*   **Flujo PVR automatizado:** Soporte para Prowlarr y Jackett para gestión avanzada de indexadores y búsquedas.
+*   **Gestión de descargas integrada:** Control nativo de clientes como qBittorrent y Transmission.
+*   **Interfaz web moderna:** GUI oscura, responsiva y pensada para escritorio y contenedores.
+*   **Vista unificada:** Muestra toda tu colección en un solo lugar, incluyendo sincronización y visualización de tu biblioteca de Steam.
+
+## Plataformas soportadas
+
+Playerr está diseñado para máxima compatibilidad, ofreciendo binarios multiplataforma y soluciones en contenedor:
+
+*   **Docker:** Soporte universal para amd64 y arm64 (Raspberry Pi, CasaOS, Synology, etc.).
+*   **Windows:** Rendimiento nativo 64-bit.
+*   **macOS:** Optimizado para Apple Silicon (M1/M2/M3) y sistemas Intel.
+*   **Linux:** Distribuciones genéricas 64-bit.
+
+## Instalación y configuración
+
+### Docker (Recomendado)
+La forma más sencilla de ejecutar Playerr es con Docker. Incluye todo lo necesario en un solo contenedor. Accede a la interfaz en `http://tu-ip:2727`.
+
+#### Escritorio / Servidor estándar
+Crea un archivo `docker-compose.yml` y ejecuta `docker-compose up -d`:
+```yaml
+services:
+  playerr:
+    image: maikboarder/playerr:latest
+    container_name: playerr
+    ports:
+      - "2727:2727"
+    volumes:
+      - ./config:/app/config
+      - /ruta/a/tus/juegos:/media
+    restart: unless-stopped
+```
+
+#### CasaOS
+1. Ve a **App Store** -> **Instalación personalizada**.
+2. Haz clic en **Importar** (arriba a la derecha) y pega este código (incluye el icono):
+   ```yaml
+   services:
+     playerr:
+       image: maikboarder/playerr:latest
+       container_name: playerr
+       ports:
+         - "2727:2727"
+       volumes:
+         - /DATA/AppData/playerr/config:/app/config
+         - /DATA/Media/Games:/media
+       restart: unless-stopped
+   
+   x-casaos:
+     architectures:
+       - amd64
+       - arm64
+     main: playerr
+     icon: https://raw.githubusercontent.com/Maikboarder/Playerr/master/frontend/src/assets/app_logo.png
+     title:
+       es_es: Playerr
+   ```
+3. Haz clic en **Instalar**.
+
+#### Synology / NAS
+1. Abre **Container Manager** (o Docker).
+2. Ve a **Proyecto** -> **Crear**.
+3. Pega el código y configura tus carpetas locales.
+4. Haz clic en **Listo**.
+
+### Compilar desde el código (Desarrolladores)
+
+Si quieres modificar el código o construir la imagen localmente:
+
+1. Clona el repositorio:
+   ```bash
+   git clone https://github.com/maikboarder/playerr.git
+   cd playerr
+   ```
+
+2. Usa el comando de compilación:
+   ```bash
+   docker build -t playerr:local .
+   ```
+
+3. O usa un `docker-compose.override.yml` para forzar compilación local:
+   ```yaml
+   services:
+     playerr:
+       build: .
+       image: playerr:local
+       # ... resto de la config
+   ```
+
