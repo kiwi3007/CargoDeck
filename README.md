@@ -7,7 +7,8 @@
 
 ### Downloads (v0.1.0-beta)
 [![Windows](https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Windows-x64.zip)
-[![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr.dmg)
+[![macOS ARM64](https://img.shields.io/badge/macOS_Apple_Silicon-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr.dmg)
+[![macOS Intel](https://img.shields.io/badge/macOS_Intel-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Intel.dmg)
 [![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Linux-x64.tar.gz)
 
 Inspired by the workflow of Radarr and Sonarr, Playerr is designed to be the definitive solution for video game enthusiasts who self-host their libraries. It bridges the gap between your local digital assets and the vast world of gaming metadata.
@@ -43,7 +44,7 @@ Playerr is architected for maximum reach, offering multi-platform binaries and c
 
 *   **Docker:** Universal support for amd64 and arm64 (Raspberry Pi, CasaOS, Synology, etc.).
 *   **Windows:** Native 64-bit performance. [Download .zip](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Windows-x64.zip)
-*   **macOS:** Fully optimized for Apple Silicon (M1/M2/M3) and standard Intel builds. [Download .dmg](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr.dmg)
+*   **macOS:** Optimized for Apple Silicon ([Download .dmg](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr.dmg)) and Intel ([Download .dmg](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Intel.dmg)).
 *   **Linux:** Generic 64-bit binary distributions. [Download .tar.gz](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Linux-x64.tar.gz)
 
 ## Installation & Setup
@@ -165,7 +166,8 @@ Playerr is an open-source project for educational and personal library managemen
 
 ### Descargas (v0.1.0-beta)
 [![Windows](https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Windows-x64.zip)
-[![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr.dmg)
+[![macOS ARM64](https://img.shields.io/badge/macOS_Apple_Silicon-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr.dmg)
+[![macOS Intel](https://img.shields.io/badge/macOS_Intel-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Intel.dmg)
 [![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Linux-x64.tar.gz)
 
 Inspirado en el flujo de trabajo de Radarr y Sonarr, Playerr está diseñado para ser la solución definitiva para los entusiastas de los videojuegos que gestionan sus bibliotecas en local. Playerr conecta tus archivos digitales con el mundo del metadato gamer.
@@ -187,7 +189,7 @@ Playerr está diseñado para máxima compatibilidad, ofreciendo binarios multipl
 
 *   **Docker:** Soporte universal para amd64 y arm64 (Raspberry Pi, CasaOS, Synology, etc.).
 *   **Windows:** Rendimiento nativo 64-bit. [Descargar .zip](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Windows-x64.zip)
-*   **macOS:** Optimizado para Apple Silicon (M1/M2/M3) y sistemas Intel. [Descargar .dmg](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr.dmg)
+*   **macOS:** Optimizado para Apple Silicon ([Descargar .dmg](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr.dmg)) y sistemas Intel ([Descargar .dmg](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Intel.dmg)).
 *   **Linux:** Distribuciones genéricas 64-bit. [Descargar .tar.gz](https://github.com/Maikboarder/Playerr/releases/download/v0.1.0-beta/Playerr-Linux-x64.tar.gz)
 
 ## Instalación y configuración
