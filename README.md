@@ -65,9 +65,27 @@ services:
 
 #### CasaOS
 1. Go to **App Store** -> **Custom Install**.
-2. Click on **Import** (top right) and paste the Docker Compose code above.
-3. Set your games path in the volumes section.
-4. Click **Install**.
+2. Click on **Import** (top right) and paste this specific code (includes the icon):
+   ```yaml
+   services:
+     playerr:
+       image: maikboarder/playerr:latest
+       container_name: playerr
+       ports:
+         - "2727:2727"
+       volumes:
+         - /DATA/AppData/playerr/config:/app/config
+         - /DATA/Media/Games:/media
+       restart: unless-stopped
+   
+   x-casaos:
+     architectures:
+       - amd64
+       - arm64
+     main: playerr
+     icon: https://raw.githubusercontent.com/Maikboarder/Playerr/master/frontend/src/assets/app_logo.png
+   ```
+3. Click **Install**.
 
 #### Synology / NAS
 1. Open **Container Manager** (or Docker).
