@@ -1,5 +1,6 @@
 name: Docker Build & Publish
 
+# Trigger build to pick up secrets
 on:
   push:
     branches: [ "master" ]
