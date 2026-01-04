@@ -1,36 +1,98 @@
 .game-details {
-  padding: 24px;
+  padding: 16px;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 .game-details-header {
   display: flex;
-  gap: 24px;
-  margin-bottom: 32px;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.game-details-poster {
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 .game-details-poster img {
-  width: 200px;
+  width: 180px;
+  max-width: 80%;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  height: auto;
+}
+
+.game-details-info {
+  width: 100%;
 }
 
 .game-details-info h1 {
-  margin: 0 0 8px;
+  margin: 0 0 12px;
+  font-size: 1.8rem;
+  line-height: 1.2;
 }
 
-.game-details-info .meta span {
-  margin-right: 12px;
+.game-details-info .meta {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
   opacity: 0.8;
 }
 
 .game-details-info .genres {
   margin: 8px 0;
   opacity: 0.9;
+  font-size: 0.9rem;
 }
 
 .game-details-info .overview {
-  margin-top: 12px;
-  max-width: 700px;
+  margin-top: 16px;
+  text-align: left;
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+/* Desktop styles */
+@media (min-width: 769px) {
+  .game-details {
+    padding: 24px;
+  }
+
+  .game-details-header {
+    flex-direction: row;
+    align-items: flex-start;
+    text-align: left;
+    gap: 32px;
+    margin-bottom: 32px;
+  }
+
+  .game-details-poster {
+    width: auto;
+  }
+
+  .game-details-poster img {
+    width: 220px;
+    max-width: none;
+  }
+
+  .game-details-info h1 {
+    font-size: 2.5rem;
+  }
+
+  .game-details-info .meta {
+    justify-content: flex-start;
+  }
+
+  .game-details-info .overview {
+    max-width: 800px;
+  }
 }
 
 .torrent-search {
