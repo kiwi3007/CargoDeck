@@ -22,11 +22,11 @@ Inspired by the workflow of Radarr and Sonarr, Playerr is designed to be the def
 
 | Library | Game Details |
 |:---:|:---:|
-| ![Library](screenshots/Library.png) | ![Game Details](screenshots/details.png) |
+| ![Library](screenshots/Library.png) | ![Game Details](screenshots/Details.png) |
 
-| Settings | Mobile View |
+| Settings (Indexers) | Library Grid |
 |:---:|:---:|
-| ![Settings](screenshots/settings.png) | ![Mobile View](screenshots/mobile.png) |
+| ![Settings](screenshots/Indexers%3ATorrents.png) | ![Library Grid](screenshots/Library%20Games.png) |
 
 <p align="center">
   <img src="screenshots/SteamProfile.png" alt="Steam Profile Integration" width="600">
