@@ -84,6 +84,8 @@ services:
        - arm64
      main: playerr
      icon: https://raw.githubusercontent.com/Maikboarder/Playerr/master/frontend/src/assets/app_logo.png
+     title:
+       en_us: Playerr
    ```
 3. Click **Install**.
 
