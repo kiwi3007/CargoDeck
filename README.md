@@ -104,7 +104,7 @@ If you want to modify the code or build the image locally instead of pulling it 
 ## Roadmap
 
 - [x] **v0.1.0 Beta:** Core PVR functionality and library scanning.
-- [/] **En Proceso:** Estudiando la compatibilidad con Lutris y Proton en Bazzite.
+- [ ] **Bazzite Support:** Researching compatibility with Lutris and Proton.
 - [ ] **DBI Protocol Integration:** Advanced USB file transfer and management for Portable Consoles environments.
 - [ ] **CasaOS Official App:** Direct integration into the CasaOS App Store.
 - [ ] **Legacy Support:** Extended optimization for Intel-based macOS systems.
