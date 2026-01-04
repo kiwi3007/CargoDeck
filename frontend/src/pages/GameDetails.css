@@ -433,6 +433,61 @@
 }
 
 @media (max-width: 768px) {
+  .game-details {
+    padding: 12px;
+  }
+
+  .game-details-header {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center;
+    gap: 20px;
+    width: 100%;
+  }
+
+  .game-details-poster {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .game-details-poster img {
+    width: 180px;
+    max-width: 70%;
+    height: auto;
+  }
+
+  .game-details-info {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .game-details-info h1 {
+    font-size: 1.8rem;
+    width: 100%;
+  }
+
+  .game-details-info .meta {
+    justify-content: center;
+    display: flex;
+    gap: 15px;
+    width: 100%;
+    margin-bottom: 10px;
+  }
+
+  .game-details-info .overview {
+    max-width: 100%;
+    text-align: left;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .torrent-search {
+    padding: 20px 16px;
+    margin-top: 24px;
+  }
 
   .results-header-row,
   .results-row {
@@ -442,9 +497,10 @@
 
   .results-row {
     padding: 16px;
-    border: 1px solid #e9ecef;
-    margin-bottom: 8px;
-    border-radius: 4px;
+    border: 1px solid #313244;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    background: rgba(30, 30, 46, 0.5);
   }
 
   .results-header-row {
@@ -455,51 +511,87 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 4px 0;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(49, 50, 68, 0.5);
+  }
+
+  .results-row>div:last-child {
+    border-bottom: none;
+    margin-top: 8px;
+    justify-content: flex-end;
   }
 
   .results-row>div::before {
     content: attr(class);
     font-weight: 600;
-    font-size: 12px;
+    font-size: 10px;
     text-transform: uppercase;
-    color: #6c757d;
-  }
-
-  .col-protocol::before {
-    content: "Source:";
-  }
-
-  .col-age::before {
-    content: "Age:";
+    color: #89b4fa;
+    margin-right: 12px;
+    flex-shrink: 0;
   }
 
   .col-title::before {
-    content: "Title:";
+    content: "Título:";
+  }
+
+  .col-protocol::before {
+    content: "Protocolo:";
+  }
+
+  .col-age::before {
+    content: "Fecha:";
   }
 
   .col-indexer::before {
-    content: "Indexer:";
+    content: "Indexador:";
   }
 
   .col-platform::before {
-    content: "Platform:";
+    content: "Plataforma:";
   }
 
   .col-size::before {
-    content: "Size:";
+    content: "Tamaño:";
   }
 
   .col-peers::before {
-    content: "Peers:";
+    content: "Pares:";
   }
 
   .col-quality::before {
-    content: "Quality:";
+    content: "Calidad:";
+  }
+
+  .col-source::before {
+    content: "Provider:";
   }
 
   .col-actions::before {
-    content: "Download:";
+    content: "Descargar:";
+  }
+
+  .col-title .title-content {
+    flex-direction: column;
+    align-items: flex-end;
+    text-align: right;
+  }
+
+  .col-title .title-link,
+  .col-title .title-text {
+    white-space: normal;
+    word-break: break-all;
+    text-align: right;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-details-poster img {
+    width: 150px;
+  }
+
+  .game-details-info h1 {
+    font-size: 1.5rem;
   }
 }
 
