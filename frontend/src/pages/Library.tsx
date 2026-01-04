@@ -95,7 +95,7 @@ const Library: React.FC = () => {
 
     // Listen for global library updates (e.g. from Auto-Scan in Settings)
     const handleLibraryUpdate = () => {
-      console.log("Library received update signal, reloading...");
+      console.log("[Library] Received update signal (EVENT). Loading games...");
       setForceUpdateCounter(prev => prev + 1); // FORCE React to re-render
       loadGames();
     };

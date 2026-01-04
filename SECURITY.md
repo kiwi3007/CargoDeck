@@ -7,7 +7,7 @@ Use this section to tell people about which versions of your project are current
 | Version | Supported          |
 | ------- | ------------------ |
 | 0.1.x   | Yes                |
-| < 0.1.0 | No                 |
+| < 0.1.1 | No                 |
 
 ## Reporting a Vulnerability
 

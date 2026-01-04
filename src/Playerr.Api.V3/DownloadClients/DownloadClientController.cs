@@ -65,6 +65,7 @@ namespace Playerr.Api.V3.DownloadClients
             existingClient.Username = client.Username;
             existingClient.Password = client.Password;
             existingClient.Category = client.Category;
+            existingClient.UrlBase = client.UrlBase;
             existingClient.Enable = client.Enable;
             existingClient.Priority = client.Priority;
 
@@ -103,7 +104,8 @@ namespace Playerr.Api.V3.DownloadClients
                         request.Host,
                         request.Port,
                         request.Username ?? string.Empty,
-                        request.Password ?? string.Empty
+                        request.Password ?? string.Empty,
+                        request.UrlBase
                     );
 
                     isConnected = await qbClient.TestConnectionAsync();
@@ -172,7 +174,8 @@ namespace Playerr.Api.V3.DownloadClients
                         client.Host,
                         client.Port,
                         client.Username ?? string.Empty,
-                        client.Password ?? string.Empty
+                        client.Password ?? string.Empty,
+                        client.UrlBase
                     );
 
                     bool success = await qbClient.AddTorrentAsync(request.Url, client.Category);
@@ -231,5 +234,6 @@ namespace Playerr.Api.V3.DownloadClients
         public int Port { get; set; }
         public string? Username { get; set; }
         public string? Password { get; set; }
+        public string? UrlBase { get; set; }
     }
 }

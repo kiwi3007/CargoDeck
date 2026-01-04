@@ -61,6 +61,9 @@ namespace Playerr.Host
             builder.Services.AddSingleton<IGameMetadataServiceFactory, GameMetadataServiceFactory>();
             builder.Services.AddSingleton<IGameRepository, InMemoryGameRepository>();
             builder.Services.AddSingleton<MediaScannerService>();
+            
+            // IO Services
+            builder.Services.AddSingleton<Playerr.Core.IO.IFileMoverService, Playerr.Core.IO.FileMoverService>();
 
             // Register SteamClient for direct usage (e.g. Settings Test/Sync)
             builder.Services.AddTransient<SteamClient>();
@@ -246,7 +249,10 @@ namespace Playerr.Host
     
                    // Real-time library updates: Subscribe to scanner events
                    var scannerService = app.Services.GetRequiredService<MediaScannerService>();
-                   scannerService.OnGameAdded += (game) => {
+                   
+                   // Update library UI when a batch is finished
+                   scannerService.OnBatchFinished += () => {
+                       Console.WriteLine("[UI] Sending LIBRARY_UPDATED signal to frontend...");
                        window.SendWebMessage("LIBRARY_UPDATED");
                    };
     

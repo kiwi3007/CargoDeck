@@ -111,8 +111,17 @@ namespace Playerr.Core.MetadataSource.Igdb
 
         public async Task<IgdbGame?> GetGameByIdAsync(int igdbId, string? lang = null)
         {
+            var results = await GetGamesByIdsAsync(new[] { igdbId }, lang);
+            return results.FirstOrDefault();
+        }
+
+        public async Task<List<IgdbGame>> GetGamesByIdsAsync(IEnumerable<int> igdbIds, string? lang = null)
+        {
+            if (igdbIds == null || !igdbIds.Any()) return new List<IgdbGame>();
+
             await EnsureAuthenticatedAsync();
 
+            var idsFilter = string.Join(",", igdbIds);
             var requestBody = $@"
                 fields name, summary, storyline, cover.url, cover.image_id,
                        screenshots.url, screenshots.image_id, artworks.url, artworks.image_id,
@@ -120,11 +129,11 @@ namespace Playerr.Core.MetadataSource.Igdb
                        involved_companies.developer, involved_companies.publisher,
                        rating, rating_count, platforms.name,
                        external_games.category, external_games.uid;
-                where id = {igdbId};
+                where id = ({idsFilter});
+                limit {igdbIds.Count()};
             ";
 
-            var results = await ExecuteQueryAsync<IgdbGame>("games", requestBody);
-            return results.FirstOrDefault();
+            return await ExecuteQueryAsync<IgdbGame>("games", requestBody);
         }
 
         public async Task<List<IgdbPlatform>> GetPlatformsAsync()

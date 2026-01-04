@@ -21,6 +21,7 @@ interface DownloadClient {
   username?: string;
   password?: string;
   category?: string;
+  urlBase?: string;
   enable: boolean;
   priority: number;
 }
@@ -69,6 +70,7 @@ const Settings: React.FC = () => {
     username: 'admin',
     password: '',
     category: 'playerr',
+    urlBase: '',
     enable: true,
     priority: 1
   });
@@ -369,7 +371,8 @@ const Settings: React.FC = () => {
         host: clientForm.host,
         port: clientForm.port,
         username: clientForm.username,
-        password: clientForm.password
+        password: clientForm.password,
+        urlBase: clientForm.urlBase
       });
 
       setClientTestResult({
@@ -429,6 +432,7 @@ const Settings: React.FC = () => {
       username: 'admin',
       password: '',
       category: 'playerr',
+      urlBase: '',
       enable: true,
       priority: 1
     });
@@ -901,6 +905,16 @@ const Settings: React.FC = () => {
                   value={clientForm.password || ''}
                   onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
                   placeholder={t('passwordPlaceholder')}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>{t('urlBase')} <small>(optional, e.g. /qbittorrent)</small></label>
+                <input
+                  type="text"
+                  value={clientForm.urlBase || ''}
+                  onChange={(e) => setClientForm({ ...clientForm, urlBase: e.target.value })}
+                  placeholder="/qbittorrent"
                 />
               </div>
 

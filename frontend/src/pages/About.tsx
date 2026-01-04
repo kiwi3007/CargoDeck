@@ -48,7 +48,7 @@ const About: React.FC = () => {
             <div className="settings-section">
                 <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
                     <img src={appLogo} alt="Playerr" style={{ width: '100px', height: 'auto', marginBottom: '0.75rem' }} />
-                    <h3>Playerr v0.1.0 (Beta)</h3>
+                    <h3>Playerr v0.1.1 (Beta)</h3>
                 </div>
 
                 <div className="settings-section" style={{ border: 'none', padding: 0, backgroundColor: 'transparent' }}>

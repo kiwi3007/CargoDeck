@@ -48,8 +48,20 @@ namespace Playerr.Core.MetadataSource
 
         public async Task<Game?> GetGameMetadataAsync(int igdbId, string? lang = null)
         {
-            var igdbGame = await _igdbClient.GetGameByIdAsync(igdbId, lang);
-            return igdbGame != null ? MapIgdbGameToGame(igdbGame, lang) : null;
+            var results = await GetGamesMetadataAsync(new[] { igdbId }, lang);
+            return results.FirstOrDefault();
+        }
+
+        public async Task<List<Game>> GetGamesMetadataAsync(IEnumerable<int> igdbIds, string? lang = null)
+        {
+            var igdbGames = await _igdbClient.GetGamesByIdsAsync(igdbIds, lang);
+            // Process sequentially to avoid internal rate limit issues if Steam is called
+            var results = new List<Game>();
+            foreach (var igdbGame in igdbGames)
+            {
+                results.Add(MapIgdbGameToGame(igdbGame, lang));
+            }
+            return results;
         }
 
         private Game MapIgdbGameToGame(IgdbGame igdbGame, string? lang = null)

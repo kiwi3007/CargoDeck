@@ -15,7 +15,7 @@ namespace Playerr.Core.Download
         private readonly string _password;
         private string? _cookie;
 
-        public QBittorrentClient(string host, int port, string username, string password)
+        public QBittorrentClient(string host, int port, string username, string password, string? urlBase = null)
         {
             _httpClient = new HttpClient();
             
@@ -30,7 +30,16 @@ namespace Playerr.Core.Download
             // Remove trailing slash if present
             cleanHost = cleanHost.TrimEnd('/');
             
-            _baseUrl = $"{cleanHost}:{port}/api/v2";
+            // Process UrlBase
+            string finalUrlBase = "";
+            if (!string.IsNullOrWhiteSpace(urlBase))
+            {
+                finalUrlBase = urlBase.Trim();
+                if (!finalUrlBase.StartsWith("/")) finalUrlBase = "/" + finalUrlBase;
+                finalUrlBase = finalUrlBase.TrimEnd('/');
+            }
+            
+            _baseUrl = $"{cleanHost}:{port}{finalUrlBase}/api/v2";
             _username = username;
             _password = password;
         }

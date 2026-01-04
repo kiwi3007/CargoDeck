@@ -46,6 +46,10 @@ document.addEventListener('click', function (e) {
   onSettingsUpdated: () => {
     console.log("Global onSettingsUpdated called");
     window.dispatchEvent(new Event('SETTINGS_UPDATED_EVENT'));
+  },
+  onLibraryUpdated: () => {
+    console.log("Global onLibraryUpdated called");
+    window.dispatchEvent(new Event('LIBRARY_UPDATED_EVENT'));
   }
 };
 
@@ -65,7 +69,9 @@ const attachExternalHandler = () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (window as any).PLAYERR_API.onSettingsUpdated();
       } else if (message === 'LIBRARY_UPDATED') {
-        window.dispatchEvent(new Event('LIBRARY_UPDATED_EVENT'));
+        console.log("[PHOTINO] Library update requested by backend");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).PLAYERR_API.onLibraryUpdated();
       }
     };
     console.log("Photino external interface attached successfully.");

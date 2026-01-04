@@ -10,6 +10,7 @@ namespace Playerr.Core.Download
         public string? Username { get; set; }
         public string? Password { get; set; }
         public string? Category { get; set; }
+        public string? UrlBase { get; set; }
         public bool Enable { get; set; } = true;
         public int Priority { get; set; }
     }

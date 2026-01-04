@@ -20,6 +20,12 @@ const ScannerStatus: React.FC = () => {
             const response = await axios.get('/api/v3/media/scan/status');
             const newStatus = response.data;
 
+            // Trigger library refresh if new games were added during this poll
+            if (newStatus.isScanning && newStatus.gamesAddedCount > status.gamesAddedCount) {
+                console.log(`ScannerStatus: Detected ${newStatus.gamesAddedCount - status.gamesAddedCount} new games. Triggering refresh...`);
+                window.dispatchEvent(new Event('LIBRARY_UPDATED_EVENT'));
+            }
+
             // If it just finished scanning
             if (prevIsScanning.current && !newStatus.isScanning) {
                 console.log("ScannerStatus: Scan finished detected via polling");

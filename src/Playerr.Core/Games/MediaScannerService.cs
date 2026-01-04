@@ -24,6 +24,7 @@ namespace Playerr.Core.Games
         public event Action<Game>? OnGameAdded;
         public event Action? OnScanStarted;
         public event Action<int>? OnScanFinished;
+        public event Action? OnBatchFinished;
 
         // 1. Valid Extensions (Whitelist)
         private static readonly Dictionary<string, PlatformRule> _platformRules = new(StringComparer.OrdinalIgnoreCase)
@@ -66,6 +67,14 @@ namespace Playerr.Core.Games
         {
             public string[] Extensions { get; set; } = Array.Empty<string>();
             public bool IsFolderMode { get; set; }
+        }
+
+        private class GameCandidate
+        {
+            public string Title { get; set; } = string.Empty;
+            public string Path { get; set; } = string.Empty;
+            public string? PlatformKey { get; set; }
+            public string? Serial { get; set; }
         }
 
         public MediaScannerService(
@@ -168,7 +177,7 @@ namespace Playerr.Core.Games
 
         private async Task<int> ScanFolderModeAsync(string rootPath, PlatformRule rule, List<Game> existingGames, string platformKey, GameMetadataService metadataService, System.Threading.CancellationToken ct)
         {
-            int added = 0;
+            var candidates = new List<GameCandidate>();
             var directories = Directory.GetDirectories(rootPath);
 
             foreach (var dir in directories)
@@ -178,13 +187,24 @@ namespace Playerr.Core.Games
                 if (DirectoryContainsValidFile(dir, rule.Extensions))
                 {
                     var (cleanName, serial) = CleanGameTitle(folderName);
-                    if (await ProcessPotentialGame(cleanName, existingGames, metadataService, dir, platformKey, serial))
+                    if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
                     {
-                        added++;
+                        candidates.Add(new GameCandidate 
+                        { 
+                            Title = cleanName, 
+                            Path = dir, 
+                            PlatformKey = platformKey, 
+                            Serial = serial 
+                        });
+                    }
+                    else
+                    {
+                        Log($"Game already exists in DB (Skipping collect): {cleanName}");
                     }
                 }
             }
-            return added;
+
+            return await ProcessCandidatesBatchAsync(candidates, existingGames, metadataService, ct);
         }
 
         private bool DirectoryContainsValidFile(string dirPath, string[] extensions)
@@ -216,7 +236,7 @@ namespace Playerr.Core.Games
 
         private async Task<int> ScanFileModeAsync(string rootPath, PlatformRule rule, List<Game> existingGames, string platformKey, GameMetadataService metadataService, System.Threading.CancellationToken ct)
         {
-            int added = 0;
+            var candidates = new List<GameCandidate>();
             var extensionsToUse = platformKey == "default" ? _allExtensions : rule.Extensions;
             Log($"Scanning (File Mode) Root: {rootPath}. Valid Extensions: {(extensionsToUse != null ? string.Join(", ", extensionsToUse) : "ALL")}");
 
@@ -242,17 +262,21 @@ namespace Playerr.Core.Games
                         }
 
                         var (cleanName, serial) = CleanGameTitle(name);
-                        // Don't log clean name if it's the same to keep log clean
-                        if(cleanName != name) Log($"Cleaned Name: '{cleanName}'" + (serial != null ? $" (Serial: {serial})" : ""));
-
-                        if (await ProcessPotentialGame(cleanName, existingGames, metadataService, file, finalPlatformKey, serial))
+                        
+                        if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
                         {
-                            added++;
-                            Log($"Successfully added: {cleanName} ({finalPlatformKey})");
+                            candidates.Add(new GameCandidate 
+                            { 
+                                Title = cleanName, 
+                                Path = file, 
+                                PlatformKey = finalPlatformKey, 
+                                Serial = serial 
+                            });
+                            if(cleanName != name) Log($"Collected Candidate: '{cleanName}'" + (serial != null ? $" (Serial: {serial})" : ""));
                         }
                         else
                         {
-                            Log($"Skipped/Failed to process: {cleanName}");
+                            Log($"Game already exists in DB (Skipping collect): {cleanName}");
                         }
                     }
                 }
@@ -261,6 +285,44 @@ namespace Playerr.Core.Games
             {
                 Log($"Error accessing directories: {ex.Message}");
             }
+
+            return await ProcessCandidatesBatchAsync(candidates, existingGames, metadataService, ct);
+        }
+
+        private async Task<int> ProcessCandidatesBatchAsync(List<GameCandidate> candidates, List<Game> existingGames, GameMetadataService metadataService, System.Threading.CancellationToken ct)
+        {
+            int added = 0;
+            const int batchSize = 5; // Reduced for quicker feedback
+            const int delayMs = 2500; // Conservative delay to stay well under 4 req/s
+
+            Log($"Processing {candidates.Count} candidates in batches of {batchSize}...");
+
+            for (int i = 0; i < candidates.Count; i += batchSize)
+            {
+                ct.ThrowIfCancellationRequested();
+                
+                var batch = candidates.Skip(i).Take(batchSize).ToList();
+                Log($"[Scanner] Processing batch {i / batchSize + 1}/{Math.Ceiling((double)candidates.Count / batchSize)}. Size: {batch.Count}");
+
+                foreach (var candidate in batch)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (await ProcessPotentialGame(candidate.Title, existingGames, metadataService, candidate.Path, candidate.PlatformKey, candidate.Serial))
+                    {
+                        added++;
+                    }
+                }
+
+                if (i + batchSize < candidates.Count)
+                {
+                    OnBatchFinished?.Invoke();
+                    Log($"Waiting {delayMs}ms to respect API rate limit...");
+                    await Task.Delay(delayMs, ct);
+                }
+            }
+            
+            // Final refresh after last batch
+            OnBatchFinished?.Invoke();
 
             return added;
         }

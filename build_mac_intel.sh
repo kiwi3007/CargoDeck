@@ -69,7 +69,7 @@ cat > "${APP_NAME}.app/Contents/Info.plist" <<EOF
     <key>CFBundleIdentifier</key>
     <string>app.playerr.desktop</string>
     <key>CFBundleVersion</key>
-    <string>0.1.0</string>
+    <string>0.1.1</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
@@ -126,7 +126,7 @@ if command -v pkgbuild >/dev/null; then
     pkgbuild --component "${APP_NAME}.app" \
              --install-location /Applications \
              --identifier "app.playerr.desktop.pkg" \
-             --version "0.1.0" \
+             --version "0.1.1" \
              "build_artifacts/Playerr-Intel.pkg"
     
     if command -v productsign >/dev/null && [ -n "$INSTALLER_CERT_NAME" ]; then
