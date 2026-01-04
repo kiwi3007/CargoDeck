@@ -9,6 +9,12 @@ Inspired by the workflow of Radarr and Sonarr, Playerr is designed to be the def
 
 ---
 
+### 🇪🇸 Versión en Español
+
+Inspirado en el flujo de trabajo de Radarr y Sonarr, Playerr está diseñado para ser la solución definitiva para los entusiastas de los videojuegos que gestionan sus bibliotecas en local. Playerr conecta tus archivos digitales con el mundo del metadato gamer.
+
+---
+
 ## Main Features
 
 *   **Intelligent Library Scanning:** Recursive and smart recognition engine that identifies video game platforms across your storage, mapping local files to their respective titles.
