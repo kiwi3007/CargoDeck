@@ -133,7 +133,8 @@ If you want to modify the code or build the image locally instead of pulling it 
 - [x] **v0.1.2 Beta:** NZB Protocol support and Ko-fi Widget.
     - [x] **Feature:** NZB Support (Search & Download).
     - [x] **Feature:** Ko-fi Global Widget.
-    - [x] **Release:** Builds (Win/Lin/Mac-Arm), Docs updated, Tag pushed.
+    - [x] **Release:** Builds (Win/Lin/Mac-Arm/Intel), Docs updated, Tag pushed.
+    - [x] **Installer:** Windows NSIS Installer (.exe) with icon and shortcuts.
 - [x] **Unraid Support:** XML template created (`_unraid/playerr.xml`).
     - **Optimization:** IGDB Rate Limit handling (batching + delays).
     - **Feature:** Hardlink Support (Atomic Move) with fallback to Copy.
