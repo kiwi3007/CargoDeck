@@ -6,6 +6,7 @@ import ContextMenu, { ContextMenuOption } from '../components/ContextMenu';
 import { t, getLanguage } from '../i18n/translations';
 import appLogo from '../assets/app_logo.png';
 import './Library.css';
+import { useUI } from '../context/UIContext';
 
 interface Game {
   id: number;
@@ -42,6 +43,7 @@ interface Platform {
 }
 
 const Library: React.FC = () => {
+  const { toggleKofi } = useUI();
   const navigate = useNavigate();
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState('');
@@ -435,7 +437,7 @@ const Library: React.FC = () => {
       {
         filteredGames.length === 0 ? (
           <div className="empty-library">
-            <div className="empty-icon">
+            <div className="empty-icon" onClick={toggleKofi} style={{ cursor: 'pointer' }}>
               <img src={appLogo} alt="Playerr" className="empty-lib-logo" />
             </div>
             <h3>

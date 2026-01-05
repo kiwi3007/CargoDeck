@@ -7,6 +7,8 @@ using Playerr.Core.Configuration;
 using Playerr.Core.MetadataSource.Steam;
 using System.Diagnostics.CodeAnalysis;
 
+using System.Threading;
+
 namespace Playerr.Api.V3.Steam
 {
     [ApiController]
@@ -162,7 +164,7 @@ namespace Playerr.Api.V3.Steam
                     }
                 });
 
-                mappedGames = (await Task.WhenAll(fetchTasks)).ToList();
+                var mappedGames = (await Task.WhenAll(fetchTasks)).ToList();
 
                 return Ok(mappedGames);
             }

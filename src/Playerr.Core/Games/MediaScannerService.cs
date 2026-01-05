@@ -57,13 +57,14 @@ namespace Playerr.Core.Games
                 ".zip", ".7z", ".rar"                           // Compressed ROMs
             } },
             ["macos"] = new() { Extensions = new[] { ".dmg", ".pkg", ".app" } },
-            ["default"] = new() { Extensions = null, IsFolderMode = false } // Special case: All extensions
+            ["default"] = new() { Extensions = null, IsFolderMode = false } // Special case: All extensions, File Mode (v0.1.0 behavior)
         };
 
         private static string[] _allExtensions = _platformRules.Values
             .Where(r => r.Extensions != null)
             .SelectMany(r => r.Extensions)
             .Distinct()
+            .Where(ext => !ext.Equals(".bin", StringComparison.OrdinalIgnoreCase)) // Exclude .bin from Auto-Scan (too generic, matches system files)
             .ToArray();
 
         // 2. Exclusion Rules (Global Blacklist)
@@ -268,6 +269,7 @@ namespace Playerr.Core.Games
             {
                 // Recursive scan for all files
                 var files = Directory.EnumerateFiles(rootPath, "*.*", SearchOption.AllDirectories);
+                int i = 0;
                 
                 foreach (var file in files)
                 {
@@ -303,6 +305,12 @@ namespace Playerr.Core.Games
                             Log($"Game already exists in DB (Skipping collect): {cleanName}");
                         }
                     }
+                    else
+                    {
+                         // Debug: Log why it was skipped (only for first 50 skipped files to avoid spam)
+                         if (i < 50) Log($"Skipped file: {Path.GetFileName(file)} (Ext: {Path.GetExtension(file)}) - Not in whitelist.");
+                    }
+                    i++;
                 }
             }
             catch (Exception ex)
@@ -423,6 +431,10 @@ namespace Playerr.Core.Games
                             GamesAddedCount++;
                             OnGameAdded?.Invoke(newGame);
                             return true;
+                        }
+                        else
+                        {
+                            Log($"CRITICAL: Metadata fetch returned null for ID {gameData.IgdbId.Value} (Game: {gameData.Title}). Check IgdbClient logs.");
                         }
                     }
                 }

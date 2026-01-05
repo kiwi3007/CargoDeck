@@ -2,53 +2,19 @@ import React from 'react';
 import { t } from '../i18n/translations';
 import './Settings.css'; // Reuse settings styles for consistency
 import appLogo from '../assets/app_logo.png';
+import { useUI } from '../context/UIContext';
 
 const About: React.FC = () => {
-    React.useEffect(() => {
-        const script = document.createElement('script');
-        script.src = 'https://storage.ko-fi.com/cdn/scripts/overlay-widget.js';
-        script.async = true;
-        script.onload = () => {
-            // @ts-ignore
-            if (window.kofiWidgetOverlay) {
-                // @ts-ignore
-                window.kofiWidgetOverlay.draw('maikboarder', {
-                    'type': 'floating-chat',
-                    'floating-chat.donateButton.text': 'Support me',
-                    'floating-chat.donateButton.background-color': '#fcbf47',
-                    'floating-chat.donateButton.text-color': '#323842'
-                });
-            }
-        };
-        document.body.appendChild(script);
-
-        return () => {
-            // Cleanup script on unmount to prevent duplicates if user navigates away and back
-            if (document.body.contains(script)) {
-                try {
-                    document.body.removeChild(script);
-                } catch (e) {
-                    // Ignore removal errors
-                }
-            }
-            // Ideally we should also remove the widget DOM element created by the script, 
-            // but the ko-fi script doesn't expose a clean destroy method easily.
-            // For now, removing the script prevents re-execution.
-            // To be safe, we can try to remove the iframe/div it creates if we knew the ID.
-            // Ko-fi creates a div with id 'kofi-widget-overlay-container' usually.
-            const widget = document.getElementById('kofi-widget-overlay-container');
-            if (widget) {
-                widget.remove();
-            }
-        };
-    }, []);
+    const { toggleKofi } = useUI();
 
     return (
         <div className="settings">
             <div className="settings-section">
                 <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-                    <img src={appLogo} alt="Playerr" style={{ width: '100px', height: 'auto', marginBottom: '0.75rem' }} />
-                    <h3>Playerr v0.1.1 (Beta)</h3>
+                    <div onClick={toggleKofi} style={{ cursor: 'pointer', display: 'inline-block' }}>
+                        <img src={appLogo} alt="Playerr" style={{ width: '100px', height: 'auto', marginBottom: '0.75rem' }} />
+                    </div>
+                    <h3>Playerr v0.1.2 (Beta)</h3>
                 </div>
 
                 <div className="settings-section" style={{ border: 'none', padding: 0, backgroundColor: 'transparent' }}>

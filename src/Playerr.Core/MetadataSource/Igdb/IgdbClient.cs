@@ -117,7 +117,7 @@ namespace Playerr.Core.MetadataSource.Igdb
              request.Headers.Add("Client-ID", _clientId);
              request.Headers.Add("Authorization", $"Bearer {_accessToken}");
              
-             var fields = "name, summary, storyline, cover.image_id, screenshots.image_id, artworks.image_id, first_release_date, total_rating, total_rating_count, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, external_games.category, external_games.uid, localizations.name, localizations.region";
+             var fields = "name, summary, storyline, cover.image_id, screenshots.image_id, artworks.image_id, first_release_date, total_rating, total_rating_count, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, external_games.category, external_games.uid";
              
              var idString = string.Join(",", ids);
              var body = $"fields {fields}; where id = ({idString}); limit 50;";
@@ -125,7 +125,12 @@ namespace Playerr.Core.MetadataSource.Igdb
              request.Content = new StringContent(body);
              var response = await _httpClient.SendAsync(request);
              
-             if (!response.IsSuccessStatusCode) return new List<IgdbGame>();
+             if (!response.IsSuccessStatusCode) 
+             {
+                 var errorContent = await response.Content.ReadAsStringAsync();
+                 Console.WriteLine($"[IgdbClient] GetGamesByIds Failed. Status: {response.StatusCode}. Body: {errorContent}");
+                 return new List<IgdbGame>();
+             }
              
              var content = await response.Content.ReadAsStringAsync();
              var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
