@@ -391,7 +391,11 @@ const Library: React.FC = () => {
               <button className="close-btn" onClick={() => setShowSearchResults(false)}>×</button>
             </div>
             <div className="search-results-list">
-              {searchResults.length === 0 ? (
+              {isSearching ? (
+                <div className="search-loading">
+                  <p>{t('searching')}</p>
+                </div>
+              ) : searchResults.length === 0 ? (
                 <div className="no-results">
                   <p>{t('noGamesFound')} "{searchQuery}"</p>
                 </div>

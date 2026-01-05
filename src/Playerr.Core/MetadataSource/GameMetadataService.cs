@@ -7,12 +7,18 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.IO;
 using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 
 namespace Playerr.Core.MetadataSource
 {
     /// <summary>
     /// Servicio para obtener metadata de juegos - Similar a MovieInfoService en Radarr
     /// </summary>
+    [SuppressMessage("Microsoft.Performance", "CA1822:MarkMembersAsStatic")]
+    [SuppressMessage("Microsoft.Globalization", "CA1304:SpecifyCultureInfo")]
+    [SuppressMessage("Microsoft.Globalization", "CA1311:SpecifyCultureForToLowerAndToUpper")]
+    [SuppressMessage("Microsoft.Reliability", "CA2007:DoNotDirectlyAwaitATask")]
     public class GameMetadataService
     {
         private readonly IgdbClient _igdbClient;

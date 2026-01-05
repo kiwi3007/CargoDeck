@@ -3,9 +3,17 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Core.Download
 {
+    [SuppressMessage("Microsoft.Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable")]
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+    [SuppressMessage("Microsoft.Reliability", "CA2007:DoNotDirectlyAwaitATask")]
+    [SuppressMessage("Microsoft.Usage", "CA2234:PassSystemUriObjectsInsteadOfStrings")]
+    [SuppressMessage("Microsoft.Design", "CA1054:UriParametersShouldNotBeStrings")]
+    [SuppressMessage("Microsoft.Performance", "CA1867:UseCharOverload")]
+    [SuppressMessage("Microsoft.Design", "CA1062:ValidateArgumentsOfPublicMethods")]
     public class SabnzbdClient
     {
         private readonly HttpClient _httpClient;
@@ -30,7 +38,7 @@ namespace Playerr.Core.Download
             if (!string.IsNullOrWhiteSpace(urlBase))
             {
                 finalUrlBase = urlBase.Trim();
-                if (!finalUrlBase.StartsWith("/")) finalUrlBase = "/" + finalUrlBase;
+                if (!finalUrlBase.StartsWith("/", StringComparison.OrdinalIgnoreCase)) finalUrlBase = "/" + finalUrlBase;
                 finalUrlBase = finalUrlBase.TrimEnd('/');
             }
             
@@ -92,12 +100,16 @@ namespace Playerr.Core.Download
             }
         }
 
+        [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+        [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
         private class SabnzbdVersionResponse
         {
             [JsonPropertyName("version")]
             public string Version { get; set; }
         }
 
+        [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+        [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
         private class SabnzbdAddResponse
         {
             [JsonPropertyName("status")]

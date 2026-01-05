@@ -4,11 +4,15 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Playerr.Core.Download;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Api.V3.DownloadClients
 {
     [ApiController]
     [Route("api/v3/downloadclient")]
+    [SuppressMessage("Microsoft.Performance", "CA1860:AvoidUsingAnyWhenUseCount")]
+    [SuppressMessage("Microsoft.Maintainability", "CA1508:AvoidDeadConditionalCode")]
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
     public class DownloadClientController : ControllerBase
     {
         private static List<DownloadClient> _clients = new();
@@ -194,8 +198,20 @@ namespace Playerr.Api.V3.DownloadClients
                 // If priorities are equal, use ID (assuming newer clients might be preferred or just stable sort)
                 DownloadClient? client = null;
                 
-                // Smart Selection based on URL extension
-                bool isNzb = request.Url.EndsWith(".nzb", StringComparison.OrdinalIgnoreCase); // Basic check
+                // Smart Selection based on Protocol (Passed from Frontend) or URL extension
+                bool isNzb = false;
+                
+                if (!string.IsNullOrEmpty(request.Protocol))
+                {
+                    isNzb = request.Protocol.Equals("nzb", StringComparison.OrdinalIgnoreCase);
+                }
+                else
+                {
+                    // Fallback to URL check
+                    isNzb = request.Url.EndsWith(".nzb", StringComparison.OrdinalIgnoreCase);
+                }
+                
+                Console.WriteLine($"[DownloadClient] Request Protocol: '{request.Protocol}', IsNZB: {isNzb}");
                 
                 if (isNzb)
                 {
@@ -214,22 +230,12 @@ namespace Playerr.Api.V3.DownloadClients
                         .FirstOrDefault();
                 }
 
-                // Fallback: If no specific client found, valid if we support mixed (but protocols differ)
-                // If isNzb and no usenet client, we fail.
-                // If not nzb and no torrent client, we fail.
-                
                 if (client == null)
                 {
                     Console.WriteLine($"[DownloadClient] No enabled download client found for {(isNzb ? "NZB" : "Torrent")}");
                     return BadRequest(new { message = $"No enabled {(isNzb ? "Usenet" : "Torrent")} download client found." });
                 }
                 
-                if (client == null)
-                {
-                    Console.WriteLine("[DownloadClient] No enabled download client found");
-                    return BadRequest(new { message = "No enabled download client found. Please check your settings." });
-                }
-
                 if (client.Implementation.Equals("qBittorrent", StringComparison.OrdinalIgnoreCase))
                 {
                     var qbClient = new QBittorrentClient(
@@ -240,7 +246,7 @@ namespace Playerr.Api.V3.DownloadClients
                         client.UrlBase
                     );
 
-                    bool success = await qbClient.AddTorrentAsync(request.Url, client.Category);
+                    bool success = await qbClient.AddTorrentAsync(request.Url, client.Category ?? string.Empty);
                     if (success)
                     {
                         Console.WriteLine("[DownloadClient] Successfully added torrent to qBittorrent");
@@ -248,8 +254,32 @@ namespace Playerr.Api.V3.DownloadClients
                     }
                     else
                     {
-                        Console.WriteLine("[DownloadClient] Failed to add torrent to qBittorrent");
-                        return StatusCode(500, new { message = "Failed to add torrent to qBittorrent" });
+                        Console.WriteLine("[DownloadClient] Failed to add torrent to qBittorrent. It might be an NZB. Attempting failover...");
+                        
+                        // Failover: Try adding to Usenet client
+                        var usenetClient = _clients
+                            .Where(c => c.Enable && (c.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase) || c.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase)))
+                            .OrderBy(c => c.Priority).ThenBy(c => c.Id)
+                            .FirstOrDefault();
+                            
+                        if (usenetClient != null)
+                        {
+                            Console.WriteLine($"[DownloadClient] Failover: Found Usenet client {usenetClient.Implementation}. Trying...");
+                            if (usenetClient.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var sabClient = new SabnzbdClient(usenetClient.Host, usenetClient.Port, usenetClient.ApiKey ?? string.Empty, usenetClient.UrlBase);
+                                if (await sabClient.AddNzbAsync(request.Url, usenetClient.Category ?? string.Empty))
+                                    return Ok(new { message = "Added to SABnzbd (Failover from Torrent)" });
+                            }
+                            else if (usenetClient.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var nzbClient = new NzbgetClient(usenetClient.Host, usenetClient.Port, usenetClient.Username ?? string.Empty, usenetClient.Password ?? string.Empty, usenetClient.UrlBase);
+                                if (await nzbClient.AddNzbAsync(request.Url, usenetClient.Category ?? string.Empty))
+                                    return Ok(new { message = "Added to NZBGet (Failover from Torrent)" });
+                            }
+                        }
+                        
+                        return StatusCode(500, new { message = "Failed to add torrent to qBittorrent and Failover failed." });
                     }
                 }
                 else if (client.Implementation.Equals("Transmission", StringComparison.OrdinalIgnoreCase))
@@ -261,7 +291,7 @@ namespace Playerr.Api.V3.DownloadClients
                         client.Password ?? string.Empty
                     );
 
-                    bool success = await transmissionClient.AddTorrentAsync(request.Url, client.Category);
+                    bool success = await transmissionClient.AddTorrentAsync(request.Url, client.Category ?? string.Empty);
                     if (success)
                     {
                         Console.WriteLine("[DownloadClient] Successfully added torrent to Transmission");
@@ -282,7 +312,7 @@ namespace Playerr.Api.V3.DownloadClients
                         client.UrlBase
                     );
                     
-                    bool success = await sabClient.AddNzbAsync(request.Url, client.Category);
+                    bool success = await sabClient.AddNzbAsync(request.Url, client.Category ?? string.Empty);
                     if (success)
                     {
                         Console.WriteLine("[DownloadClient] Successfully added NZB to SABnzbd");
@@ -303,7 +333,7 @@ namespace Playerr.Api.V3.DownloadClients
                         client.UrlBase
                     );
                     
-                    bool success = await nzbClient.AddNzbAsync(request.Url, client.Category);
+                    bool success = await nzbClient.AddNzbAsync(request.Url, client.Category ?? string.Empty);
                     if (success)
                     {
                         Console.WriteLine("[DownloadClient] Successfully added NZB to NZBGet");
@@ -325,11 +355,14 @@ namespace Playerr.Api.V3.DownloadClients
         }
     }
 
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
     public class AddTorrentRequest
     {
         public string Url { get; set; } = string.Empty;
+        public string? Protocol { get; set; } // "torrent", "nzb"
     }
 
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
     public class TestDownloadClientRequest
     {
         public string Implementation { get; set; } = string.Empty;

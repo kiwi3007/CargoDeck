@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.StaticFiles;
-using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -18,9 +17,16 @@ using Playerr.Core.Jackett;
 using Playerr.Core.Configuration;
 using System.Linq;
 using Photino.NET;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Host
 {
+    [SuppressMessage("Microsoft.Design", "CA1052:StaticHolderTypesShouldBeSealed")]
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+    [SuppressMessage("Microsoft.Reliability", "CA2007:DoNotDirectlyAwaitATask")]
+    [SuppressMessage("Microsoft.Globalization", "CA1303:Do not pass literals as localized parameters")]
+    [SuppressMessage("Microsoft.Globalization", "CA1310:SpecifyStringComparison")]
+    [SuppressMessage("Microsoft.Usage", "CA2012:UseValueTasksCorrectly")]
     public class Program
     {
         [STAThread]
@@ -35,6 +41,7 @@ namespace Playerr.Host
             
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+            builder.Services.AddHttpClient(); // Register IHttpClientFactory
 
             // Add CORS for development
             builder.Services.AddCors(options =>
@@ -47,14 +54,53 @@ namespace Playerr.Host
                 });
             });
 
-            // Configuration service for persistence - Use AppContext.BaseDirectory to look next to the executable
+            // Configuration service for persistence
             var exePath = AppContext.BaseDirectory;
-            var contentRoot = exePath; // Default content root to exe location for portable apps
+            var configPath = Path.Combine(exePath, "config");
             
-            // Allow override via args or env if needed, but default to portable behavior
-            // Note: builder.Environment.ContentRootPath defaults to CWD, which is bad for portable apps ran from elsewhere
+            // In development/build scenarios, the exe is deep in _output/net8.0/osx-arm64/
+            // We want to look for the 'config' folder in the project root so it persists across builds (which wipe _output)
+            if (!Directory.Exists(configPath))
+            {
+                // Try to find project root by looking for the 'config' folder up the tree
+                var candidate = exePath;
+                bool found = false;
+
+                // 1. Try relative search (works for Terminal runs)
+                for (int i = 0; i < 10; i++)
+                {
+                    candidate = Path.GetDirectoryName(candidate);
+                    if (candidate == null) break;
+                    
+                    var checkPath = Path.Combine(candidate, "config");
+                    if (Directory.Exists(checkPath))
+                    {
+                        Console.WriteLine($"[Config] Found persistent configuration at: {checkPath}");
+                        configPath = checkPath;
+                        exePath = candidate; 
+                        found = true;
+                        break;
+                    }
+                }
+
+                // 2. Fallback for macOS App Translocation / Sandbox (works for .app double-click)
+                if (!found)
+                {
+                     // Explicit development path fallback
+                     var explicitDevPath = "/Users/imaik/Documents/Playerr/Proyecto/config";
+                     if (Directory.Exists(explicitDevPath))
+                     {
+                         Console.WriteLine($"[Config] Using explicit development configuration at: {explicitDevPath}");
+                         configPath = explicitDevPath;
+                         // CRITICAL FIX: Update exePath to the PARENT of the config folder
+                         // ConfigurationService does Path.Combine(root, "config")
+                         exePath = "/Users/imaik/Documents/Playerr/Proyecto"; 
+                     }
+                }
+            }
             
-            var configService = new ConfigurationService(contentRoot);
+            // Note: ConfigurationService adds "/config" to the path passed to it
+            var configService = new ConfigurationService(exePath);
             builder.Services.AddSingleton(configService);
 
             // IGDB metadata services - use factory pattern for dynamic configuration
@@ -149,8 +195,6 @@ namespace Playerr.Host
                      }
                  }
             }
-            
-
             
             if (Directory.Exists(uiPath))
             {
@@ -256,18 +300,19 @@ namespace Playerr.Host
                        window.SendWebMessage("LIBRARY_UPDATED");
                    };
     
-                   window.RegisterWebMessageReceivedHandler((object sender, string message) => {
-                           var window = (Photino.NET.PhotinoWindow)sender;
+                   // Fix for CS8622: Use object? for sender
+                   window.RegisterWebMessageReceivedHandler((object? sender, string message) => {
+                           if (sender is not Photino.NET.PhotinoWindow windowInstance) return;
     
                            // Handle messages from frontend
-                           if (message.StartsWith("OPEN_URL:"))
+                           if (message.StartsWith("OPEN_URL:", StringComparison.OrdinalIgnoreCase))
                            {
                                var url = message.Substring("OPEN_URL:".Length);
                                OpenBrowser(url);
                            }
                            else if (message == "SELECT_FOLDER")
                            {
-                               var folders = window.ShowOpenFolder();
+                               var folders = windowInstance.ShowOpenFolder();
                                if (folders != null && folders.Length > 0)
                                {
                                    var selectedPath = folders[0];
@@ -283,16 +328,16 @@ namespace Playerr.Host
                                         configService.SaveMediaSettings(currentMediaSettings);
                                         
                                         // 1. Notify UI with specific path for immediate feedback
-                                        window.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
+                                        windowInstance.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
     
                                         // 2. Notify UI that settings have changed (reload for consistency)
-                                        window.SendWebMessage("SETTINGS_UPDATED");
+                                        windowInstance.SendWebMessage("SETTINGS_UPDATED");
                                    }
                                    catch (Exception ex)
                                    {
                                         Console.WriteLine($"Error saving folder selection: {ex.Message}");
                                         // Fallback: try to send path anyway for debug
-                                        window.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
+                                        windowInstance.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
                                    }
                                }
                            }

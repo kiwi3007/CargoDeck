@@ -5,11 +5,11 @@ import './Settings.css';
 import igdbLogo from '../assets/igdb_logo.png';
 import prowlarrLogo from '../assets/prowlarr_logo.png';
 import languageIcon from '../assets/language_icon.png';
-import downloadIcon from '../assets/download_icon.png';
 import mediaFolderIcon from '../assets/media_folder_icon.png';
 import jackettLogo from '../assets/jackett_logo.png';
 import steamLogo from '../assets/steam_logo.png';
 import pcIcon from '../assets/pc_icon.png';
+import torrentNzbIcon from '../assets/TORRENT_NZB_icon.png';
 import FolderExplorerModal from '../components/FolderExplorerModal';
 
 interface DownloadClient {
@@ -796,7 +796,7 @@ const Settings: React.FC = () => {
 
       <div className="settings-section">
         <div className="section-header-with-logo">
-          <img src={downloadIcon} alt="Downloads" className="download-icon" />
+          <img src={torrentNzbIcon} alt="Download Clients" style={{ height: '60px' }} />
         </div>
         <p className="settings-description">
           {t('downloadClientsDesc')}

@@ -8,12 +8,18 @@ using Playerr.Core.MetadataSource.Steam;
 using Playerr.Core.Games;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Api.V3.Settings
 {
     [ApiController]
     [Route("api/v3/settings")]
     [Route("api/v3/metadata/igdb")]
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    [SuppressMessage("Microsoft.Performance", "CA1869:CacheAndReuseJsonSerializerOptions")]
     public class SettingsController : ControllerBase
     {
         private readonly ProwlarrSettings _prowlarrSettings;
@@ -132,24 +138,23 @@ namespace Playerr.Api.V3.Settings
         [HttpPost("steam/test")]
         public async Task<IActionResult> TestSteamSettings([FromBody] SteamSettings request)
         {
-            // Temporarily save to config so client can pick it up? 
-            // Better to pass creds to client methods, but Client reads from config.
-            // Let's save temporarily or assume user saved first. 
-            // The UI flow: User types, hits Test. We should probably NOT save if just testing, 
-            // but our SteamClient architecture unfortunately reads from ConfigService.LoadSteamSettings().
-            // Ideally we'd pass api key to methods. 
-            // Workaround: We will rely on user hitting "Save" first or saving implicitly.
-            // Or we can save here if that's acceptable UI behavior (usually "Test" is non-destructive, but saving config is fine).
-            // Let's UPDATE the config first so the client sees the values being tested.
             _configService.SaveSteamSettings(request);
 
             try
             {
-                var profile = await _steamClient.GetPlayerSummariesAsync(request.SteamId);
-                var userName = profile?.PersonaName ?? "Unknown";
+                // Create a temporary client with the provided credentials to verify them
+                var tempClient = new SteamClient(request.ApiKey);
+                var profile = await tempClient.GetPlayerProfileAsync(request.SteamId);
+                
+                if (profile == null)
+                {
+                    return BadRequest(new { success = false, message = "Connection failed: Invalid API Key or Steam ID. Profile could not be retrieved." });
+                }
+
+                var userName = profile.PersonaName;
                 return Ok(new { success = true, message = $"Connected as {userName}", userName = userName });
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 return BadRequest(new { success = false, message = ex.Message });
             }
@@ -164,51 +169,61 @@ namespace Playerr.Api.V3.Settings
                 if (!settings.IsConfigured)
                     return BadRequest(new { success = false, message = "Steam not configured" });
 
-                var steamGames = await _steamClient.GetOwnedGamesAsync(settings.SteamId);
+                // Use a fresh client with the correct key (avoid DI stale key issues)
+                var client = new SteamClient(settings.ApiKey);
+                var steamGames = await client.GetOwnedGamesAsync(settings.SteamId);
                 var existingGames = await _gameRepository.GetAllAsync();
                 
                 int addedCount = 0;
                 var metadataService = _metadataServiceFactory.CreateService();
 
-                foreach (var game in steamGames)
+                foreach (var steamGame in steamGames)
                 {
                     // Check if exists by SteamId or Title
-                    if (!existingGames.Any(g => g.SteamId == game.SteamId || 
-                                                (g.Title.Equals(game.Title, System.StringComparison.OrdinalIgnoreCase))))
+                    if (!existingGames.Any(g => g.SteamId == steamGame.AppId || 
+                                                (g.Title.Equals(steamGame.Name, StringComparison.OrdinalIgnoreCase))))
                     {
+                        var newGame = new Game
+                        {
+                            Title = steamGame.Name,
+                            SteamId = steamGame.AppId,
+                            Added = DateTime.UtcNow,
+                            Status = GameStatus.Announced, 
+                            Monitored = true
+                        };
+
                         // Enrich with IGDB Metadata
                         try 
                         {
-                            var searchResults = await metadataService.SearchGamesAsync(game.Title);
+                            var searchResults = await metadataService.SearchGamesAsync(steamGame.Name);
                             var match = searchResults.FirstOrDefault();
                             
                             if (match != null)
                             {
-                                game.IgdbId = match.IgdbId;
-                                game.Overview = match.Overview;
-                                game.Images = match.Images;
-                                game.Genres = match.Genres;
-                                game.Developer = match.Developer;
-                                game.Publisher = match.Publisher;
-                                game.ReleaseDate = match.ReleaseDate;
-                                game.Year = match.Year;
-                                game.Rating = match.Rating;
+                                newGame.IgdbId = match.IgdbId;
+                                newGame.Overview = match.Overview;
+                                newGame.Images = match.Images;
+                                newGame.Genres = match.Genres;
+                                newGame.Developer = match.Developer;
+                                newGame.Publisher = match.Publisher;
+                                newGame.ReleaseDate = match.ReleaseDate;
+                                newGame.Year = match.Year;
+                                newGame.Rating = match.Rating;
                             }
                         }
-                        catch (System.Exception ex)
+                        catch (Exception ex)
                         {
-                            System.Console.WriteLine($"Failed to enrich metadata for {game.Title}: {ex.Message}");
-                            // Continue adding the game even if metadata fails
+                            Console.WriteLine($"Failed to enrich metadata for {steamGame.Name}: {ex.Message}");
                         }
 
-                        await _gameRepository.AddAsync(game);
+                        await _gameRepository.AddAsync(newGame);
                         addedCount++;
                     }
                 }
 
                 return Ok(new { success = true, message = $"Synced {steamGames.Count} games. Added {addedCount} new games.", count = addedCount });
             }
-            catch (System.Exception ex)
+            catch (Exception ex)
             {
                 return BadRequest(new { success = false, message = ex.Message });
             }

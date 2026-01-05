@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Core.Games
 {
@@ -14,6 +15,9 @@ namespace Playerr.Core.Games
         public string? Quality { get; set; }
         public string? ReleaseGroup { get; set; }
         public string? Edition { get; set; }
+        
+        [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
         public List<string> Languages { get; set; } = new();
     }
 }

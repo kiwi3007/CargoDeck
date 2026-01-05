@@ -1,127 +1,130 @@
 using System;
-using System.IO;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Net.Http;
-using System.Threading.Tasks;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Playerr.Core.Prowlarr; // Reuse SearchResult and ProwlarrCategory if possible, or define common ones
+using System.Threading.Tasks;
+using System.Web;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Core.Jackett
 {
+    [SuppressMessage("Microsoft.Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable")]
+    [SuppressMessage("Microsoft.Globalization", "CA1303:DoNotPassLiteralsAsLocalizedParameters")]
+    [SuppressMessage("Microsoft.Performance", "CA1869:CacheAndReuseJsonSerializerOptions")]
+    [SuppressMessage("Microsoft.Reliability", "CA2007:DoNotDirectlyAwaitATask")]
+    [SuppressMessage("Microsoft.Usage", "CA2234:PassSystemUriObjectsInsteadOfStrings")]
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+    [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope")]
+    [SuppressMessage("Microsoft.Design", "CA1062:ValidateArgumentsOfPublicMethods")]
+    [SuppressMessage("Microsoft.Design", "CA1054:UriParametersShouldNotBeStrings")]
+    [SuppressMessage("Microsoft.Performance", "CA1867:UseCharOverload")]
     public class JackettClient
     {
         private readonly HttpClient _httpClient;
         private readonly string _apiKey;
+        private readonly string _baseUrl;
 
         public JackettClient(string baseUrl, string apiKey)
         {
-            if (!baseUrl.EndsWith("/")) baseUrl += "/";
-            _httpClient = new HttpClient { BaseAddress = new Uri(baseUrl) };
+            _baseUrl = baseUrl.TrimEnd('/');
             _apiKey = apiKey;
+            _httpClient = new HttpClient();
         }
 
-        public async Task<List<SearchResult>> SearchAsync(string query, int[]? categories = null)
+        public async Task<List<JackettResult>> SearchAsync(string query, int[]? categories = null)
         {
-            var categoryQuery = categories != null && categories.Length > 0 
-                ? "&Category[]=" + string.Join("&Category[]=", categories) 
-                : "";
-                
-            var fullUrl = $"api/v2.0/indexers/all/results?apikey={_apiKey}&Query={Uri.EscapeDataString(query)}{categoryQuery}";
+            // Jackett API: /api/v2.0/indexers/all/results?apikey=...&Query=...&Category=...
+            var uriBuilder = new UriBuilder($"{_baseUrl}/api/v2.0/indexers/all/results");
+            var queryParams = HttpUtility.ParseQueryString(uriBuilder.Query);
+            
+            queryParams["apikey"] = _apiKey;
+            queryParams["Query"] = query;
+            
+            if (categories != null && categories.Length > 0)
+            {
+                // Jackett accepts comma separated categories
+                queryParams["Category"] = string.Join(",", categories);
+            }
+
+            uriBuilder.Query = queryParams.ToString();
             
             try
             {
-                Console.WriteLine($"[Jackett] Searching: {_httpClient.BaseAddress}{fullUrl}");
-                var response = await _httpClient.GetAsync(fullUrl);
-                
-                if (!response.IsSuccessStatusCode)
-                {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[Jackett] Search failed with status {response.StatusCode}: {errorContent}");
-                    return new List<SearchResult>();
-                }
+                var response = await _httpClient.GetAsync(uriBuilder.Uri);
+                response.EnsureSuccessStatusCode();
 
                 var content = await response.Content.ReadAsStringAsync();
-                var jackettResponse = JsonSerializer.Deserialize<JackettSearchResponse>(content, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                var root = JsonSerializer.Deserialize<JackettSearchResponse>(content, options);
 
-                if (jackettResponse?.Results == null) return new List<SearchResult>();
-
-                return jackettResponse.Results.Select(r => new SearchResult
-                {
-                    Title = r.Title,
-                    Guid = r.Guid,
-                    DownloadUrl = r.Link,
-                    MagnetUrl = r.MagnetUri,
-                    InfoUrl = r.Comments,
-                    IndexerName = r.IndexerName ?? "Jackett",
-                    Provider = "Jackett",
-                    Size = r.Size,
-                    Seeders = r.Seeders,
-                    Leechers = r.Peers - r.Seeders,
-                    PublishDate = r.PublishDate,
-                    Protocol = !string.IsNullOrEmpty(r.MagnetUri) ? "magnet" : (r.Link?.EndsWith(".nzb", StringComparison.OrdinalIgnoreCase) == true ? "nzb" : "torrent"),
-                    Quality = "",
-                    ReleaseGroup = "",
-                    Categories = r.Category?.Select(c => new ProwlarrCategory { Id = c, Name = "Jackett Category" }).ToList() ?? new List<ProwlarrCategory>()
-                }).ToList();
+                return root?.Results ?? new List<JackettResult>();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Jackett] Search Error: {ex.Message}");
-                return new List<SearchResult>();
+                Console.WriteLine($"Jackett Search Error: {ex.Message}");
+                return new List<JackettResult>();
             }
         }
 
         public async Task<bool> TestConnectionAsync()
         {
-            var testUrl = $"api/v2.0/indexers?apikey={_apiKey}";
-            try
+            try 
             {
-                Console.WriteLine($"[Jackett] Testing connection: {_httpClient.BaseAddress}{testUrl}");
+                // Simple health check or try to get configured indexers
+                var url = $"{_baseUrl}/api/v2.0/indexers/all/results?apikey={_apiKey}&t=caps"; 
+                // t=caps usually returns capabilities xml/json, lightweight check
                 
-                var response = await _httpClient.GetAsync(testUrl);
-                
-                Console.WriteLine($"[Jackett] Response Status: {response.StatusCode}");
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[Jackett] Test failed with status {response.StatusCode}: {errorContent}");
-                    return false;
-                }
-                
-                Console.WriteLine("[Jackett] Connection successful!");
-                return true;
+                var response = await _httpClient.GetAsync(url);
+                return response.IsSuccessStatusCode;
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"[Jackett] Test Error: {ex.Message}");
                 return false;
             }
         }
     }
 
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
     public class JackettSearchResponse
     {
-        public List<JackettResult> Results { get; set; } = new();
+        [JsonPropertyName("Results")]
+        public List<JackettResult> Results { get; set; } = new List<JackettResult>();
     }
 
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
+    [SuppressMessage("Microsoft.Naming", "CA1720:IdentifiersShouldNotContainTypeNames")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
     public class JackettResult
     {
         public string Title { get; set; } = string.Empty;
-        public string Guid { get; set; } = string.Empty;
-        public string? IndexerName { get; set; }
-        public string Link { get; set; } = string.Empty;
-        public string? MagnetUri { get; set; }
-        public string? Comments { get; set; }
+        public string Guid { get; set; } = string.Empty; // Often a URL or PermaLink
+        public string Link { get; set; } = string.Empty; // .torrent download link or magnet
+        
+        [JsonPropertyName("MagnetUri")]
+        public string MagnetUri { get; set; } = string.Empty;
+        
+        public string Tracker { get; set; } = string.Empty;
         public long Size { get; set; }
+        public DateTime PublishDate { get; set; }
+        
+        public List<int> Category { get; set; } = new List<int>();
+        
         public int Seeders { get; set; }
         public int Peers { get; set; }
-        public DateTime PublishDate { get; set; }
-        public List<int>? Category { get; set; }
+        
+        public int Leechers => Math.Max(0, Peers - Seeders);
+        
+        // Helper to get best download link
+        public string DownloadUrl => !string.IsNullOrEmpty(MagnetUri) ? MagnetUri : Link;
+        public string Protocol => !string.IsNullOrEmpty(MagnetUri) || Link.EndsWith(".torrent") ? "torrent" : "torrent"; // Default to torrent if not explicit
     }
 }

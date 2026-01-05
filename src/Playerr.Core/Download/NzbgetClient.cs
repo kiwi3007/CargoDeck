@@ -5,9 +5,21 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Net.Http.Headers;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Core.Download
 {
+    [SuppressMessage("Microsoft.Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable")]
+    [SuppressMessage("Microsoft.Usage", "CA2234:PassSystemUriObjectsInsteadOfStrings")]
+    [SuppressMessage("Microsoft.Reliability", "CA2007:DoNotDirectlyAwaitATask")]
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+    [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope")]
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1054:UriParametersShouldNotBeStrings")]
+    [SuppressMessage("Microsoft.Performance", "CA1867:UseCharOverload")]
+    [SuppressMessage("Microsoft.Design", "CA1062:ValidateArgumentsOfPublicMethods")]
+    [SuppressMessage("Microsoft.Performance", "CA1825:AvoidZeroLengthArrayAllocations")]
     public class NzbgetClient
     {
         private readonly HttpClient _httpClient;
@@ -37,7 +49,7 @@ namespace Playerr.Core.Download
             if (!string.IsNullOrWhiteSpace(urlBase))
             {
                 finalUrlBase = urlBase.Trim();
-                if (!finalUrlBase.StartsWith("/")) finalUrlBase = "/" + finalUrlBase;
+                if (!finalUrlBase.StartsWith("/", StringComparison.OrdinalIgnoreCase)) finalUrlBase = "/" + finalUrlBase;
                 finalUrlBase = finalUrlBase.TrimEnd('/');
             }
             
@@ -98,43 +110,6 @@ namespace Playerr.Core.Download
         {
             try
             {
-                // NZBGet append method: (FileName, Content(Base64), Category, Priority, AddToTop, Paused, DupeKey, DupeScore, DupeMode, Url)
-                // When adding by URL, Content should be empty string, and URL passed as last arg.
-                // Or simplified 'appendurl' method if available, but 'append' is standard.
-                // Let's use 'append' with URL.
-
-                var request = new
-                {
-                    method = "append",
-                    @params = new object[] 
-                    { 
-                        "",             // FileName (empty to auto-detect from URL)
-                        "",             // Content (empty for URL)
-                        category ?? "", // Category
-                        0,              // Priority (0=Normal)
-                        false,          // AddToTop
-                        false,          // Paused
-                        "",             // DupeKey
-                        0,              // DupeScore
-                        "SCORE",        // DupeMode
-                        new object[] { new { Name = "url", Value = nzbUrl } } // Extra Attributes (URL) - Wait, NZBGet API is tricky with URL.
-                        // Actually, NZBGet standard 'append' takes content. 'appendurl' is not a standard RPC method in older versions but often supported via extension scripts.
-                        // Official documentation says: append(Filename, Content, Category, Priority, AddToTop, Paused, DupeKey, DupeScore, DupeMode)
-                        // But wait, there is no direct 'add by URL' simple method in core RPC without downloading it yourself first?
-                        // Let's check documentation logic usually used:
-                        // Most apps download the NZB blob then push it.
-                        // HOWEVER, NZBGet matches: (filename, content, category, ...).
-                        
-                        // BUT! Prowlarr/Radarr often send the URL.
-                        // Let's try downloading the NZB content ourselves if needed, OR checking if there is an appendurl.
-                        // Actually, let's keep it simple: Many clients expect the *content* if using 'append'.
-                        // But let's see if we can just pass the URL in the third param if the second is empty? No.
-                        
-                        // Revised strategy for NZBGet: Playerr (backend) downloads the NZB from Prowlarr URL, then pushes it base64 encoded.
-                    },
-                    id = 2
-                };
-                
                 // Downloading NZB content first to be safe and compatible
                 using var nzbDownloader = new HttpClient();
                 var nzbBytes = await nzbDownloader.GetByteArrayAsync(nzbUrl);

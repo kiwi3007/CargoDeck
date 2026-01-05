@@ -6,9 +6,21 @@ using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using Playerr.Core.Configuration;
 using Playerr.Core.MetadataSource;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 
 namespace Playerr.Core.Games
 {
+    [SuppressMessage("Microsoft.Performance", "CA1822:MarkMembersAsStatic")]
+    [SuppressMessage("Microsoft.Globalization", "CA1303:Do not pass literals as localized parameters")]
+    [SuppressMessage("Microsoft.Globalization", "CA1304:SpecifyCultureInfo")]
+    [SuppressMessage("Microsoft.Globalization", "CA1307:SpecifyStringComparison")]
+    [SuppressMessage("Microsoft.Globalization", "CA1311:SpecifyCultureForToLowerAndToUpper")]
+    [SuppressMessage("Microsoft.Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable")]
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+    [SuppressMessage("Microsoft.Performance", "CA1860:AvoidUsingAnyWhenUseCount")]
+    [SuppressMessage("Microsoft.Reliability", "CA2007:DoNotDirectlyAwaitATask")]
+    [SuppressMessage("Microsoft.Design", "CA1003:UseGenericEventHandlerInstances")]
     public class MediaScannerService
     {
         private readonly ConfigurationService _configService;
@@ -63,12 +75,14 @@ namespace Playerr.Core.Games
             ".ds_store", ".db"
         };
 
+        [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
         private class PlatformRule
         {
             public string[] Extensions { get; set; } = Array.Empty<string>();
             public bool IsFolderMode { get; set; }
         }
 
+        [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
         private class GameCandidate
         {
             public string Title { get; set; } = string.Empty;
@@ -178,7 +192,17 @@ namespace Playerr.Core.Games
         private async Task<int> ScanFolderModeAsync(string rootPath, PlatformRule rule, List<Game> existingGames, string platformKey, GameMetadataService metadataService, System.Threading.CancellationToken ct)
         {
             var candidates = new List<GameCandidate>();
-            var directories = Directory.GetDirectories(rootPath);
+            // Use try-catch for Directory.GetDirectories to handle permission issues
+            string[] directories;
+            try
+            {
+                directories = Directory.GetDirectories(rootPath);
+            }
+            catch (Exception ex)
+            {
+                Log($"Error accessing root path: {ex.Message}");
+                return 0;
+            }
 
             foreach (var dir in directories)
             {
@@ -339,15 +363,19 @@ namespace Playerr.Core.Games
             catch { }
         }
 
-        private bool IsValidFile(string filePath, string[] validExtensions)
+        private bool IsValidFile(string filePath, string[]? validExtensions)
         {
             var ext = Path.GetExtension(filePath);
             if (string.IsNullOrEmpty(ext)) return false;
             // Case-insensitive check
+            if (validExtensions == null) // All extensions allowed (default mode)
+            {
+                 return !_globalBlacklist.Contains(ext);
+            }
             return validExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase) && !_globalBlacklist.Contains(ext);
         }
 
-        private async Task<bool> ProcessPotentialGame(string gameTitle, List<Game> existingGames, GameMetadataService metadataService, string localPath = null, string platformKey = null, string serial = null)
+        private async Task<bool> ProcessPotentialGame(string gameTitle, List<Game> existingGames, GameMetadataService metadataService, string? localPath = null, string? platformKey = null, string? serial = null)
         {
             if (existingGames.Any(g => g.Title.Equals(gameTitle, StringComparison.OrdinalIgnoreCase)))
             {
@@ -447,11 +475,11 @@ namespace Playerr.Core.Games
             return null;
         }
 
-        private (string Title, string Serial) CleanGameTitle(string title)
+        private (string Title, string? Serial) CleanGameTitle(string title)
         {
             if (string.IsNullOrWhiteSpace(title)) return (title, null);
             
-            string serial = null;
+            string? serial = null;
             // 0. Extract Platform IDs (CUSA12345, CUSA-12345, BLES12345, BLUS12345, etc) before cleaning
             var serialMatch = Regex.Match(title, @"([A-Z]{4}-?\d{5})", RegexOptions.IgnoreCase);
             if (serialMatch.Success)

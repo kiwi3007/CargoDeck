@@ -108,12 +108,15 @@ const GameDetails: React.FC = () => {
     }
   };
 
-  const handleDownload = async (url: string) => {
+  const handleDownload = async (url: string, protocol?: string) => {
     if (downloadingUrl) return;
 
     setDownloadingUrl(url);
     try {
-      const response = await axios.post('/api/v3/downloadclient/add', { url });
+      const response = await axios.post('/api/v3/downloadclient/add', {
+        url,
+        protocol: protocol
+      });
       setNotification({ message: response.data.message || t('downloadStarted'), type: 'success' });
     } catch (error: any) {
       console.error('Download failed:', error);
@@ -201,6 +204,105 @@ const GameDetails: React.FC = () => {
       negativeKeywords: ['PS4', 'PC', 'SWITCH'],
       extensions: [],
       color: '#107c10'
+    }
+  };
+
+  type PlatformType = 'PC' | 'PlayStation' | 'Xbox' | 'Nintendo' | 'Unknown';
+
+  const GetPlatformInfo = (categoryId: number): { name: string, icon: string, type: PlatformType } => {
+    switch (categoryId) {
+      // ==========================================
+      // 🖥️ PC & MAC
+      // ==========================================
+      case 4000: // PC General
+      case 4010: // PC 0day
+      case 4020: // PC ISO
+      case 4040: // PC Mobile
+      case 4050: // PC Games (Standard)
+      case 14050: // PC Games (Extended)
+      case 100400: // TPB PC General
+      case 100401: // TPB PC
+      case 104050: // User specific extended
+        return { name: "PC", icon: "mdi-microsoft-windows", type: 'PC' };
+
+      case 4030: // Mac
+      case 100402: // TPB Mac
+        return { name: "Mac", icon: "mdi-apple", type: 'PC' };
+
+      // ==========================================
+      // 🔵 SONY PLAYSTATION
+      // ==========================================
+      case 1080: // PS3
+      case 101080: // PS3 Extended
+      case 100403: // TPB PSx (A veces mezcla)
+        return { name: "PS3", icon: "mdi-sony-playstation", type: 'PlayStation' };
+
+      case 1180: // PS4 (Standard Newznab)
+      case 101100: // PS4 (Extended)
+        return { name: "PS4", icon: "mdi-sony-playstation", type: 'PlayStation' };
+
+      case 1020: // PSP
+      case 101020:
+        return { name: "PSP", icon: "mdi-sony-playstation", type: 'PlayStation' };
+
+      case 1120: // PS Vita
+      case 101120:
+        return { name: "PS Vita", icon: "mdi-sony-playstation", type: 'PlayStation' };
+
+      // ==========================================
+      // 🟢 MICROSOFT XBOX
+      // ==========================================
+      case 1040: // Xbox Original
+      case 101040:
+        return { name: "Xbox", icon: "mdi-microsoft-xbox", type: 'Xbox' };
+
+      case 1050: // Xbox 360
+      case 101050:
+      case 1070: // 360 DLC
+      case 100404: // TPB Xbox360
+        return { name: "Xbox 360", icon: "mdi-microsoft-xbox", type: 'Xbox' };
+
+      case 1140: // Xbox One
+      case 101090: // Xbox One Extended
+        return { name: "Xbox One", icon: "mdi-microsoft-xbox", type: 'Xbox' };
+
+      // ==========================================
+      // 🔴 NINTENDO
+      // ==========================================
+      case 101035: // Switch (El ID más común ahora)
+      case 101110: // Switch Alternativo
+      case 101111: // Switch Update/DLC
+        return { name: "Switch", icon: "mdi-nintendo-switch", type: 'Nintendo' };
+
+      case 1030: // Wii
+      case 101030:
+      case 100405: // TPB Wii
+        return { name: "Wii", icon: "mdi-nintendo-wii", type: 'Nintendo' };
+
+      case 1130: // Wii U
+      case 101130:
+        return { name: "Wii U", icon: "mdi-nintendo-wiiu", type: 'Nintendo' };
+
+      case 1010: // NDS
+      case 101010:
+        return { name: "DS", icon: "mdi-nintendo-game-boy", type: 'Nintendo' };
+
+      case 1110: // 3DS
+        return { name: "3DS", icon: "mdi-nintendo-3ds", type: 'Nintendo' };
+
+      // ==========================================
+      // 📦 OTROS / GENÉRICOS
+      // ==========================================
+      case 1000: // Console General
+        return { name: "Console", icon: "mdi-gamepad-variant", type: 'Unknown' };
+
+      default:
+        // Si es un 1xxx desconocido, es consola
+        if (categoryId >= 1000 && categoryId < 2000) return { name: "Console", icon: "mdi-gamepad-variant", type: 'Unknown' };
+        // Si es un 4xxx desconocido, es PC
+        if (categoryId >= 4000 && categoryId < 5000) return { name: "PC", icon: "mdi-laptop", type: 'PC' };
+
+        return { name: "Unknown", icon: "mdi-help-circle", type: 'Unknown' };
     }
   };
 
@@ -328,6 +430,7 @@ const GameDetails: React.FC = () => {
         </button>
         {error && <p className="error">{error}</p>}
 
+
         {results.length > 0 && (
           <div className="results-container">
             {notification && (
@@ -342,19 +445,65 @@ const GameDetails: React.FC = () => {
             <div className="results-table">
               <div className="results-header-row">
                 <div className="col-protocol sortable" onClick={() => handleSort('protocol')}>{t('protocol')} {getSortIcon('protocol')}</div>
-                <div className="col-age sortable" onClick={() => handleSort('age')}>{t('age')} {getSortIcon('age')}</div>
                 <div className="col-title sortable" onClick={() => handleSort('title')}>{t('title')} {getSortIcon('title')}</div>
                 <div className="col-indexer sortable" onClick={() => handleSort('indexer')}>{t('indexer')} {getSortIcon('indexer')}</div>
                 <div className="col-platform">{t('platform')}</div>
                 <div className="col-size sortable" onClick={() => handleSort('size')}>{t('size')} {getSortIcon('size')}</div>
                 <div className="col-peers sortable" onClick={() => handleSort('seeders')}>{t('peers')} {getSortIcon('seeders')}</div>
-                <div className="col-quality">{t('quality')}</div>
                 <div className="col-actions">{t('download')}</div>
               </div>
 
               {sortedResults.map((result, index) => {
                 const analysis = analyzeTorrent(result.title);
                 const platformStyle = PLATFORM_CONFIG[analysis.detectedPlatform]?.color || '#45475a';
+
+                // Try to resolve explicit category name
+                let explicitPlatform = '';
+                let explicitPlatformType: PlatformType | null = null;
+
+                if (result.category) {
+                  const catIds = result.category.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                  // Prioritize finding a detailed match (skipping general ones if detailed exists)
+                  // But our GetPlatformInfo returns generic names for 1000/4000 too.
+                  // Let's iterate and find the "best" one. 
+
+                  // Sort IDs? Or just take first valid? Usually only 1 category per item.
+                  // Sometimes multiple: 1000, 1010. We want 1010.
+
+                  // Let's assume the highest ID often carries the most specific info in Newznab (e.g. 1010 > 1000)
+                  // Or use the one that returns a name != "Console" and != "PC" and != "Unknown"
+
+                  for (const cid of catIds) {
+                    const info = GetPlatformInfo(cid);
+                    if (info.name !== "Console" && info.name !== "Unknown") {
+                      explicitPlatform = info.name;
+                      explicitPlatformType = info.type;
+                      break; // Found a specific one
+                    }
+
+                    // Only set generic if we haven't found anything yet AND it's not Unknown
+                    if (!explicitPlatform && info.name !== "Unknown") {
+                      explicitPlatform = info.name;
+                      explicitPlatformType = info.type;
+                    }
+                  }
+                }
+
+                // Final display platform: Explicit Category > Detected Title Analysis
+                // If explicit is empty (because all were Unknown), it falls back to detected.
+                const displayPlatform = explicitPlatform || analysis.detectedPlatform;
+
+                // Adjust color using Type
+                let finalColor = platformStyle;
+                if (explicitPlatformType) {
+                  switch (explicitPlatformType) {
+                    case 'Nintendo': finalColor = PLATFORM_CONFIG['Nintendo Switch'].color; break;
+                    case 'PlayStation': finalColor = PLATFORM_CONFIG['PlayStation 5'].color; break;
+                    case 'Xbox': finalColor = PLATFORM_CONFIG['Xbox Series'].color; break;
+                    case 'PC': finalColor = PLATFORM_CONFIG['PC'].color; break;
+                    default: finalColor = '#45475a'; break;
+                  }
+                }
 
                 return (
                   <div key={index} className={`results-row ${analysis.confidence}`}>
@@ -364,11 +513,7 @@ const GameDetails: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="col-age">
-                      <span className="age" title={new Date(result.publishDate).toLocaleString()}>
-                        {result.formattedAge || t('unknown')}
-                      </span>
-                    </div>
+
 
                     <div className="col-title">
                       <div className="title-content">
@@ -395,8 +540,8 @@ const GameDetails: React.FC = () => {
                     </div>
 
                     <div className="col-platform">
-                      <span className="platform-tag" style={{ backgroundColor: platformStyle }}>
-                        {analysis.detectedPlatform}
+                      <span className="platform-tag" style={{ backgroundColor: finalColor }} title={`Category IDs: ${result.category || 'None'}`}>
+                        {displayPlatform}
                       </span>
                     </div>
 
@@ -420,19 +565,15 @@ const GameDetails: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="col-source">
-                      <span className={`provider-badge ${(result.provider || '').toLowerCase()}`}>
-                        {result.provider || 'Unknown'}
-                      </span>
-                    </div>
+
 
                     <div className="col-actions">
                       <div className="download-buttons">
                         {result.magnetUrl && (
                           <button
                             className={`download-btn magnet ${downloadingUrl === result.magnetUrl ? 'loading' : ''}`}
-                            title="Send to qBittorrent"
-                            onClick={() => handleDownload(result.magnetUrl)}
+                            title="Send to Download Client"
+                            onClick={() => handleDownload(result.magnetUrl, result.protocol)}
                             disabled={!!downloadingUrl}
                           >
                             {downloadingUrl === result.magnetUrl ? '⏳' : '🧲'}
@@ -441,8 +582,8 @@ const GameDetails: React.FC = () => {
                         {result.downloadUrl && (
                           <button
                             className={`download-btn direct ${downloadingUrl === result.downloadUrl ? 'loading' : ''}`}
-                            title="Send to qBittorrent"
-                            onClick={() => handleDownload(result.downloadUrl)}
+                            title="Send to Download Client"
+                            onClick={() => handleDownload(result.downloadUrl, result.protocol)}
                             disabled={!!downloadingUrl}
                           >
                             {downloadingUrl === result.downloadUrl ? '⏳' : '⬇️'}

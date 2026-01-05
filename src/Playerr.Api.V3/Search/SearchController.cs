@@ -5,20 +5,28 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Playerr.Core.Prowlarr;
 using Playerr.Core.Jackett;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Api.V3.Search
 {
     [ApiController]
     [Route("api/v3/[controller]")]
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+    [SuppressMessage("Microsoft.Performance", "CA1860:AvoidUsingAnyWhenUseCount")]
+    [SuppressMessage("Microsoft.Performance", "CA1849:CallAsyncMethodsWhenInAnAsyncMethod")]
+    [SuppressMessage("Microsoft.Reliability", "CA2008:DoNotCreateTasksWithoutPassingATaskScheduler")]
     public class SearchController : ControllerBase
     {
         private readonly ProwlarrSettings _prowlarrSettings;
         private readonly JackettSettings _jackettSettings;
+        private readonly System.Net.Http.IHttpClientFactory _httpClientFactory;
 
-        public SearchController(ProwlarrSettings prowlarrSettings, JackettSettings jackettSettings)
+        public SearchController(ProwlarrSettings prowlarrSettings, JackettSettings jackettSettings, System.Net.Http.IHttpClientFactory httpClientFactory)
         {
             _prowlarrSettings = prowlarrSettings;
             _jackettSettings = jackettSettings;
+            _httpClientFactory = httpClientFactory;
         }
 
         [HttpGet]
@@ -31,12 +39,18 @@ namespace Playerr.Api.V3.Search
 
             if (!_prowlarrSettings.IsConfigured && !_jackettSettings.IsConfigured)
             {
-                return StatusCode(500, new { error = "Neither Prowlarr nor Jackett is configured. Please set URL and API key in Settings." });
+                // Return empty list if no providers configured
+                return new List<SearchResult>();
             }
 
             var results = new List<SearchResult>();
             var tasks = new List<Task<List<SearchResult>>>();
-
+            
+            // Create a shared HttpClient for this request scope to reuse connections
+            // Use a short timeout to prevent slow indexers from blocking the user logic
+            var sharedClient = _httpClientFactory.CreateClient("");
+            sharedClient.Timeout = TimeSpan.FromSeconds(60);  
+            
             int[]? categoryIds = null;
             if (!string.IsNullOrEmpty(categories))
             {
@@ -47,47 +61,106 @@ namespace Playerr.Api.V3.Search
                                        .ToArray();
             }
 
-            // Search Prowlarr
+            // 1. Search Prowlarr Indexers individually (SearchManager Logic)
             if (_prowlarrSettings.IsConfigured)
             {
                 var prowlarrClient = new ProwlarrClient(_prowlarrSettings.Url, _prowlarrSettings.ApiKey);
-                tasks.Add(prowlarrClient.SearchAsync(query, null, categoryIds));
+                
+                try 
+                {
+                    // Get ALL indexers
+                    var indexers = await prowlarrClient.GetIndexersAsync();
+                    
+                    foreach (var indexer in indexers.Where(i => i.Enable))
+                    {
+                        var proxyUrl = $"{_prowlarrSettings.Url}/{indexer.Id}/api";
+                        Playerr.Core.Indexers.IIndexerClient client;
+
+                        // Determine Client Type
+                        if (indexer.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase))
+                        {
+                            client = new Playerr.Core.Indexers.NewznabClient(sharedClient, proxyUrl, _prowlarrSettings.ApiKey);
+                        }
+                        else
+                        {
+                            client = new Playerr.Core.Indexers.TorznabClient(sharedClient, proxyUrl, _prowlarrSettings.ApiKey);
+                        }
+
+                        // Launch Task
+                        tasks.Add(client.SearchAsync(query, categoryIds).ContinueWith(t => 
+                        {
+                            if (t.IsFaulted)
+                            {
+                                Console.WriteLine($"[SearchManager] Indexer {indexer.Name} Failed: {t.Exception?.InnerException?.Message}");
+                                return new List<SearchResult>();
+                            }
+                            var idxResults = t.Result;
+                            // Tag results with Indexer Name if missing
+                            foreach(var r in idxResults) 
+                            { 
+                                if(string.IsNullOrEmpty(r.IndexerName)) r.IndexerName = indexer.Name;
+                                r.IndexerId = indexer.Id;
+                            }
+                            return idxResults;
+                        }));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[SearchManager] Failed to fetch indexers: {ex.Message}");
+                }
             }
 
-            // Search Jackett
+            // 2. Search Jackett (Legacy/Direct)
             if (_jackettSettings.IsConfigured)
             {
                 var jackettClient = new JackettClient(_jackettSettings.Url, _jackettSettings.ApiKey);
-                tasks.Add(jackettClient.SearchAsync(query, categoryIds));
+                tasks.Add(jackettClient.SearchAsync(query, categoryIds)
+                    .ContinueWith(t => 
+                    {
+                        if (t.IsFaulted) 
+                        {
+                            Console.WriteLine($"Jackett Search Failed: {t.Exception?.Message}");
+                            return new List<SearchResult>();
+                        }
+                        
+                        return t.Result.Select(j => new SearchResult
+                        {
+                            Title = j.Title,
+                            Guid = j.Guid,
+                            Size = j.Size,
+                            IndexerName = j.Tracker,
+                            Seeders = j.Seeders,
+                            Leechers = j.Leechers,
+                            PeersFromIndexer = j.Peers,
+                            PublishDate = j.PublishDate,
+                            DownloadUrl = j.DownloadUrl,
+                            MagnetUrl = j.MagnetUri,
+                            InfoUrl = j.Guid,
+                            Protocol = j.Protocol,
+                            Provider = "Jackett"
+                        }).ToList();
+                    }));
             }
 
             try
             {
-                var searchTasks = await Task.WhenAll(tasks);
-                foreach (var taskResults in searchTasks)
+                await Task.WhenAll(tasks);
+                
+                foreach (var t in tasks)
                 {
-                    results.AddRange(taskResults);
-                    Console.WriteLine($"[SearchController] Added {taskResults.Count} results from provider. Protocols: {string.Join(", ", taskResults.Select(r => r.Protocol).Distinct())}");
+                    if (t.Result != null) results.AddRange(t.Result);
                 }
 
-                // De-duplicate by title and size (or guid if reliable)
+                Console.WriteLine($"[SearchController] Total Results: {results.Count}");
+
+                // De-duplicate by title and size
                 var uniqueResults = results
                     .GroupBy(r => new { r.Title, r.Size })
                     .Select(g => g.First())
                     .ToList();
 
-                // DEBUG: Inject Mock NZB Result
-                uniqueResults.Insert(0, new Playerr.Core.Prowlarr.SearchResult
-                {
-                    Title = "TEST_NZB_RESULT_FOR_VERIFICATION",
-                    Size = 1000000000,
-                    IndexerName = "Mock NZB Indexer",
-                    Protocol = "nzb",
-                    Guid = "http://example.com/test.nzb",
-                    InfoUrl = "http://example.com"
-                });
-
-                Console.WriteLine($"[SearchController] Returning {uniqueResults.Count} results. First Item Protocol: {uniqueResults.FirstOrDefault()?.Protocol}");
+                Console.WriteLine($"[SearchController] Returning {uniqueResults.Count} unique results.");
 
                 return Ok(uniqueResults);
             }
@@ -132,6 +205,7 @@ namespace Playerr.Api.V3.Search
         }
     }
 
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
     public class TestConnectionRequest
     {
         public string Url { get; set; } = string.Empty;

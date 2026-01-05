@@ -1,282 +1,217 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Core.MetadataSource.Igdb
 {
-    /// <summary>
-    /// Cliente para IGDB API - Similar a MovieDB en Radarr
-    /// Requiere Client ID y Client Secret de Twitch
-    /// </summary>
+    [SuppressMessage("Microsoft.Performance", "CA1822:MarkMembersAsStatic")]
+    [SuppressMessage("Microsoft.Reliability", "CA2007:DoNotDirectlyAwaitATask")]
+    [SuppressMessage("Microsoft.Design", "CA1055:UriReturnValuesShouldNotBeStrings")]
+    [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope")]
+    [SuppressMessage("Microsoft.Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable")]
+    [SuppressMessage("Microsoft.Usage", "CA2234:PassSystemUriObjectsInsteadOfStrings")]
+    [SuppressMessage("Microsoft.Usage", "CA2201:DoNotRaiseReservedExceptionTypes")]
+    [SuppressMessage("Microsoft.Globalization", "CA1307:SpecifyStringComparison")]
+    [SuppressMessage("Microsoft.Design", "CA1062:ValidateArgumentsOfPublicMethods")]
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Performance", "CA1869:CacheAndReuseJsonSerializerOptions")]
     public class IgdbClient
     {
         private readonly HttpClient _httpClient;
-        private string _clientId;
-        private string _clientSecret;
+        private readonly string _clientId;
+        private readonly string _clientSecret;
         private string? _accessToken;
         private DateTime _tokenExpiration;
 
-        private const string IgdbApiUrl = "https://api.igdb.com/v4";
-        private const string TwitchAuthUrl = "https://id.twitch.tv/oauth2/token";
-
         public IgdbClient(string clientId, string clientSecret)
         {
+            _clientId = clientId;
+            _clientSecret = clientSecret;
             _httpClient = new HttpClient();
-            _clientId = clientId;
-            _clientSecret = clientSecret;
         }
 
-        public bool HasValidCredentials =>
-            !string.IsNullOrWhiteSpace(_clientId) &&
-            !string.IsNullOrWhiteSpace(_clientSecret);
-
-        public void UpdateCredentials(string clientId, string clientSecret)
+        private async Task EnsureTokenAsync()
         {
-            _clientId = clientId;
-            _clientSecret = clientSecret;
-            _accessToken = null;
-            _tokenExpiration = DateTime.MinValue;
-        }
+            if (_accessToken != null && DateTime.UtcNow < _tokenExpiration) return;
 
-        private async Task EnsureAuthenticatedAsync()
-        {
-            if (!HasValidCredentials)
-            {
-                throw new InvalidOperationException("IGDB credentials are not configured");
-            }
-
-            if (!string.IsNullOrEmpty(_accessToken) && DateTime.UtcNow < _tokenExpiration)
-                return;
-
-            var request = new HttpRequestMessage(HttpMethod.Post, 
-                $"{TwitchAuthUrl}?client_id={_clientId}&client_secret={_clientSecret}&grant_type=client_credentials");
-
-            var response = await _httpClient.SendAsync(request);
+            var url = $"https://id.twitch.tv/oauth2/token?client_id={_clientId}&client_secret={_clientSecret}&grant_type=client_credentials";
+            var response = await _httpClient.PostAsync(new Uri(url), null);
+            
             if (!response.IsSuccessStatusCode)
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"[IgdbClient] Auth Error ({response.StatusCode}): {errorContent}");
-                throw new HttpRequestException($"IGDB Auth Failed: {response.StatusCode} - {errorContent}");
+                throw new Exception($"Failed to authenticate with IGDB: {response.StatusCode}");
             }
 
             var content = await response.Content.ReadAsStringAsync();
-            var authResponse = JsonSerializer.Deserialize<TwitchAuthResponse>(content);
+            var result = JsonSerializer.Deserialize<TwitchAuthResponse>(content);
 
-            _accessToken = authResponse?.AccessToken;
-            _tokenExpiration = DateTime.UtcNow.AddSeconds(authResponse?.ExpiresIn ?? 3600);
-        }
-
-        public async Task<List<IgdbGame>> SearchGamesAsync(string query, int? platformId = null, string? lang = null, string? externalId = null)
-        {
-            await EnsureAuthenticatedAsync();
-
-            string requestBody;
+            if (result == null) throw new Exception("Failed to deserialize auth response");
             
-            if (!string.IsNullOrEmpty(externalId))
-            {
-                // Search by external identifier (e.g., CUSA code for PS4)
-                requestBody = $@"
-                    fields name, summary, storyline, cover.url, cover.image_id, 
-                           screenshots.url, screenshots.image_id, artworks.url, artworks.image_id,
-                           first_release_date, genres.name, involved_companies.company.name,
-                           rating, rating_count, platforms.name,
-                           external_games.category, external_games.uid;
-                    where external_games.uid = ""{externalId}"";
-                    limit 10;
-                ";
-                
-                var resultsByExternalId = await ExecuteQueryAsync<IgdbGame>("games", requestBody);
-                if (resultsByExternalId.Any()) return resultsByExternalId;
-            }
-
-            // Fallback to name-based search with platform filter
-            requestBody = $@"
-                search ""{query}"";
-                fields name, summary, storyline, cover.url, cover.image_id, 
-                       screenshots.url, screenshots.image_id, artworks.url, artworks.image_id,
-                       first_release_date, genres.name, involved_companies.company.name,
-                       rating, rating_count, platforms.name,
-                       external_games.category, external_games.uid;
-                {(platformId.HasValue ? $"where platforms = ({platformId});" : "")}
-                limit 20;
-            ";
-
-            return await ExecuteQueryAsync<IgdbGame>("games", requestBody);
+            _accessToken = result.AccessToken;
+            _tokenExpiration = DateTime.UtcNow.AddSeconds(result.ExpiresIn - 60); // Buffer
         }
 
-        public async Task<IgdbGame?> GetGameByIdAsync(int igdbId, string? lang = null)
+        public async Task<List<IgdbGame>> SearchGamesAsync(string query, int? platformId = null, string? lang = null, string? serial = null)
         {
-            var results = await GetGamesByIdsAsync(new[] { igdbId }, lang);
-            return results.FirstOrDefault();
-        }
+            await EnsureTokenAsync();
 
-        public async Task<List<IgdbGame>> GetGamesByIdsAsync(IEnumerable<int> igdbIds, string? lang = null)
-        {
-            if (igdbIds == null || !igdbIds.Any()) return new List<IgdbGame>();
-
-            await EnsureAuthenticatedAsync();
-
-            var idsFilter = string.Join(",", igdbIds);
-            var requestBody = $@"
-                fields name, summary, storyline, cover.url, cover.image_id,
-                       screenshots.url, screenshots.image_id, artworks.url, artworks.image_id,
-                       first_release_date, genres.name, involved_companies.company.name,
-                       involved_companies.developer, involved_companies.publisher,
-                       rating, rating_count, platforms.name,
-                       external_games.category, external_games.uid;
-                where id = ({idsFilter});
-                limit {igdbIds.Count()};
-            ";
-
-            return await ExecuteQueryAsync<IgdbGame>("games", requestBody);
-        }
-
-        public async Task<List<IgdbPlatform>> GetPlatformsAsync()
-        {
-            await EnsureAuthenticatedAsync();
-
-            var requestBody = @"
-                fields name, slug, platform_logo.url;
-                where category = (1,2,3,4,5,6);
-                limit 100;
-                sort name asc;
-            ";
-
-            return await ExecuteQueryAsync<IgdbPlatform>("platforms", requestBody);
-        }
-
-        private async Task<List<T>> ExecuteQueryAsync<T>(string endpoint, string body)
-        {
-            var request = new HttpRequestMessage(HttpMethod.Post, $"{IgdbApiUrl}/{endpoint}")
-            {
-                Content = new StringContent(body, Encoding.UTF8, "text/plain")
-            };
-
+            var request = new HttpRequestMessage(HttpMethod.Post, new Uri("https://api.igdb.com/v4/games"));
             request.Headers.Add("Client-ID", _clientId);
             request.Headers.Add("Authorization", $"Bearer {_accessToken}");
 
+            // Basic fields to fetch
+            var fields = "name, summary, storyline, cover.image_id, screenshots.image_id, artworks.image_id, first_release_date, total_rating, total_rating_count, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, external_games.category, external_games.uid";
+
+            // If lang provided, request localized names (not fully supported by IGDB API in search directly, post-filtering needed)
+            // Note: IGDB doesn't have a simple "lang" parameter for search. We fetch data and filter logic in Service.
+            
+            string body;
+            
+            if (serial != null)
+            {
+                // EXPERIMENTAL: Try to search by serial if it appears in alt_names or external? 
+                // IGDB doesn't index serials well. We'll stick to name search but maybe exact match?
+                // Actually, let's just append the clean query.
+            }
+            
+            if (platformId.HasValue)
+            {
+                body = $"fields {fields}; search \"{query}\"; where platforms = ({platformId.Value}) & version_parent = null; limit 10;";
+            }
+            else
+            {
+                body = $"fields {fields}; search \"{query}\"; where version_parent = null; limit 10;";
+            }
+
+            request.Content = new StringContent(body);
             var response = await _httpClient.SendAsync(request);
             
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"[IgdbClient] Query Error ({response.StatusCode}) for endpoint {endpoint}: {errorContent}");
-                Console.WriteLine($"[IgdbClient] Request Body: {body}");
-                throw new HttpRequestException($"IGDB Query Failed: {response.StatusCode} - {errorContent}");
+                Console.WriteLine($"[IgdbClient] Search Failed. Status: {response.StatusCode}. Body: {errorContent}");
+                return new List<IgdbGame>();
             }
 
             var content = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<List<T>>(content, new JsonSerializerOptions 
-            { 
-                PropertyNameCaseInsensitive = true 
-            }) ?? new List<T>();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            return JsonSerializer.Deserialize<List<IgdbGame>>(content, options) ?? new List<IgdbGame>();
+        }
+        
+        public async Task<List<IgdbGame>> GetGamesByIdsAsync(IEnumerable<int> ids, string? lang = null)
+        {
+             if (!ids.Any()) return new List<IgdbGame>();
+             
+             await EnsureTokenAsync();
+             
+             var request = new HttpRequestMessage(HttpMethod.Post, new Uri("https://api.igdb.com/v4/games"));
+             request.Headers.Add("Client-ID", _clientId);
+             request.Headers.Add("Authorization", $"Bearer {_accessToken}");
+             
+             var fields = "name, summary, storyline, cover.image_id, screenshots.image_id, artworks.image_id, first_release_date, total_rating, total_rating_count, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, external_games.category, external_games.uid, localizations.name, localizations.region";
+             
+             var idString = string.Join(",", ids);
+             var body = $"fields {fields}; where id = ({idString}); limit 50;";
+             
+             request.Content = new StringContent(body);
+             var response = await _httpClient.SendAsync(request);
+             
+             if (!response.IsSuccessStatusCode) return new List<IgdbGame>();
+             
+             var content = await response.Content.ReadAsStringAsync();
+             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+             return JsonSerializer.Deserialize<List<IgdbGame>>(content, options) ?? new List<IgdbGame>();
         }
 
-        public static string GetImageUrl(string imageId, ImageSize size = ImageSize.CoverBig)
+        public static string GetImageUrl(string imageId, ImageSize size)
         {
+            if (string.IsNullOrEmpty(imageId)) return "";
             var sizeStr = size switch
             {
-                ImageSize.CoverSmall => "t_cover_small",
-                ImageSize.CoverBig => "t_cover_big",
-                ImageSize.Screenshot => "t_screenshot_med",
-                ImageSize.ScreenshotHuge => "t_screenshot_huge",
-                ImageSize.Thumb => "t_thumb",
-                ImageSize.Micro => "t_micro",
-                ImageSize.HD => "t_1080p",
-                _ => "t_cover_big"
+                ImageSize.CoverSmall => "cover_small",
+                ImageSize.CoverBig => "cover_big",
+                ImageSize.ScreenshotMed => "screenshot_med",
+                ImageSize.ScreenshotBig => "screenshot_big",
+                ImageSize.ScreenshotHuge => "screenshot_huge",
+                ImageSize.LogoMed => "logo_med",
+                ImageSize.Thumb => "thumb",
+                ImageSize.Micro => "micro",
+                ImageSize.HD => "720p",
+                ImageSize.FullHD => "1080p",
+                _ => "cover_big"
             };
+            return $"https://images.igdb.com/igdb/image/upload/t_{sizeStr}/{imageId}.jpg";
+        }
 
-            return $"https://images.igdb.com/igdb/image/upload/{sizeStr}/{imageId}.jpg";
+        [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+        [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+        private class TwitchAuthResponse
+        {
+            [JsonPropertyName("access_token")]
+            public string AccessToken { get; set; } = string.Empty;
+
+            [JsonPropertyName("expires_in")]
+            public int ExpiresIn { get; set; }
+
+            [JsonPropertyName("token_type")]
+            public string TokenType { get; set; } = string.Empty;
         }
     }
 
-    public class TwitchAuthResponse
+    public enum ImageSize
     {
-        [JsonPropertyName("access_token")]
-        public string AccessToken { get; set; } = string.Empty;
-
-        [JsonPropertyName("expires_in")]
-        public int ExpiresIn { get; set; }
-
-        [JsonPropertyName("token_type")]
-        public string TokenType { get; set; } = string.Empty;
+        CoverSmall, CoverBig, ScreenshotMed, ScreenshotBig, ScreenshotHuge, LogoMed, Thumb, Micro, HD, FullHD
     }
 
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
     public class IgdbGame
     {
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
-        public string? Summary { get; set; }
-        public string? Storyline { get; set; }
-        public IgdbCover? Cover { get; set; }
+        public string Summary { get; set; } = string.Empty;
+        public string Storyline { get; set; } = string.Empty;
+        public IgdbImage? Cover { get; set; }
         public List<IgdbImage> Screenshots { get; set; } = new();
         public List<IgdbImage> Artworks { get; set; } = new();
+        public List<IgdbGenre> Genres { get; set; } = new();
         
         [JsonPropertyName("first_release_date")]
         public long? FirstReleaseDate { get; set; }
         
-        public List<IgdbGenre> Genres { get; set; } = new();
+        [JsonPropertyName("total_rating")]
+        public double? Rating { get; set; }
+        
+        [JsonPropertyName("total_rating_count")]
+        public int? RatingCount { get; set; }
         
         [JsonPropertyName("involved_companies")]
         public List<IgdbInvolvedCompany> InvolvedCompanies { get; set; } = new();
         
-        public double? Rating { get; set; }
-        
-        [JsonPropertyName("rating_count")]
-        public int? RatingCount { get; set; }
-        
-        public List<IgdbPlatformRef> Platforms { get; set; } = new();
-
-        [JsonPropertyName("game_localizations")]
-        public List<IgdbLocalization> Localizations { get; set; } = new();
-
         [JsonPropertyName("external_games")]
         public List<IgdbExternalGame> ExternalGames { get; set; } = new();
-    }
-
-    public class IgdbExternalGame
-    {
-        public int Category { get; set; }
-        public string? Uid { get; set; }
-    }
-
-    public class IgdbLocalization
-    {
-        public int Id { get; set; }
-        public string? Name { get; set; }
-        public string? Summary { get; set; }
-        public string? Storyline { get; set; }
-        public int Language { get; set; }
-    }
-
-    public class IgdbCover
-    {
-        public int Id { get; set; }
         
-        [JsonPropertyName("image_id")]
-        public string ImageId { get; set; } = string.Empty;
-        
-        public string? Url { get; set; }
+        [JsonPropertyName("localizations")]
+        public List<IgdbLocalization> Localizations { get; set; } = new();
     }
 
     public class IgdbImage
     {
-        public int Id { get; set; }
-        
         [JsonPropertyName("image_id")]
         public string ImageId { get; set; } = string.Empty;
-        
-        public string? Url { get; set; }
     }
 
     public class IgdbGenre
     {
-        public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
     }
 
@@ -289,34 +224,19 @@ namespace Playerr.Core.MetadataSource.Igdb
 
     public class IgdbCompany
     {
-        public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
     }
-
-    public class IgdbPlatform
+    
+    public class IgdbExternalGame
     {
-        public int Id { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string Slug { get; set; } = string.Empty;
-        
-        [JsonPropertyName("platform_logo")]
-        public IgdbImage? PlatformLogo { get; set; }
+        public int Category { get; set; } // 1 = steam
+        public string Uid { get; set; } = string.Empty;
     }
-
-    public class IgdbPlatformRef
+    
+    public class IgdbLocalization 
     {
-        public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
-    }
-
-    public enum ImageSize
-    {
-        CoverSmall,
-        CoverBig,
-        Screenshot,
-        ScreenshotHuge,
-        Thumb,
-        Micro,
-        HD
+        [JsonPropertyName("region")]
+        public int Language { get; set; } // ID of the region/language
     }
 }

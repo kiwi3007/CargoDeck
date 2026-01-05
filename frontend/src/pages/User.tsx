@@ -8,6 +8,10 @@ interface SteamProfile {
     avatarUrl: string;
     personaState: number; // 0: Offline, 1: Online, 2: Busy, 3: Away, 4: Snooze, 5: Looking to Trade, 6: Looking to Play
     gameExtraInfo?: string;
+    realName?: string;
+    countryCode?: string;
+    accountCreated?: string;
+    level?: number;
 }
 
 interface SteamLibraryStats {
@@ -33,23 +37,62 @@ interface SteamRecentGame {
     };
 }
 
+interface SteamFriend {
+    steamId: string;
+    personaName: string;
+    avatarUrl: string;
+    personaState: number; // 0=Offline, 1=Online, etc
+    gameExtraInfo: string;
+}
+
 const User: React.FC = () => {
     const [profile, setProfile] = useState<SteamProfile | null>(null);
     const [stats, setStats] = useState<SteamLibraryStats | null>(null);
     const [recentGames, setRecentGames] = useState<SteamRecentGame[]>([]);
+    const [friends, setFriends] = useState<SteamFriend[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [profileRes, statsRes, recentRes] = await Promise.all([
-                    axios.get('/api/v3/steam/profile'),
-                    axios.get('/api/v3/steam/stats'),
-                    axios.get('/api/v3/steam/recent')
-                ]);
-                setProfile(profileRes.data);
-                setStats(statsRes.data);
-                setRecentGames(recentRes.data);
+                // Fetch independently to allow partial loading
+                try {
+                    const profileRes = await axios.get('/api/v3/steam/profile');
+                    console.log('Steam Profile Data:', profileRes.data); // DEBUG: Check level
+                    if (profileRes.data) setProfile(profileRes.data);
+                } catch (e) {
+                    console.warn('Failed to load profile', e);
+                }
+
+                try {
+                    const statsRes = await axios.get('/api/v3/steam/stats');
+                    if (statsRes.data) setStats(statsRes.data);
+                } catch (e) {
+                    console.warn('Failed to load stats', e);
+                }
+
+                try {
+                    const recentRes = await axios.get('/api/v3/steam/recent');
+                    // Ensure it is an array
+                    if (Array.isArray(recentRes.data)) {
+                        setRecentGames(recentRes.data);
+                    } else {
+                        setRecentGames([]);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load recent games', e);
+                    setRecentGames([]);
+                }
+
+                try {
+                    const friendRes = await axios.get('/api/v3/steam/friends');
+                    if (Array.isArray(friendRes.data)) {
+                        setFriends(friendRes.data);
+                    }
+                } catch (e) {
+                    console.warn('Failed to load friends', e);
+                }
+
             } catch (error) {
                 console.error('Error fetching Steam data:', error);
             } finally {
@@ -109,7 +152,41 @@ const User: React.FC = () => {
                             />
                         </div>
                         <div className="profile-info">
-                            <h1 style={{ margin: 0, fontSize: '2.5rem', fontWeight: 700 }}>{profile.personaName}</h1>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <h1 style={{ margin: 0, fontSize: '2.5rem', fontWeight: 700 }}>{profile.personaName}</h1>
+                                {profile.countryCode && (
+                                    <span style={{ fontSize: '1.5rem' }}>
+                                        {/* Simple logic to detect country roughly or just show code. For now showing code is safer. */}
+                                        <img
+                                            src={`https://flagcdn.com/24x18/${profile.countryCode.toLowerCase()}.png`}
+                                            alt={profile.countryCode}
+                                            title={profile.countryCode}
+                                            style={{ borderRadius: '2px' }}
+                                        />
+                                    </span>
+                                )}
+                                {profile.level !== undefined && (
+                                    <div
+                                        title={`Steam Level ${profile.level}`}
+                                        style={{
+                                            border: '2px solid #f2f2f2',
+                                            borderRadius: '50%',
+                                            width: '32px',
+                                            height: '32px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontWeight: 'bold',
+                                            fontSize: '0.9rem',
+                                            color: '#f2f2f2',
+                                            marginLeft: '0.5rem'
+                                        }}
+                                    >
+                                        {profile.level}
+                                    </div>
+                                )}
+                            </div>
+
                             <div style={{
                                 fontSize: '1.2rem',
                                 color: getStatusColor(profile.personaState, profile.gameExtraInfo),
@@ -118,7 +195,20 @@ const User: React.FC = () => {
                             }}>
                                 {getStatusText(profile.personaState, profile.gameExtraInfo)}
                             </div>
-                            <div style={{ marginTop: '0.5rem', color: '#6c7086' }}>
+
+                            {/* NEW: Real Name & Member Since */}
+                            {(profile.realName || profile.accountCreated) && (
+                                <div style={{ marginTop: '0.5rem', color: '#c5c5c5', fontSize: '0.9rem', display: 'flex', gap: '1rem' }}>
+                                    {profile.realName && <span>{profile.realName}</span>}
+                                    {profile.accountCreated && (
+                                        <span>
+                                            Member since {new Date(profile.accountCreated).getFullYear()}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
+                            <div style={{ marginTop: '0.2rem', color: '#6c7086', fontSize: '0.8rem' }}>
                                 Steam ID: {profile.steamId}
                             </div>
                         </div>
@@ -148,8 +238,6 @@ const User: React.FC = () => {
                 )}
             </div>
 
-
-
             {recentGames.length > 0 && (
                 <div className="recent-activity" style={{ marginBottom: '3rem' }}>
                     <h3 style={{ color: '#fff', marginBottom: '1.5rem' }}>Recent Activity</h3>
@@ -163,6 +251,7 @@ const User: React.FC = () => {
                                 borderRadius: '8px',
                                 gap: '1rem'
                             }}>
+                                {(() => { console.log(`Game: ${game.name}`, game.latestNews); return null; })()}
                                 {game.iconUrl ? (
                                     <img src={game.iconUrl} alt={game.name} style={{ width: '120px', height: 'auto', borderRadius: '4px', objectFit: 'cover' }} />
                                 ) : (
@@ -192,39 +281,92 @@ const User: React.FC = () => {
                                     )}
 
                                     {game.latestNews && (
-                                        <div className="game-news" style={{
-                                            background: 'rgba(0,0,0,0.2)',
-                                            padding: '0.8rem',
-                                            borderRadius: '6px',
-                                            borderLeft: '3px solid #f9e2af'
-                                        }}>
-                                            <div style={{ fontSize: '0.75rem', color: '#f9e2af', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                                {t('latestUpdate') || 'LATEST UPDATE'} • {new Date(game.latestNews.date).toLocaleDateString()}
-                                            </div>
-                                            <a href={game.latestNews.url} target="_blank" rel="noopener noreferrer" style={{
-                                                color: '#cdd6f4',
-                                                textDecoration: 'none',
-                                                fontSize: '0.9rem',
-                                                fontWeight: 500,
-                                                display: 'block'
-                                            }} className="news-link">
+                                        <div style={{ marginTop: '0.8rem', fontSize: '0.9rem', borderTop: '1px solid #333', paddingTop: '0.5rem' }}>
+                                            <span style={{ color: '#89b4fa', fontWeight: 'bold', marginRight: '0.5rem', textTransform: 'uppercase', fontSize: '0.75rem' }}>
+                                                {game.latestNews.feedLabel || 'NEWS'}
+                                            </span>
+                                            <a
+                                                href={game.latestNews.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{ color: '#cdd6f4', textDecoration: 'none', fontWeight: 500 }}
+                                            >
                                                 {game.latestNews.title}
                                             </a>
+                                            <span style={{ color: '#6c7086', marginLeft: '0.5rem', fontSize: '0.8rem' }}>
+                                                {new Date(game.latestNews.date).toLocaleDateString()}
+                                            </span>
                                         </div>
                                     )}
                                 </div>
                             </div>
                         ))}
                     </div>
-                </div>
+                </div >
             )}
 
-            {!profile && (
-                <div className="empty-library">
-                    <h3>{t('userPageDesc')}</h3>
-                </div>
-            )}
-        </div>
+            {/* Friends Section */}
+            {
+                friends.length > 0 && (
+                    <div className="friends-list" style={{ marginBottom: '3rem' }}>
+                        <h3 style={{ color: '#fff', marginBottom: '1.5rem' }}>Friends ({friends.length})</h3>
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                            gap: '1rem'
+                        }}>
+                            {friends.map(friend => (
+                                <div key={friend.steamId} style={{
+                                    background: '#1e2029',
+                                    padding: '0.8rem',
+                                    borderRadius: '8px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '1rem',
+                                    border: friend.gameExtraInfo ? '1px solid #a6e3a1' : (friend.personaState === 1 ? '1px solid #89b4fa' : '1px solid transparent')
+                                }}>
+                                    <div style={{ position: 'relative' }}>
+                                        <img
+                                            src={friend.avatarUrl}
+                                            alt={friend.personaName}
+                                            style={{ width: '48px', height: '48px', borderRadius: '4px' }}
+                                        />
+                                    </div>
+                                    <div style={{ overflow: 'hidden' }}>
+                                        <div style={{
+                                            color: '#fff',
+                                            fontWeight: 600,
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis'
+                                        }}>
+                                            {friend.personaName}
+                                        </div>
+                                        <div style={{
+                                            color: getStatusColor(friend.personaState, friend.gameExtraInfo),
+                                            fontSize: '0.8rem',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis'
+                                        }}>
+                                            {friend.gameExtraInfo ? `Playing ${friend.gameExtraInfo}` : getStatusText(friend.personaState)}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )
+            }
+
+            {
+                !profile && (
+                    <div className="empty-library">
+                        <h3>{t('userPageDesc')}</h3>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 

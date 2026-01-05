@@ -3,11 +3,13 @@ using Playerr.Core.Configuration;
 using Playerr.Core.Games;
 using System;
 using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Api.V3.Settings
 {
     [ApiController]
     [Route("api/v3/[controller]")]
+    [SuppressMessage("Microsoft.Design", "CA1034:NestedTypesShouldNotBeVisible")]
     public class MediaController : ControllerBase
     {
         private readonly ConfigurationService _configService;

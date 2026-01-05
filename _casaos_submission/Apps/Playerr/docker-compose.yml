@@ -9,6 +9,8 @@ services:
       - /DATA/AppData/playerr/config:/app/config
       - /DATA/Media/Games:/media
     restart: unless-stopped
+    environment:
+      - Prowlarr__Url=http://prowlarr:9696
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest

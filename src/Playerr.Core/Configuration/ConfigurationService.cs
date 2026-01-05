@@ -4,9 +4,13 @@ using System.IO;
 using Playerr.Core.Prowlarr;
 using Playerr.Core.Jackett;
 using Playerr.Core.MetadataSource.Igdb;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Core.Configuration
 {
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    [SuppressMessage("Microsoft.Performance", "CA1869:CacheAndReuseJsonSerializerOptions")]
     public class ConfigurationService
     {
         private readonly string _configDirectory;

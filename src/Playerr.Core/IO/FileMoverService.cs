@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Core.IO
 {
@@ -9,6 +10,11 @@ namespace Playerr.Core.IO
         bool ImportFile(string sourceFile, string destinationFile);
     }
 
+    [SuppressMessage("Microsoft.Performance", "CA1822:MarkMembersAsStatic")]
+    [SuppressMessage("Microsoft.Globalization", "CA2101:SpecifyMarshalingForPInvokeStringArguments")]
+    [SuppressMessage("Microsoft.Interoperability", "CA5392:UseDefaultDllImportSearchPathsAttribute")]
+    [SuppressMessage("Microsoft.Globalization", "CA1303:DoNotPassLiteralsAsLocalizedParameters")]
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
     public class FileMoverService : IFileMoverService
     {
         public bool ImportFile(string sourceFile, string destinationFile)

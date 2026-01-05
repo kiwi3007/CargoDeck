@@ -200,7 +200,7 @@
 
 .results-header-row {
   display: grid;
-  grid-template-columns: 110px 60px 1fr 120px 100px 80px 80px 130px 100px;
+  grid-template-columns: 110px 1fr 120px 100px 80px 80px 100px;
   gap: 12px;
   padding: 12px 16px;
   background: #313244;
@@ -218,7 +218,7 @@
 
 .results-row {
   display: grid;
-  grid-template-columns: 110px 60px 1fr 120px 100px 80px 80px 130px 100px;
+  grid-template-columns: 110px 1fr 120px 100px 80px 80px 100px;
   gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid #313244;
@@ -307,6 +307,11 @@
 .col-indexer .flag {
   margin-right: 2px;
   font-size: 10px;
+}
+
+.col-platform {
+  display: flex;
+  justify-content: center;
 }
 
 .col-platform .platform-tag {
@@ -484,7 +489,7 @@
 
   .results-header-row,
   .results-row {
-    grid-template-columns: 70px 50px 1fr 100px 80px 70px 70px 100px 80px;
+    grid-template-columns: 70px 1fr 100px 80px 70px 70px 80px;
   }
 
   .col-quality .quality-info {

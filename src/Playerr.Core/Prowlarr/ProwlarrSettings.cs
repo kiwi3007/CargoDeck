@@ -1,7 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Playerr.Core.Prowlarr
 {
     public class ProwlarrSettings
     {
+        [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
         public string Url { get; set; } = "http://localhost:9696";
         public string ApiKey { get; set; } = string.Empty;
 

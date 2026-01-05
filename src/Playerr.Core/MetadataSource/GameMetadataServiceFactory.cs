@@ -32,18 +32,19 @@ namespace Playerr.Core.MetadataSource
         public void RefreshConfiguration()
         {
             var igdbSettings = _configService.LoadIgdbSettings();
+            var steamSettings = _configService.LoadSteamSettings();
             
             if (igdbSettings.IsConfigured)
             {
                 var igdbClient = new IgdbClient(igdbSettings.ClientId, igdbSettings.ClientSecret);
-                var steamClient = new SteamClient(_configService);
+                var steamClient = new SteamClient(steamSettings.ApiKey);
                 _currentService = new GameMetadataService(igdbClient, steamClient);
             }
             else
             {
                 // Create a dummy client for when IGDB is not configured
                 var dummyClient = new IgdbClient(string.Empty, string.Empty);
-                var steamClient = new SteamClient(_configService);
+                var steamClient = new SteamClient(steamSettings.ApiKey);
                 _currentService = new GameMetadataService(dummyClient, steamClient);
             }
         }

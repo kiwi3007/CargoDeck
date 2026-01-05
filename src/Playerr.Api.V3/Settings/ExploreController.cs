@@ -2,11 +2,14 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.IO;
 using System.Linq;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Api.V3.Settings
 {
     [ApiController]
     [Route("api/v3/[controller]")]
+    [SuppressMessage("Microsoft.Security", "CA3003:ReviewCodeForFilePathInjectionVulnerabilities")]
+    [SuppressMessage("Microsoft.Globalization", "CA1307:SpecifyStringComparison")]
     public class ExploreController : ControllerBase
     {
         [HttpGet]

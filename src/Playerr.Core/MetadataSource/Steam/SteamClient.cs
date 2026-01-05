@@ -1,440 +1,720 @@
 using System;
-using System.Net.Http;
-using System.Text.Json;
-using System.Threading.Tasks;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using Playerr.Core.Configuration;
+using System.Net.Http;
+using System.Threading.Tasks;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Playerr.Core.Games;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 
 namespace Playerr.Core.MetadataSource.Steam
 {
+    [SuppressMessage("Microsoft.Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable")]
+    [SuppressMessage("Microsoft.Reliability", "CA2007:DoNotDirectlyAwaitATask")]
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+    [SuppressMessage("Microsoft.Globalization", "CA1304:SpecifyCultureInfo")]
+    [SuppressMessage("Microsoft.Globalization", "CA1311:SpecifyCultureForToLowerAndToUpper")]
+    [SuppressMessage("Microsoft.Performance", "CA1822:MarkMembersAsStatic")]
+    [SuppressMessage("Microsoft.Usage", "CA2201:DoNotRaiseReservedExceptionTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1062:ValidateArgumentsOfPublicMethods")]
+    [SuppressMessage("Microsoft.Usage", "CA2234:PassSystemUriObjectsInsteadOfStrings")]
+    [SuppressMessage("Microsoft.Performance", "CA1869:CacheAndReuseJsonSerializerOptions")]
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    [SuppressMessage("Microsoft.Globalization", "CA1303:DoNotPassLiteralsAsLocalizedParameters")]
     public class SteamClient
     {
         private readonly HttpClient _httpClient;
-        private readonly ConfigurationService _configService;
+        private readonly string? _apiKey;
 
-        public SteamClient(ConfigurationService configService)
+        public SteamClient(string? apiKey = null)
         {
-            _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "Playerr/1.0");
-            _configService = configService;
+            _httpClient = new HttpClient
+            {
+                BaseAddress = new Uri("https://store.steampowered.com/")
+            };
+            // Try to find API key from environment if not provided
+            _apiKey = apiKey ?? Environment.GetEnvironmentVariable("Steam__ApiKey");
         }
 
-        private string GetApiKey()
+        public async Task<List<SteamGameResult>> SearchAsync(string query)
         {
-            var settings = _configService.LoadSteamSettings();
-            if (string.IsNullOrEmpty(settings.ApiKey))
+            // Steam Store Search is unofficial and messy (often HTML scraping).
+            // A better way is using the full app list which is cached, but for a direct search:
+            // https://store.steampowered.com/api/storesearch/?term={query}&l=english&cc=US
+            
+            var url = $"api/storesearch/?term={Uri.EscapeDataString(query)}&l=english&cc=US";
+            try 
             {
-                throw new Exception("Steam API Key not configured.");
-            }
-            return settings.ApiKey;
-        }
-
-        public async Task<SteamPlayerProfile?> GetPlayerSummariesAsync(string steamId)
-        {
-            try
-            {
-                var apiKey = GetApiKey();
-                var finalSteamId = steamId;
-
-                // If not numeric, try to resolve vanity URL
-                if (!long.TryParse(steamId, out _))
-                {
-                    finalSteamId = await ResolveVanityUrlAsync(steamId, apiKey);
-                }
-
-                // GetPlayerSummaries v2
-                var url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={apiKey}&steamids={finalSteamId}";
-                
                 var response = await _httpClient.GetAsync(url);
-                EnsureSuccessOrThrow(response);
-
-                var content = await response.Content.ReadAsStringAsync();
-                var root = JsonDocument.Parse(content);
-                
-                // Navigate: response -> players -> [0]
-                var players = root.RootElement.GetProperty("response").GetProperty("players");
-                if (players.GetArrayLength() > 0)
+                if (response.IsSuccessStatusCode)
                 {
-                    var player = players[0];
-                    return new SteamPlayerProfile
-                    {
-                        SteamId = player.GetProperty("steamid").GetString() ?? "",
-                        PersonaName = player.GetProperty("personaname").GetString() ?? "Unknown",
-                        AvatarUrl = player.GetProperty("avatarfull").GetString() ?? "",
-                        PersonaState = player.TryGetProperty("personastate", out var state) ? state.GetInt32() : 0,
-                        GameExtraInfo = player.TryGetProperty("gameextrainfo", out var game) ? game.GetString() : null
-                    };
+                    var content = await response.Content.ReadAsStringAsync();
+                    var result = JsonSerializer.Deserialize<SteamStoreSearchResponse>(content);
+                    return result?.Items ?? new List<SteamGameResult>();
                 }
-                
-                return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error fetching player summaries: {ex.Message}");
-                // Return null or throw depending on preference. 
-                // For UI partial loading, returning null allows gracefully showing "Not connected" or error.
-                return null; 
+                Console.WriteLine($"Steam Search Error: {ex.Message}");
             }
+            return new List<SteamGameResult>();
         }
 
-        private async Task<string> ResolveVanityUrlAsync(string vanityUrl, string apiKey)
+        public async Task<SteamAppDetails?> GetGameDetailsAsync(string appId, string? lang = "english")
         {
-            var url = $"https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key={apiKey}&vanityurl={vanityUrl}";
-            var response = await _httpClient.GetAsync(url);
-            EnsureSuccessOrThrow(response);
-
-            var content = await response.Content.ReadAsStringAsync();
-            var root = JsonDocument.Parse(content);
-            var responseElem = root.RootElement.GetProperty("response");
-
-            if (responseElem.GetProperty("success").GetInt32() == 1)
-            {
-                return responseElem.GetProperty("steamid").GetString()!;
-            }
-
-            throw new Exception($"Could not resolve Steam Vanity URL: {vanityUrl}");
-        }
-
-        public async Task<SteamLibraryStats> GetLibraryStatsAsync(string steamId)
-        {
-            var stats = new SteamLibraryStats();
+            // https://store.steampowered.com/api/appdetails?appids={appId}&l={lang}
+            var url = $"api/appdetails?appids={appId}&l={lang ?? "english"}";
             try
             {
-                var apiKey = GetApiKey();
-                var finalSteamId = steamId;
-
-                if (!long.TryParse(steamId, out _))
-                {
-                    finalSteamId = await ResolveVanityUrlAsync(steamId, apiKey);
-                }
-
-                // GetOwnedGames v1
-                var url = $"https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key={apiKey}&steamid={finalSteamId}&format=json&include_played_free_games=1";
-                
                 var response = await _httpClient.GetAsync(url);
-                EnsureSuccessOrThrow(response);
-
-                var content = await response.Content.ReadAsStringAsync();
-                var root = JsonDocument.Parse(content);
-                
-                if (root.RootElement.GetProperty("response").TryGetProperty("games", out var gamesElement))
+                if (response.IsSuccessStatusCode)
                 {
-                    stats.TotalGames = root.RootElement.GetProperty("response").TryGetProperty("game_count", out var count) ? count.GetInt32() : 0;
-                    
-                    foreach (var gameElem in gamesElement.EnumerateArray())
+                    var content = await response.Content.ReadAsStringAsync();
+                    // Response is a dynamic dictionary: { "APPID": { "success": true, "data": { ... } } }
+                    using var doc = JsonDocument.Parse(content);
+                    if (doc.RootElement.TryGetProperty(appId, out var appElement))
                     {
-                        if (gameElem.TryGetProperty("playtime_forever", out var playtime))
+                        if (appElement.TryGetProperty("success", out var success) && success.GetBoolean())
                         {
-                            stats.TotalMinutesPlayed += playtime.GetInt32();
+                            if (appElement.TryGetProperty("data", out var dataElement))
+                            {
+                                return JsonSerializer.Deserialize<SteamAppDetails>(dataElement.GetRawText());
+                            }
                         }
                     }
                 }
-                
-                return stats;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error calculating library stats: {ex.Message}");
-                return new SteamLibraryStats(); // Return empty stats on failure
+                Console.WriteLine($"Steam Details Error: {ex.Message}");
             }
+            return null;
         }
 
+        // New method to fetch player's owned games (requires API Key)
+        public async Task<List<SteamUserGame>> GetOwnedGamesAsync(string steamId)
+        {
+            if (string.IsNullOrEmpty(_apiKey))
+            {
+                Console.WriteLine("Steam API Key is missing. Cannot fetch owned games.");
+                return new List<SteamUserGame>();
+            }
+
+            var url = $"https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key={_apiKey}&steamid={steamId}&include_appinfo=1&include_played_free_games=1&format=json";
+            
+            try
+            {
+                // Use a separate client or absolute URI for API calls (different base)
+                using var apiClient = new HttpClient();
+                var response = await apiClient.GetAsync(url);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    
+                    // DEBUG LOGGING
+                    Console.WriteLine($"[SteamClient] GetOwnedGames Success. Length: {content.Length}");
+                    // Console.WriteLine(content); // Uncomment to dump full JSON if needed
+
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var result = JsonSerializer.Deserialize<SteamOwnedGamesResponse>(content, options);
+                    
+                    var games = result?.Response?.Games ?? new List<SteamUserGame>();
+                    Console.WriteLine($"[SteamClient] Parsed {games.Count} games.");
+                    return games;
+                }
+                else 
+                {
+                     Console.WriteLine($"[SteamClient] GetOwnedGames Failed. Status: {response.StatusCode}");
+                     var errorContent = await response.Content.ReadAsStringAsync();
+                     Console.WriteLine($"[SteamClient] Error Body: {errorContent}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Steam GetOwnedGames Exception: {ex.Message}");
+            }
+            
+            return new List<SteamUserGame>();
+        }
+
+        public async Task<SteamPlayerProfile?> GetPlayerProfileAsync(string steamId)
+        {
+            if (string.IsNullOrEmpty(_apiKey)) return null;
+
+            var url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={_apiKey}&steamids={steamId}";
+            try
+            {
+                using var apiClient = new HttpClient();
+                var response = await apiClient.GetAsync(url);
+                if (response.IsSuccessStatusCode)
+                {
+                     var content = await response.Content.ReadAsStringAsync();
+                     var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                     var result = JsonSerializer.Deserialize<SteamPlayerSummariesResponse>(content, options);
+                     return result?.Response?.Players?.FirstOrDefault();
+                }
+            }
+             catch (Exception ex)
+            {
+                Console.WriteLine($"Steam GetPlayerProfile Error: {ex.Message}");
+            }
+            return null;
+        }
+        
         public async Task<List<SteamRecentGame>> GetRecentlyPlayedGamesAsync(string steamId)
         {
-            var recentGames = new List<SteamRecentGame>();
+             if (string.IsNullOrEmpty(_apiKey)) return new List<SteamRecentGame>();
+             
+             var url = $"https://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v0001/?key={_apiKey}&steamid={steamId}&format=json";
+             try
+             {
+                 using var apiClient = new HttpClient();
+                 var response = await apiClient.GetAsync(url);
+                 if (response.IsSuccessStatusCode)
+                 {
+                     var content = await response.Content.ReadAsStringAsync();
+                     var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                     var result = JsonSerializer.Deserialize<SteamRecentGamesResponse>(content, options);
+                     return result?.Response?.Games ?? new List<SteamRecentGame>();
+                 }
+             }
+             catch
+             {
+                 // Ignore errors
+             }
+             return new List<SteamRecentGame>();
+        }
+        
+        public async Task<List<SteamNewsItem>> GetGameNewsAsync(string appId, int count = 3, int maxLength = 300)
+        {
+            var url = $"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={appId}&count={count}&maxlength={maxLength}&format=json";
+            try 
+            {
+                using var apiClient = new HttpClient();
+                apiClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
+                var response = await apiClient.GetAsync(url);
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var result = JsonSerializer.Deserialize<SteamNewsResponse>(content, options);
+                    var items = result?.AppNews?.NewsItems ?? new List<SteamNewsItem>();
+                    Console.WriteLine($"[SteamClient] GetGameNews for {appId}: Found {items.Count} items.");
+                    return items;
+                }
+                else
+                {
+                    Console.WriteLine($"[SteamClient] GetGameNews for {appId} Failed: {response.StatusCode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SteamClient] GetGameNews for {appId} Error: {ex.Message}");
+            }
+            return new List<SteamNewsItem>();
+        }
+
+        public async Task<int> GetSteamLevelAsync(string steamId)
+        {
+            var url = $"https://api.steampowered.com/IPlayerService/GetSteamLevel/v1/?key={_apiKey}&steamid={steamId}";
             try
             {
-                var apiKey = GetApiKey();
-                // GetRecentlyPlayedGames v1
-                var url = $"https://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v0001/?key={apiKey}&steamid={steamId}&format=json&count=5";
-                
-                var response = await _httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return recentGames;
-
-                var content = await response.Content.ReadAsStringAsync();
-                var root = JsonDocument.Parse(content);
-                
-                if (root.RootElement.GetProperty("response").TryGetProperty("games", out var gamesElement))
+                using var apiClient = new HttpClient();
+                var response = await apiClient.GetAsync(url);
+                if (response.IsSuccessStatusCode)
                 {
-                    var tasks = new List<Task<SteamRecentGame>>();
+                    var content = await response.Content.ReadAsStringAsync();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var result = JsonSerializer.Deserialize<SteamLevelResponse>(content, options);
+                    return result?.Response?.PlayerLevel ?? 0;
+                }
+            }
+            catch { }
+            return 0;
+        }
 
-                    foreach (var gameElem in gamesElement.EnumerateArray())
-                    {
-                        var appId = gameElem.GetProperty("appid").GetInt32();
-                        var name = gameElem.GetProperty("name").GetString() ?? $"App {appId}";
-                        var playtime2Weeks = gameElem.TryGetProperty("playtime_2weeks", out var p2w) ? p2w.GetInt32() : 0;
-                        var playtimeForever = gameElem.GetProperty("playtime_forever").GetInt32();
-
-                        tasks.Add(ProcessGameAsync(steamId, appId, name, playtime2Weeks, playtimeForever, apiKey));
-                    }
+        public async Task<(int Achieved, int Total)> GetPlayerAchievementsAsync(string steamId, string appId)
+        {
+            var url = $"https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid={appId}&key={_apiKey}&steamid={steamId}";
+            try
+            {
+                using var apiClient = new HttpClient();
+                var response = await apiClient.GetAsync(url);
+                 if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var result = JsonSerializer.Deserialize<SteamUserStatsResponse>(content, options);
                     
-                    recentGames = (await Task.WhenAll(tasks)).ToList();
-                }
-                
-                return recentGames;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching recent games: {ex.Message}");
-                return recentGames;
-            }
-        }
-
-        private async Task<SteamRecentGame> ProcessGameAsync(string steamId, int appId, string name, int playtime2Weeks, int playtimeForever, string apiKey)
-        {
-            var game = new SteamRecentGame
-            {
-                AppId = appId,
-                Name = name,
-                Playtime2Weeks = playtime2Weeks,
-                PlaytimeForever = playtimeForever,
-                // Use High-Res Header Image (460x215) instead of the tiny icon
-                IconUrl = $"https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/{appId}/header.jpg"
-            };
-
-            // Run achievements and news fetch in parallel
-            var achievementsTask = GetPlayerAchievementsAsync(steamId, appId, apiKey);
-            var newsTask = GetNewsForAppAsync(appId);
-
-            await Task.WhenAll(achievementsTask, newsTask);
-
-            var (achieved, total) = await achievementsTask;
-            game.Achieved = achieved;
-            game.TotalAchievements = total;
-            game.LatestNews = await newsTask;
-
-            return game;
-        }
-
-        private async Task<SteamNewsItem?> GetNewsForAppAsync(int appId)
-        {
-            try
-            {
-                // GetNewsForApp v2
-                var url = $"https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/?appid={appId}&count=1&maxlength=300&format=json";
-                var response = await _httpClient.GetAsync(url);
-                
-                if (!response.IsSuccessStatusCode) return null;
-
-                var content = await response.Content.ReadAsStringAsync();
-                var root = JsonDocument.Parse(content);
-                
-                if (!root.RootElement.TryGetProperty("appnews", out var appnews)) return null;
-                if (!appnews.TryGetProperty("newsitems", out var newsitems) || newsitems.GetArrayLength() == 0) return null;
-
-                var news = newsitems[0];
-                return new SteamNewsItem
-                {
-                    Title = news.GetProperty("title").GetString() ?? "Update",
-                    Url = news.GetProperty("url").GetString() ?? "",
-                    FeedLabel = news.GetProperty("feedlabel").GetString() ?? "News",
-                    // Date is unix timestamp
-                    Date = DateTimeOffset.FromUnixTimeSeconds(news.GetProperty("date").GetInt64()).DateTime
-                };
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private async Task<(int achieved, int total)> GetPlayerAchievementsAsync(string steamId, int appId, string apiKey)
-        {
-            try
-            {
-                var url = $"https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid={appId}&key={apiKey}&steamid={steamId}";
-                var response = await _httpClient.GetAsync(url);
-                
-                if (!response.IsSuccessStatusCode) return (0, 0);
-
-                var content = await response.Content.ReadAsStringAsync();
-                var root = JsonDocument.Parse(content);
-                
-                if (!root.RootElement.TryGetProperty("playerstats", out var stats)) return (0, 0);
-                if (!stats.TryGetProperty("achievements", out var achievements)) return (0, 0);
-
-                int achievedCount = 0;
-                int totalCount = achievements.GetArrayLength();
-
-                foreach (var ach in achievements.EnumerateArray())
-                {
-                    if (ach.TryGetProperty("achieved", out var achieved) && achieved.GetInt32() == 1)
+                    if (result?.PlayerStats?.Achievements != null)
                     {
-                        achievedCount++;
+                        var total = result.PlayerStats.Achievements.Count;
+                        var achieved = result.PlayerStats.Achievements.Count(a => a.Achieved == 1);
+                        return (achieved, total);
                     }
                 }
-
-                return (achievedCount, totalCount);
             }
-            catch
-            {
-                return (0, 0);
-            }
+            catch { }
+            return (0, 0);
         }
 
-        public async Task<List<Game>> GetOwnedGamesAsync(string steamId)
+        public async Task<List<string>> GetFriendListAsync(string steamId)
         {
-            var games = new List<Game>();
+            var url = $"https://api.steampowered.com/ISteamUser/GetFriendList/v0001/?key={_apiKey}&steamid={steamId}&relationship=friend";
             try
             {
-                var apiKey = GetApiKey();
-                var finalSteamId = steamId;
-
-                // If not numeric, try to resolve vanity URL
-                if (!long.TryParse(steamId, out _))
+                using var apiClient = new HttpClient();
+                var response = await apiClient.GetAsync(url);
+                if (response.IsSuccessStatusCode)
                 {
-                    finalSteamId = await ResolveVanityUrlAsync(steamId, apiKey);
+                    var content = await response.Content.ReadAsStringAsync();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var result = JsonSerializer.Deserialize<SteamFriendsResponse>(content, options);
+                    return result?.Friendslist?.Friends?.Select(f => f.SteamId).ToList() ?? new List<string>();
                 }
-
-                // GetOwnedGames v1 - include_appinfo=1 to get name and img_icon_url
-                var url = $"https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key={apiKey}&steamid={finalSteamId}&format=json&include_appinfo=1&include_played_free_games=1";
-                
-                var response = await _httpClient.GetAsync(url);
-                EnsureSuccessOrThrow(response);
-
-                var content = await response.Content.ReadAsStringAsync();
-                var root = JsonDocument.Parse(content);
-                
-                if (root.RootElement.GetProperty("response").TryGetProperty("games", out var gamesElement))
-                {
-                    foreach (var gameElem in gamesElement.EnumerateArray())
-                    {
-                        var appid = gameElem.GetProperty("appid").GetInt32();
-                        var name = gameElem.GetProperty("name").GetString();
-                        var imgIconUrl = gameElem.TryGetProperty("img_icon_url", out var icon) ? icon.GetString() : null;
-                        
-                        // Construct basic Game object
-                        var game = new Game
-                        {
-                            Title = name ?? $"Steam App {appid}",
-                            SteamId = appid,
-                            PlatformId = 1, // Accessing Platform ID 1 (PC) assumption or logic needed? Let's assume 1 is default/PC.
-                            Status = GameStatus.Announced, // Or Owned? Status enum has TBA, Announced, Released, Downloading, Downloaded, Missing. Maybe "Released" is best fit for owned games?
-                            Added = DateTime.UtcNow,
-                            Monitored = true
-                        };
-                        
-                        // Icon URL format: http://media.steampowered.com/steamcommunity/public/images/apps/{appid}/{hash}.jpg
-                        if (!string.IsNullOrEmpty(imgIconUrl))
-                        {
-                             // We might want to fetch higher res images from IGDB later, but this is a start.
-                        }
-
-                        games.Add(game);
-                    }
-                }
-                
-                return games;
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error fetching owned games: {ex.Message}");
-                throw new Exception($"Failed to sync Steam library: {ex.Message}");
-            }
+            catch { }
+            return new List<string>();
         }
 
-        public async Task<SteamGameDetails?> GetGameDetailsAsync(string steamId, string lang = "en")
+        public async Task<List<SteamPlayerProfile>> GetPlayerProfilesAsync(IEnumerable<string> steamIds)
         {
+            if (!steamIds.Any()) return new List<SteamPlayerProfile>();
+            
+            // Steam API allows comma separated IDs
+            var ids = string.Join(",", steamIds);
+            var url = $"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={_apiKey}&steamids={ids}";
+            
             try
             {
-                // Map ISO codes to Steam language parameters
-                // Steam uses full language names or specific codes
-                var steamLang = MapToSteamLanguage(lang);
-                var url = $"https://store.steampowered.com/api/appdetails?appids={steamId}&l={steamLang}";
-                
-                var response = await _httpClient.GetAsync(url);
-                if (!response.IsSuccessStatusCode) return null;
-
-                var content = await response.Content.ReadAsStringAsync();
-                var root = JsonDocument.Parse(content);
-
-                if (!root.RootElement.TryGetProperty(steamId, out var gameProp)) return null;
-                if (!gameProp.TryGetProperty("success", out var success) || !success.GetBoolean()) return null;
-                if (!gameProp.TryGetProperty("data", out var data)) return null;
-
-                return JsonSerializer.Deserialize<SteamGameDetails>(data.GetRawText(), new JsonSerializerOptions
+                using var apiClient = new HttpClient();
+                var response = await apiClient.GetAsync(url);
+                if (response.IsSuccessStatusCode)
                 {
-                    PropertyNameCaseInsensitive = true
-                });
+                    var content = await response.Content.ReadAsStringAsync();
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    var result = JsonSerializer.Deserialize<SteamPlayerSummariesResponse>(content, options);
+                    return result?.Response?.Players ?? new List<SteamPlayerProfile>();
+                }
             }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private string MapToSteamLanguage(string lang)
-        {
-            return lang.ToLower() switch
-            {
-                "es" => "spanish",
-                "fr" => "french",
-                "de" => "german",
-                "ru" => "russian",
-                "zh" => "schinese", // Simplified Chinese
-                "ja" => "japanese",
-                _ => "english"
-            };
-        }
-
-        private void EnsureSuccessOrThrow(HttpResponseMessage response)
-        {
-            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) // 401
-            {
-                throw new Exception("Unauthorized (401). Invalid Steam API Key. Please verify your API Key has no extra spaces and is correct.");
-            }
-            if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) // 403
-            {
-                throw new Exception("Access Denied (403). Possible reasons: \n1. Invalid API Key \n2. Steam Profile/Game Details set to Private (must be Public).");
-            }
-            response.EnsureSuccessStatusCode();
+            catch { }
+            return new List<SteamPlayerProfile>();
         }
     }
 
-    public class SteamGameDetails
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    public class SteamStoreSearchResponse
     {
-        public string Name { get; set; } = string.Empty;
-        public string DetailedDescription { get; set; } = string.Empty;
-        public string ShortDescription { get; set; } = string.Empty;
-        public string AboutTheGame { get; set; } = string.Empty;
+        [JsonPropertyName("items")]
+        public List<SteamGameResult> Items { get; set; } = new List<SteamGameResult>();
     }
 
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    public class SteamGameResult
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+        
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+        
+        [JsonPropertyName("tiny_image")]
+        public string TinyImage { get; set; }
+        
+        [JsonPropertyName("price")]
+        public SteamPriceInfo Price { get; set; }
+    }
+
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    public class SteamPriceInfo
+    {
+        [JsonPropertyName("initial")]
+        public int Initial { get; set; }
+        
+        [JsonPropertyName("final")]
+        public int Final { get; set; }
+    }
+
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    public class SteamAppDetails
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; set; }
+        
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+        
+        [JsonPropertyName("steam_appid")]
+        public int SteamAppId { get; set; }
+        
+        [JsonPropertyName("required_age")]
+        public object RequiredAge { get; set; } // Can be int or string
+        
+        [JsonPropertyName("is_free")]
+        public bool IsFree { get; set; }
+        
+        [JsonPropertyName("detailed_description")]
+        public string DetailedDescription { get; set; }
+        
+        [JsonPropertyName("about_the_game")]
+        public string AboutTheGame { get; set; }
+        
+        [JsonPropertyName("short_description")]
+        public string ShortDescription { get; set; }
+        
+        [JsonPropertyName("header_image")]
+        public string HeaderImage { get; set; }
+        
+        [JsonPropertyName("website")]
+        public string Website { get; set; }
+        
+        [JsonPropertyName("developers")]
+        public List<string> Developers { get; set; }
+        
+        [JsonPropertyName("publishers")]
+        public List<string> Publishers { get; set; }
+        
+        [JsonPropertyName("platforms")]
+        public SteamPlatforms Platforms { get; set; }
+        
+        [JsonPropertyName("categories")]
+        public List<SteamCategory> Categories { get; set; }
+        
+        [JsonPropertyName("genres")]
+        public List<SteamGenre> Genres { get; set; }
+        
+        [JsonPropertyName("screenshots")]
+        public List<SteamScreenshot> Screenshots { get; set; }
+        
+        [JsonPropertyName("movies")]
+        public List<SteamMovie> Movies { get; set; }
+        
+        [JsonPropertyName("release_date")]
+        public SteamReleaseDate ReleaseDate { get; set; }
+        
+        [JsonPropertyName("background")]
+        public string Background { get; set; }
+    }
+
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    public class SteamPlatforms
+    {
+        [JsonPropertyName("windows")]
+        public bool Windows { get; set; }
+        [JsonPropertyName("mac")]
+        public bool Mac { get; set; }
+        [JsonPropertyName("linux")]
+        public bool Linux { get; set; }
+    }
+
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    public class SteamCategory { [JsonPropertyName("description")] public string Description { get; set; } }
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    public class SteamGenre { [JsonPropertyName("description")] public string Description { get; set; } }
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    public class SteamScreenshot { [JsonPropertyName("path_thumbnail")] public string Thumbnail { get; set; } [JsonPropertyName("path_full")] public string Full { get; set; } }
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    public class SteamMovie { [JsonPropertyName("webm")] public SteamMovieUrl Webm { get; set; } [JsonPropertyName("mp4")] public SteamMovieUrl Mp4 { get; set; } [JsonPropertyName("thumbnail")] public string Thumbnail { get; set; } }
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
+    public class SteamMovieUrl { [JsonPropertyName("480")] public string Url480 { get; set; } [JsonPropertyName("max")] public string UrlMax { get; set; } }
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    public class SteamReleaseDate { [JsonPropertyName("coming_soon")] public bool ComingSoon { get; set; } [JsonPropertyName("date")] public string Date { get; set; } }
+
+    // User / Owned Games Classes
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    public class SteamOwnedGamesResponse
+    {
+        [JsonPropertyName("response")]
+        public SteamOwnedGamesResponseData Response { get; set; }
+    }
+
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    public class SteamOwnedGamesResponseData
+    {
+        [JsonPropertyName("game_count")]
+        public int GameCount { get; set; }
+        
+        [JsonPropertyName("games")]
+        public List<SteamUserGame> Games { get; set; }
+    }
+
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
+    public class SteamUserGame
+    {
+        [JsonPropertyName("appid")]
+        public int AppId { get; set; }
+        
+        [JsonPropertyName("name")]
+        public string Name { get; set; }
+        
+        [JsonPropertyName("playtime_forever")]
+        public int PlaytimeForever { get; set; } // Minutes
+        
+        [JsonPropertyName("img_icon_url")]
+        public string ImgIconUrl { get; set; }
+        
+        [JsonPropertyName("playtime_2weeks")]
+        public int? Playtime2Weeks { get; set; }
+    }
+
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    public class SteamPlayerSummariesResponse
+    {
+        [JsonPropertyName("response")]
+        public SteamPlayerSummariesData Response { get; set; }
+    }
+
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    public class SteamPlayerSummariesData
+    {
+        [JsonPropertyName("players")]
+        public List<SteamPlayerProfile> Players { get; set; }
+    }
+
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
     public class SteamPlayerProfile
     {
-        public string SteamId { get; set; } = string.Empty;
-        public string PersonaName { get; set; } = string.Empty;
-        public string AvatarUrl { get; set; } = string.Empty;
-        public int PersonaState { get; set; }
-        public string? GameExtraInfo { get; set; }
-    }
+        [JsonPropertyName("steamid")]
+        public string SteamId { get; set; }
+        
+        [JsonPropertyName("personaname")]
+        public string PersonaName { get; set; }
+        
+        [JsonPropertyName("profileurl")]
+        public string ProfileUrl { get; set; } // Suppressed CA1056 here
+        
+        [JsonPropertyName("avatar")]
+        public string Avatar { get; set; }
+        
+        [JsonPropertyName("avatarmedium")]
+        public string AvatarMedium { get; set; }
+        
+        [JsonPropertyName("avatarfull")]
+        public string AvatarFull { get; set; }
 
-    public class SteamLibraryStats
+        public string AvatarUrl => AvatarFull ?? AvatarMedium ?? Avatar;
+        
+        [JsonPropertyName("personastate")]
+        public int PersonaState { get; set; } // 0 - Offline, 1 - Online, etc
+
+        [JsonPropertyName("realname")]
+        public string RealName { get; set; }
+
+        [JsonPropertyName("loccountrycode")]
+        public string LocCountryCode { get; set; }
+
+        [JsonPropertyName("timecreated")]
+        public long TimeCreated { get; set; }
+
+        [JsonPropertyName("gameextrainfo")]
+        public string GameExtraInfo { get; set; }
+    }
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    public class SteamRecentGamesResponse
     {
-        public int TotalGames { get; set; }
-        public int TotalMinutesPlayed { get; set; }
-        public double TotalHoursPlayed => Math.Round(TotalMinutesPlayed / 60.0, 1);
+        [JsonPropertyName("response")]
+        public SteamRecentGamesData Response { get; set; }
     }
-
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    public class SteamRecentGamesData
+    {
+         [JsonPropertyName("total_count")]
+         public int TotalCount { get; set; }
+         
+         [JsonPropertyName("games")]
+         public List<SteamRecentGame> Games { get; set; }
+    }
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
     public class SteamRecentGame
     {
-        public int AppId { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public int Playtime2Weeks { get; set; }
-        public int PlaytimeForever { get; set; }
-        public string? IconUrl { get; set; }
-        public int Achieved { get; set; }
-        public int TotalAchievements { get; set; }
-        public double CompletionPercent => TotalAchievements > 0 ? Math.Round((double)Achieved / TotalAchievements * 100, 1) : 0;
-        public SteamNewsItem? LatestNews { get; set; }
+         [JsonPropertyName("appid")]
+         public int AppId { get; set; }
+         
+         [JsonPropertyName("name")]
+         public string Name { get; set; }
+         
+         [JsonPropertyName("playtime_2weeks")]
+         public int Playtime2Weeks { get; set; }
+         
+         [JsonPropertyName("playtime_forever")]
+         public int PlaytimeForever { get; set; }
+         
+         [JsonPropertyName("img_icon_url")]
+         public string ImgIconUrl { get; set; }
+         
+         // Helper to build full icon URL (Steam legacy)
+         public string IconUrl => !string.IsNullOrEmpty(ImgIconUrl) 
+            ? $"http://media.steampowered.com/steamcommunity/public/images/apps/{AppId}/{ImgIconUrl}.jpg" 
+            : "";
     }
-
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    public class SteamNewsResponse
+    {
+        [JsonPropertyName("appnews")]
+        public SteamAppNews AppNews { get; set; }
+    }
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+    [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+    public class SteamAppNews
+    {
+        [JsonPropertyName("appid")]
+        public int AppId { get; set; }
+        
+        [JsonPropertyName("newsitems")]
+        public List<SteamNewsItem> NewsItems { get; set; }
+    }
+    
+    [SuppressMessage("Microsoft.Performance", "CA1812:AvoidUninstantiatedInternalClasses")]
+    [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
     public class SteamNewsItem
     {
-        public string Title { get; set; } = string.Empty;
-        public string Url { get; set; } = string.Empty;
-        public string FeedLabel { get; set; } = string.Empty;
-        public DateTime Date { get; set; }
+        [JsonPropertyName("gid")]
+        public string Gid { get; set; }
+        
+        [JsonPropertyName("title")]
+        public string Title { get; set; }
+        
+        [JsonPropertyName("url")]
+        public string Url { get; set; }
+        
+        [JsonPropertyName("is_external_url")]
+        public bool IsExternalUrl { get; set; }
+        
+        [JsonPropertyName("author")]
+        public string Author { get; set; }
+        
+        [JsonPropertyName("contents")]
+        public string Contents { get; set; }
+        
+        [JsonPropertyName("feedlabel")]
+        public string FeedLabel { get; set; }
+        
+        [JsonPropertyName("date")]
+        public long DateUnix { get; set; }
+        
+        [JsonPropertyName("feedname")]
+        public string FeedName { get; set; }
+        
+        public DateTime Date => DateTimeOffset.FromUnixTimeSeconds(DateUnix).DateTime;
+    }
+
+    public class SteamLevelResponse
+    {
+        [JsonPropertyName("response")]
+        public SteamLevelData Response { get; set; }
+    }
+
+    public class SteamLevelData
+    {
+        [JsonPropertyName("player_level")]
+        public int PlayerLevel { get; set; }
+    }
+
+    public class SteamUserStatsResponse
+    {
+        [JsonPropertyName("playerstats")]
+        public SteamUserStatsData PlayerStats { get; set; }
+    }
+
+    public class SteamUserStatsData
+    {
+        [JsonPropertyName("achievements")]
+        public List<SteamAchievementStatus> Achievements { get; set; }
+    }
+
+    public class SteamAchievementStatus
+    {
+        [JsonPropertyName("apiname")]
+        public string ApiName { get; set; }
+        
+        [JsonPropertyName("achieved")]
+        public int Achieved { get; set; }
+    }
+
+    public class SteamFriendsResponse
+    {
+        [JsonPropertyName("friendslist")]
+        public SteamFriendsList Friendslist { get; set; }
+    }
+
+    public class SteamFriendsList
+    {
+        [JsonPropertyName("friends")]
+        public List<SteamFriend> Friends { get; set; }
+    }
+
+    public class SteamFriend
+    {
+        [JsonPropertyName("steamid")]
+        public string SteamId { get; set; }
+        
+        [JsonPropertyName("relationship")]
+        public string Relationship { get; set; }
+        
+        [JsonPropertyName("friend_since")]
+        public long FriendSince { get; set; }
     }
 }

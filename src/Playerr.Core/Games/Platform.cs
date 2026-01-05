@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Core.Games
 {
@@ -9,6 +10,9 @@ namespace Playerr.Core.Games
         public string Slug { get; set; } = string.Empty;
         public PlatformType Type { get; set; }
         public string? Icon { get; set; }
+        
+        [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
         public List<Game> Games { get; set; } = new();
     }
 

@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Playerr.Core.Download
 {
     public class DownloadClient
@@ -10,7 +12,10 @@ namespace Playerr.Core.Download
         public string? Username { get; set; }
         public string? Password { get; set; }
         public string? Category { get; set; }
+        
+        [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
         public string? UrlBase { get; set; }
+        
         public string? ApiKey { get; set; }
         public bool Enable { get; set; } = true;
         public int Priority { get; set; }

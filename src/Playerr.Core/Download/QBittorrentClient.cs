@@ -4,9 +4,28 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Core.Download
 {
+    [SuppressMessage("Microsoft.Performance", "CA1822:MarkMembersAsStatic")]
+    [SuppressMessage("Microsoft.Globalization", "CA1303:Do not pass literals as localized parameters")]
+    [SuppressMessage("Microsoft.Globalization", "CA1304:SpecifyCultureInfo")]
+    [SuppressMessage("Microsoft.Globalization", "CA1305:SpecifyIFormatProvider")]
+    [SuppressMessage("Microsoft.Globalization", "CA1307:SpecifyStringComparison")]
+    [SuppressMessage("Microsoft.Globalization", "CA1310:SpecifyStringComparison")]
+    [SuppressMessage("Microsoft.Globalization", "CA1309:UseOrdinalStringComparison")]
+    [SuppressMessage("Microsoft.Globalization", "CA1311:SpecifyCultureForToLowerAndToUpper")]
+    [SuppressMessage("Microsoft.Reliability", "CA2007:DoNotDirectlyAwaitATask")]
+    [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1062:ValidateArgumentsOfPublicMethods")]
+    [SuppressMessage("Microsoft.Usage", "CA2201:DoNotRaiseReservedExceptionTypes")]
+    [SuppressMessage("Microsoft.Design", "CA1001:TypesThatOwnDisposableFieldsShouldBeDisposable")]
+    [SuppressMessage("Microsoft.Usage", "CA2234:PassSystemUriObjectsInsteadOfStrings")]
+    [SuppressMessage("Microsoft.Design", "CA1054:UriParametersShouldNotBeStrings")]
+    [SuppressMessage("Microsoft.Performance", "CA1869:CacheAndReuseJsonSerializerOptions")]
+    [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope")]
+    [SuppressMessage("Microsoft.Performance", "CA1866:UseCharOverload")]
     public class QBittorrentClient
     {
         private readonly HttpClient _httpClient;

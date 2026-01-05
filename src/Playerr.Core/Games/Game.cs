@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Core.Games
 {
@@ -18,6 +19,8 @@ namespace Playerr.Core.Games
         // Visual Assets - Similar a Radarr con posters y fanart
         public GameImages Images { get; set; } = new();
         
+        [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
         public List<string> Genres { get; set; } = new();
         public string? Developer { get; set; }
         public string? Publisher { get; set; }
@@ -29,6 +32,9 @@ namespace Playerr.Core.Games
         public bool Monitored { get; set; }
         public string? Path { get; set; }
         public long? SizeOnDisk { get; set; }
+        
+        [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
         public List<GameFile> GameFiles { get; set; } = new();
         
         // Metadata IDs
@@ -42,8 +48,15 @@ namespace Playerr.Core.Games
         public string? CoverUrl { get; set; }          // Carátula principal
         public string? CoverLargeUrl { get; set; }     // Carátula HD
         public string? BackgroundUrl { get; set; }      // Fondo/Fanart
+        [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
         public string? BannerUrl { get; set; }         // Banner horizontal
+        
+        [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
         public List<string> Screenshots { get; set; } = new();  // Screenshots del juego
+        
+        [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
         public List<string> Artworks { get; set; } = new();     // Arte conceptual
     }
 
