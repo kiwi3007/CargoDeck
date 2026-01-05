@@ -57,7 +57,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <key>CFBundleIdentifier</key>
     <string>com.playerr.app</string>
     <key>CFBundleVersion</key>
-    <string>0.1.1-beta</string>
+    <string>0.1.2-beta</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>

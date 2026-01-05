@@ -69,7 +69,7 @@ cat > "${APP_NAME}.app/Contents/Info.plist" <<EOF
     <key>CFBundleIdentifier</key>
     <string>app.playerr.desktop</string>
     <key>CFBundleVersion</key>
-    <string>0.1.1</string>
+    <string>0.1.2-beta</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
@@ -120,19 +120,20 @@ if command -v hdiutil >/dev/null; then
 fi
 
 # Create a PKG (Real Installer Wizard)
-if command -v pkgbuild >/dev/null; then
-    echo "Creating .pkg installer for Intel..."
-    rm -f "build_artifacts/Playerr-Intel.pkg"
-    pkgbuild --component "${APP_NAME}.app" \
-             --install-location /Applications \
-             --identifier "app.playerr.desktop.pkg" \
-             --version "0.1.1" \
-             "build_artifacts/Playerr-Intel.pkg"
-    
-    if command -v productsign >/dev/null && [ -n "$INSTALLER_CERT_NAME" ]; then
-        echo "Note: PKG is created but not signed with a developer cert (requires Apple Developer ID)."
-    fi
-fi
+# Create a PKG (Real Installer Wizard) - DISABLED
+# if command -v pkgbuild >/dev/null; then
+#     echo "Creating .pkg installer for Intel..."
+#     rm -f "build_artifacts/Playerr-Intel.pkg"
+#     pkgbuild --component "${APP_NAME}.app" \
+#              --install-location /Applications \
+#              --identifier "app.playerr.desktop.pkg" \
+#              --version "0.1.2-beta" \
+#              "build_artifacts/Playerr-Intel.pkg"
+#     
+#     if command -v productsign >/dev/null && [ -n "$INSTALLER_CERT_NAME" ]; then
+#         echo "Note: PKG is created but not signed with a developer cert (requires Apple Developer ID)."
+#     fi
+# fi
 
 echo "=================================="
 echo "Intel Build Complete!"

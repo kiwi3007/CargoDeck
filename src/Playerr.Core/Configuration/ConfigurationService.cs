@@ -23,7 +23,31 @@ namespace Playerr.Core.Configuration
 
         public ConfigurationService(string contentRoot)
         {
-            _configDirectory = Path.Combine(contentRoot, "config");
+            // Determine config directory logic:
+            // 1. Check for 'config' folder in contentRoot (Portable Mode)
+            // 2. If not found, use %AppData%/Playerr/config (Installed Mode - Windows specific)
+            
+            var localConfig = Path.Combine(contentRoot, "config");
+            
+            if (Directory.Exists(localConfig))
+            {
+                _configDirectory = localConfig;
+            }
+            else
+            {
+                // Fallback to AppData for installed versions
+                var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                if (!string.IsNullOrEmpty(appData))
+                {
+                    _configDirectory = Path.Combine(appData, "Playerr", "config");
+                }
+                else
+                {
+                    // Fallback to local if AppData is not available (e.g. non-Windows or weird environment)
+                    _configDirectory = localConfig;
+                }
+            }
+
             _prowlarrConfigFile = Path.Combine(_configDirectory, "prowlarr.json");
             _jackettConfigFile = Path.Combine(_configDirectory, "jackett.json");
             _igdbConfigFile = Path.Combine(_configDirectory, "igdb.json");
@@ -32,7 +56,15 @@ namespace Playerr.Core.Configuration
             _steamConfigFile = Path.Combine(_configDirectory, "steam.json");
             
             // Ensure config directory exists
-            Directory.CreateDirectory(_configDirectory);
+            try 
+            {
+                Directory.CreateDirectory(_configDirectory);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Critical Error: Could not create config directory at {_configDirectory}. Details: {ex.Message}");
+                // If we fail here, the app will likely crash, but at least we logged it.
+            }
         }
 
         public ProwlarrSettings LoadProwlarrSettings()

@@ -2,6 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <Version>0.1.2</Version>
+    <ApplicationIcon>../../frontend/src/assets/app_logo.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
