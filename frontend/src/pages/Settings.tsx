@@ -22,6 +22,7 @@ interface DownloadClient {
   password?: string;
   category?: string;
   urlBase?: string;
+  apiKey?: string;
   enable: boolean;
   priority: number;
 }
@@ -71,6 +72,7 @@ const Settings: React.FC = () => {
     password: '',
     category: 'playerr',
     urlBase: '',
+    apiKey: '',
     enable: true,
     priority: 1
   });
@@ -372,7 +374,8 @@ const Settings: React.FC = () => {
         port: clientForm.port,
         username: clientForm.username,
         password: clientForm.password,
-        urlBase: clientForm.urlBase
+        urlBase: clientForm.urlBase,
+        apiKey: clientForm.apiKey
       });
 
       setClientTestResult({
@@ -433,6 +436,7 @@ const Settings: React.FC = () => {
       password: '',
       category: 'playerr',
       urlBase: '',
+      apiKey: '',
       enable: true,
       priority: 1
     });
@@ -860,6 +864,8 @@ const Settings: React.FC = () => {
                 >
                   <option value="qBittorrent">qBittorrent</option>
                   <option value="Transmission">Transmission</option>
+                  <option value="SABnzbd">SABnzbd (Usenet)</option>
+                  <option value="NZBGet">NZBGet (Usenet)</option>
                   <option value="Deluge">Deluge ({t('comingSoon')})</option>
                 </select>
               </div>
@@ -888,25 +894,41 @@ const Settings: React.FC = () => {
                 </div>
               </div>
 
-              <div className="form-group">
-                <label>{t('username')}</label>
-                <input
-                  type="text"
-                  value={clientForm.username || ''}
-                  onChange={(e) => setClientForm({ ...clientForm, username: e.target.value })}
-                  placeholder={t('usernamePlaceholder')}
-                />
-              </div>
+              {clientForm.implementation !== 'SABnzbd' && (
+                <>
+                  <div className="form-group">
+                    <label>{t('username')}</label>
+                    <input
+                      type="text"
+                      value={clientForm.username || ''}
+                      onChange={(e) => setClientForm({ ...clientForm, username: e.target.value })}
+                      placeholder={t('usernamePlaceholder')}
+                    />
+                  </div>
 
-              <div className="form-group">
-                <label>{t('password')}</label>
-                <input
-                  type="password"
-                  value={clientForm.password || ''}
-                  onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
-                  placeholder={t('passwordPlaceholder')}
-                />
-              </div>
+                  <div className="form-group">
+                    <label>{t('password')}</label>
+                    <input
+                      type="password"
+                      value={clientForm.password || ''}
+                      onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
+                      placeholder={t('passwordPlaceholder')}
+                    />
+                  </div>
+                </>
+              )}
+
+              {clientForm.implementation === 'SABnzbd' && (
+                <div className="form-group">
+                  <label>API Key</label>
+                  <input
+                    type="password"
+                    value={clientForm.apiKey || ''}
+                    onChange={(e) => setClientForm({ ...clientForm, apiKey: e.target.value })}
+                    placeholder="SABnzbd API Key"
+                  />
+                </div>
+              )}
 
               <div className="form-group">
                 <label>{t('urlBase')} <small>(optional, e.g. /qbittorrent)</small></label>

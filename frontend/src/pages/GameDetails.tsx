@@ -405,15 +405,19 @@ const GameDetails: React.FC = () => {
                     </div>
 
                     <div className="col-peers">
-                      <div className="peers-info">
-                        <span className={`seeders ${getSeedersClass(result.seeders)}`}>
-                          {result.seeders ?? 0}
-                        </span>
-                        <span className="separator">/</span>
-                        <span className="leechers">
-                          {result.leechers ?? 0}
-                        </span>
-                      </div>
+                      {result.protocol?.toLowerCase() === 'usenet' || result.protocol?.toLowerCase() === 'nzb' ? (
+                        <span className="peers-info">-</span>
+                      ) : (
+                        <div className="peers-info">
+                          <span className={`seeders ${getSeedersClass(result.seeders)}`}>
+                            {result.seeders ?? 0}
+                          </span>
+                          <span className="separator">/</span>
+                          <span className="leechers">
+                            {result.leechers ?? 0}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="col-source">

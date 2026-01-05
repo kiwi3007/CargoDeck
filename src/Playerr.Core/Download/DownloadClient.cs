@@ -11,6 +11,7 @@ namespace Playerr.Core.Download
         public string? Password { get; set; }
         public string? Category { get; set; }
         public string? UrlBase { get; set; }
+        public string? ApiKey { get; set; }
         public bool Enable { get; set; } = true;
         public int Priority { get; set; }
     }

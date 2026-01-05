@@ -66,6 +66,7 @@ namespace Playerr.Api.V3.DownloadClients
             existingClient.Password = client.Password;
             existingClient.Category = client.Category;
             existingClient.UrlBase = client.UrlBase;
+            existingClient.ApiKey = client.ApiKey;
             existingClient.Enable = client.Enable;
             existingClient.Priority = client.Priority;
 
@@ -129,6 +130,37 @@ namespace Playerr.Api.V3.DownloadClients
                         version = await transmissionClient.GetVersionAsync();
                     }
                 }
+                else if (request.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sabClient = new SabnzbdClient(
+                        request.Host,
+                        request.Port,
+                        request.ApiKey ?? string.Empty,
+                        request.UrlBase
+                    );
+
+                    isConnected = await sabClient.TestConnectionAsync();
+                    if (isConnected)
+                    {
+                        version = await sabClient.GetVersionAsync();
+                    }
+                }
+                else if (request.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase))
+                {
+                    var nzbClient = new NzbgetClient(
+                        request.Host,
+                        request.Port,
+                        request.Username ?? string.Empty,
+                        request.Password ?? string.Empty,
+                        request.UrlBase
+                    );
+
+                    isConnected = await nzbClient.TestConnectionAsync();
+                    if (isConnected)
+                    {
+                        version = await nzbClient.GetVersionAsync();
+                    }
+                }
                 else
                 {
                     return BadRequest(new { message = $"Unsupported download client: {request.Implementation}" });
@@ -160,7 +192,37 @@ namespace Playerr.Api.V3.DownloadClients
                 
                 // Sort by Priority (lower is better, assuming 1 is highest priority)
                 // If priorities are equal, use ID (assuming newer clients might be preferred or just stable sort)
-                var client = _clients.Where(c => c.Enable).OrderBy(c => c.Priority).ThenBy(c => c.Id).FirstOrDefault();
+                DownloadClient? client = null;
+                
+                // Smart Selection based on URL extension
+                bool isNzb = request.Url.EndsWith(".nzb", StringComparison.OrdinalIgnoreCase); // Basic check
+                
+                if (isNzb)
+                {
+                    // Prioritize Usenet clients
+                     client = _clients
+                        .Where(c => c.Enable && (c.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase) || c.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase)))
+                        .OrderBy(c => c.Priority).ThenBy(c => c.Id)
+                        .FirstOrDefault();
+                }
+                else
+                {
+                    // Prioritize Torrent clients (default)
+                     client = _clients
+                        .Where(c => c.Enable && !c.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase) && !c.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase))
+                        .OrderBy(c => c.Priority).ThenBy(c => c.Id)
+                        .FirstOrDefault();
+                }
+
+                // Fallback: If no specific client found, valid if we support mixed (but protocols differ)
+                // If isNzb and no usenet client, we fail.
+                // If not nzb and no torrent client, we fail.
+                
+                if (client == null)
+                {
+                    Console.WriteLine($"[DownloadClient] No enabled download client found for {(isNzb ? "NZB" : "Torrent")}");
+                    return BadRequest(new { message = $"No enabled {(isNzb ? "Usenet" : "Torrent")} download client found." });
+                }
                 
                 if (client == null)
                 {
@@ -211,6 +273,47 @@ namespace Playerr.Api.V3.DownloadClients
                         return StatusCode(500, new { message = "Failed to add torrent to Transmission" });
                     }
                 }
+                else if (client.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sabClient = new SabnzbdClient(
+                        client.Host,
+                        client.Port,
+                        client.ApiKey ?? string.Empty,
+                        client.UrlBase
+                    );
+                    
+                    bool success = await sabClient.AddNzbAsync(request.Url, client.Category);
+                    if (success)
+                    {
+                        Console.WriteLine("[DownloadClient] Successfully added NZB to SABnzbd");
+                        return Ok(new { message = "NZB added successfully to SABnzbd" });
+                    }
+                    else
+                    {
+                         return StatusCode(500, new { message = "Failed to add NZB to SABnzbd" });
+                    }
+                }
+                else if (client.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase))
+                {
+                    var nzbClient = new NzbgetClient(
+                        client.Host,
+                        client.Port,
+                        client.Username ?? string.Empty,
+                        client.Password ?? string.Empty,
+                        client.UrlBase
+                    );
+                    
+                    bool success = await nzbClient.AddNzbAsync(request.Url, client.Category);
+                    if (success)
+                    {
+                        Console.WriteLine("[DownloadClient] Successfully added NZB to NZBGet");
+                        return Ok(new { message = "NZB added successfully to NZBGet" });
+                    }
+                    else
+                    {
+                         return StatusCode(500, new { message = "Failed to add NZB to NZBGet" });
+                    }
+                }
                 
                 return BadRequest(new { message = $"Unsupported download client: {client.Implementation}" });
             }
@@ -235,5 +338,6 @@ namespace Playerr.Api.V3.DownloadClients
         public string? Username { get; set; }
         public string? Password { get; set; }
         public string? UrlBase { get; set; }
+        public string? ApiKey { get; set; }
     }
 }
