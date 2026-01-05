@@ -81,7 +81,7 @@ namespace Playerr.Api.V3.Search
                 {
                     Title = "TEST_NZB_RESULT_FOR_VERIFICATION",
                     Size = 1000000000,
-                    Indexer = "Mock NZB Indexer",
+                    IndexerName = "Mock NZB Indexer",
                     Protocol = "nzb",
                     Guid = "http://example.com/test.nzb",
                     InfoUrl = "http://example.com"
