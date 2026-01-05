@@ -285,7 +285,7 @@ namespace Playerr.Core.Prowlarr
         
         public string Category => Categories?.Count > 0 ? string.Join(", ", Categories.Select(c => c.Name)) : string.Empty;
         
-        [JsonPropertyName("downloadProtocol")]
+        [JsonPropertyName("protocol")]
         public string Protocol { get; set; } = "torrent";
         
         [JsonPropertyName("languages")]

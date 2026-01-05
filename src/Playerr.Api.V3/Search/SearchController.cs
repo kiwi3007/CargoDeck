@@ -67,6 +67,7 @@ namespace Playerr.Api.V3.Search
                 foreach (var taskResults in searchTasks)
                 {
                     results.AddRange(taskResults);
+                    Console.WriteLine($"[SearchController] Added {taskResults.Count} results from provider. Protocols: {string.Join(", ", taskResults.Select(r => r.Protocol).Distinct())}");
                 }
 
                 // De-duplicate by title and size (or guid if reliable)
@@ -74,6 +75,19 @@ namespace Playerr.Api.V3.Search
                     .GroupBy(r => new { r.Title, r.Size })
                     .Select(g => g.First())
                     .ToList();
+
+                // DEBUG: Inject Mock NZB Result
+                uniqueResults.Insert(0, new Playerr.Core.Prowlarr.SearchResult
+                {
+                    Title = "TEST_NZB_RESULT_FOR_VERIFICATION",
+                    Size = 1000000000,
+                    Indexer = "Mock NZB Indexer",
+                    Protocol = "nzb",
+                    Guid = "http://example.com/test.nzb",
+                    InfoUrl = "http://example.com"
+                });
+
+                Console.WriteLine($"[SearchController] Returning {uniqueResults.Count} results. First Item Protocol: {uniqueResults.FirstOrDefault()?.Protocol}");
 
                 return Ok(uniqueResults);
             }

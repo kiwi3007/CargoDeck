@@ -63,7 +63,7 @@ namespace Playerr.Core.Jackett
                     Seeders = r.Seeders,
                     Leechers = r.Peers - r.Seeders,
                     PublishDate = r.PublishDate,
-                    Protocol = string.IsNullOrEmpty(r.MagnetUri) ? "torrent" : "magnet",
+                    Protocol = !string.IsNullOrEmpty(r.MagnetUri) ? "magnet" : (r.Link?.EndsWith(".nzb", StringComparison.OrdinalIgnoreCase) == true ? "nzb" : "torrent"),
                     Quality = "",
                     ReleaseGroup = "",
                     Categories = r.Category?.Select(c => new ProwlarrCategory { Id = c, Name = "Jackett Category" }).ToList() ?? new List<ProwlarrCategory>()
