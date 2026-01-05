@@ -18,7 +18,7 @@ Inspired by the workflow of Radarr and Sonarr, Playerr is designed to be the def
 *   **Intelligent Library Scanning:** Recursive and smart recognition engine that identifies video game platforms across your storage, mapping local files to their respective titles.
 *   **Rich Metadata Integration:** Native hooks into IGDB and Steam APIs to fetch high-quality artwork, descriptions, ratings, and release dates.
 *   **Seamless PVR Workflow:** Support for Prowlarr and Jackett for automated indexer management and advanced searching.
-*   **NZB Protocol Support:** Native integration for Usenet downloads via NZB files, automatically handling protocol associations.
+*   **NZB Protocol Support:** Native integration for Usenet downloads via NZB files, automatically handling protocol associations. Compatible with **SABnzbd** and **NZBGet**.
 *   **Integrated Download Management:** Native control for industry-standard clients like qBittorrent and Transmission.
 *   **Modern Web GUI:** A vibrant, dark-themed responsive interface designed for both desktop and containerized environments.
 *   **Unified Library View:** Display your entire gaming collection in one place, including native support for syncing and viewing your **Steam Library**.
@@ -128,8 +128,10 @@ If you want to modify the code or build the image locally instead of pulling it 
 
 ## Roadmap
 
-- [x] **v0.1.2 Beta:** NZB Protocol support and Ko-fi Widget integration.
-- [x] **v0.1.1 Beta:** Core PVR functionality and library scanning.
+- [x] **v0.1.2 Beta:** NZB Protocol support and Ko-fi Widget.
+    - [x] **Feature:** NZB Support (Search & Download).
+    - [x] **Feature:** Ko-fi Global Widget.
+    - [x] **Release:** Builds (Win/Lin/Mac-Arm), Docs updated, Tag pushed.
     - **Optimization:** IGDB Rate Limit handling (batching + delays).
     - **Feature:** Hardlink Support (Atomic Move) with fallback to Copy.
     - **Integration:** qBittorrent UrlBase support for Reverse Proxies.
@@ -184,7 +186,7 @@ Inspirado en el flujo de trabajo de Radarr y Sonarr, Playerr está diseñado par
 *   **Escaneo inteligente de biblioteca:** Reconocimiento recursivo y automático de plataformas de videojuegos en tu almacenamiento, mapeando archivos locales a sus títulos correspondientes.
 *   **Integración de metadatos:** Conexión nativa con IGDB y Steam para obtener imágenes, descripciones, valoraciones y fechas de lanzamiento.
 *   **Flujo PVR automatizado:** Soporte para Prowlarr y Jackett para gestión avanzada de indexadores y búsquedas.
-*   **Soporte Protocolo NZB:** Integración nativa para descargas Usenet mediante archivos NZB, gestionando automáticamente la asociación de protocolos.
+*   **Soporte Protocolo NZB:** Integración nativa para descargas Usenet mediante archivos NZB, gestionando automáticamente la asociación de protocolos. Compatible con **SABnzbd** y **NZBGet**.
 *   **Gestión de descargas integrada:** Control nativo de clientes como qBittorrent y Transmission.
 *   **Interfaz web moderna:** GUI oscura, responsiva y pensada para escritorio y contenedores.
 *   **Vista unificada:** Muestra toda tu colección en un solo lugar, incluyendo sincronización y visualización de tu biblioteca de Steam.
