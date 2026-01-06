@@ -59,6 +59,51 @@
   font-size: 0.95rem;
 }
 
+/* Game Actions Menu */
+.game-actions-menu {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background-color: #313244;
+  color: #cdd6f4;
+  border: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.action-btn:hover {
+  background-color: #45475a;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+  color: #fff;
+}
+
+.action-btn:active {
+  transform: translateY(0);
+}
+
+.action-btn.active {
+  background-color: #cba6f7;
+  color: #11111b;
+}
+
+.action-btn svg {
+  font-size: 1.1em;
+}
+
 /* Desktop styles */
 @media (min-width: 769px) {
   .game-details {
@@ -166,6 +211,11 @@
 
 .download-notification.error {
   background: #dc3545;
+  color: white;
+}
+
+.download-notification.info {
+  background: #007bff;
   color: white;
 }
 

@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { t, getLanguage } from '../i18n/translations';
 import GameCorrectionModal from '../components/GameCorrectionModal';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faSearch, faPen, faFolderOpen, faDownload, faGamepad } from '@fortawesome/free-solid-svg-icons';
 import './GameDetails.css';
 
 interface Game {
@@ -70,8 +72,12 @@ const GameDetails: React.FC = () => {
   const [sortField, setSortField] = useState<keyof TorrentResult | null>('seeders');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
-  const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'search' | 'files' | 'none'>('search'); // 'search' by default to keep existing behavior? Or none? User said "Search Game" is one function. Let's make it toggleable.
+  // Actually, standard behavior was "Search Torrents" always visible at bottom. 
+  // User wants a MENU. 
+  // Let's make "Search" show/hide the search section.
 
   useEffect(() => {
     if (notification) {
@@ -397,6 +403,16 @@ const GameDetails: React.FC = () => {
       setNotification({ message: t('errorUpdating' as any) || 'Error al actualizar', type: 'error' });
     }
   };
+  const handleInstall = async () => {
+    try {
+      setNotification({ message: t('searchingInstaller' as any) || 'Buscando instalador...', type: 'info' });
+      const res = await axios.post(`/api/v3/game/${id}/install`);
+      setNotification({ message: `${t('installerLaunched' as any) || 'Instalador lanzado'}: ${res.data.path}`, type: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      setNotification({ message: err.response?.data || t('errorLaunchingInstaller' as any) || 'Error al lanzar instalador', type: 'error' });
+    }
+  };
 
   if (loading) {
     return <div className="game-details"><p>{t('loadingGame')}</p></div>;
@@ -424,13 +440,44 @@ const GameDetails: React.FC = () => {
         <div className="game-details-info">
           <div className="title-row" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <h1>{game.title}</h1>
+          </div>
+
+          <div className="game-actions-menu">
             <button
-              className="btn-icon"
-              onClick={() => setShowCorrectionModal(true)}
-              title={t('correctGame' as any) || 'Corregir'}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2em' }}
+              className={`action-btn ${activeTab === 'search' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('search');
+                handleSearchTorrents();
+              }}
+              title={t('searchLinks' as any) || 'Buscar Enlaces'}
             >
-              ✏️
+              <FontAwesomeIcon icon={faSearch} />
+              <span>{t('search' as any) || 'Buscar'}</span>
+            </button>
+            <button
+              className="action-btn"
+              onClick={() => setShowCorrectionModal(true)}
+              title={t('correctMetadata' as any) || 'Corregir Metadatos'}
+            >
+              <FontAwesomeIcon icon={faPen} />
+              <span>{t('correct' as any) || 'Corregir'}</span>
+            </button>
+
+            <button
+              className="action-btn"
+              onClick={handleInstall}
+              title={t('install' as any) || 'Instalar'}
+            >
+              <FontAwesomeIcon icon={faDownload} />
+              <span>{t('install' as any) || 'Instalar'}</span>
+            </button>
+            <button
+              className="action-btn"
+              onClick={() => console.log('Play clicked')}
+              title={t('play' as any) || 'Jugar'}
+            >
+              <FontAwesomeIcon icon={faGamepad} />
+              <span>{t('play' as any) || 'Jugar'}</span>
             </button>
           </div>
           <div className="meta">
@@ -449,182 +496,182 @@ const GameDetails: React.FC = () => {
         </div>
       </div>
 
-      <div className="torrent-search">
-        <h2>{t('searchTorrents')}</h2>
-        <p>{t('willSearchProwlarr')} <strong>{game.title}</strong></p>
-        <button onClick={handleSearchTorrents} disabled={searching}>
-          {searching ? t('searching') : t('searchTorrents')}
-        </button>
-        {error && <p className="error">{error}</p>}
+      {activeTab === 'search' && (
+        <div className="torrent-search">
+          <h2>{t('searchTorrents')}</h2>
+          <p>{t('willSearchProwlarr')} <strong>{game.title}</strong></p>
+
+          {error && <p className="error">{error}</p>}
 
 
-        {results.length > 0 && (
-          <div className="results-container">
-            {notification && (
-              <div className={`download-notification ${notification.type}`}>
-                {notification.message}
-              </div>
-            )}
-            <div className="results-header">
-              <h4>{t('searchResults')} ({results.length} {t('resultsFound')})</h4>
-            </div>
-
-            <div className="results-table">
-              <div className="results-header-row">
-                <div className="col-protocol sortable" onClick={() => handleSort('protocol')}>{t('protocol')} {getSortIcon('protocol')}</div>
-                <div className="col-title sortable" onClick={() => handleSort('title')}>{t('title')} {getSortIcon('title')}</div>
-                <div className="col-indexer sortable" onClick={() => handleSort('indexer')}>{t('indexer')} {getSortIcon('indexer')}</div>
-                <div className="col-platform">{t('platform')}</div>
-                <div className="col-size sortable" onClick={() => handleSort('size')}>{t('size')} {getSortIcon('size')}</div>
-                <div className="col-peers sortable" onClick={() => handleSort('seeders')}>{t('peers')} {getSortIcon('seeders')}</div>
-                <div className="col-actions">{t('download')}</div>
+          {results.length > 0 && (
+            <div className="results-container">
+              {notification && (
+                <div className={`download-notification ${notification.type}`}>
+                  {notification.message}
+                </div>
+              )}
+              <div className="results-header">
+                <h4>{t('searchResults')} ({results.length} {t('resultsFound')})</h4>
               </div>
 
-              {sortedResults.map((result, index) => {
-                const analysis = analyzeTorrent(result.title);
-                const platformStyle = PLATFORM_CONFIG[analysis.detectedPlatform]?.color || '#45475a';
+              <div className="results-table">
+                <div className="results-header-row">
+                  <div className="col-protocol sortable" onClick={() => handleSort('protocol')}>{t('protocol')} {getSortIcon('protocol')}</div>
+                  <div className="col-title sortable" onClick={() => handleSort('title')}>{t('title')} {getSortIcon('title')}</div>
+                  <div className="col-indexer sortable" onClick={() => handleSort('indexer')}>{t('indexer')} {getSortIcon('indexer')}</div>
+                  <div className="col-platform">{t('platform')}</div>
+                  <div className="col-size sortable" onClick={() => handleSort('size')}>{t('size')} {getSortIcon('size')}</div>
+                  <div className="col-peers sortable" onClick={() => handleSort('seeders')}>{t('peers')} {getSortIcon('seeders')}</div>
+                  <div className="col-actions">{t('download')}</div>
+                </div>
 
-                // Try to resolve explicit category name
-                let explicitPlatform = '';
-                let explicitPlatformType: PlatformType | null = null;
+                {sortedResults.map((result, index) => {
+                  const analysis = analyzeTorrent(result.title);
+                  const platformStyle = PLATFORM_CONFIG[analysis.detectedPlatform]?.color || '#45475a';
 
-                if (result.category) {
-                  const catIds = result.category.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-                  // Prioritize finding a detailed match (skipping general ones if detailed exists)
-                  // But our GetPlatformInfo returns generic names for 1000/4000 too.
-                  // Let's iterate and find the "best" one. 
+                  // Try to resolve explicit category name
+                  let explicitPlatform = '';
+                  let explicitPlatformType: PlatformType | null = null;
 
-                  // Sort IDs? Or just take first valid? Usually only 1 category per item.
-                  // Sometimes multiple: 1000, 1010. We want 1010.
+                  if (result.category) {
+                    const catIds = result.category.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                    // Prioritize finding a detailed match (skipping general ones if detailed exists)
+                    // But our GetPlatformInfo returns generic names for 1000/4000 too.
+                    // Let's iterate and find the "best" one. 
 
-                  // Let's assume the highest ID often carries the most specific info in Newznab (e.g. 1010 > 1000)
-                  // Or use the one that returns a name != "Console" and != "PC" and != "Unknown"
+                    // Sort IDs? Or just take first valid? Usually only 1 category per item.
+                    // Sometimes multiple: 1000, 1010. We want 1010.
 
-                  for (const cid of catIds) {
-                    const info = GetPlatformInfo(cid);
-                    if (info.name !== "Console" && info.name !== "Unknown") {
-                      explicitPlatform = info.name;
-                      explicitPlatformType = info.type;
-                      break; // Found a specific one
-                    }
+                    // Let's assume the highest ID often carries the most specific info in Newznab (e.g. 1010 > 1000)
+                    // Or use the one that returns a name != "Console" and != "PC" and != "Unknown"
 
-                    // Only set generic if we haven't found anything yet AND it's not Unknown
-                    if (!explicitPlatform && info.name !== "Unknown") {
-                      explicitPlatform = info.name;
-                      explicitPlatformType = info.type;
+                    for (const cid of catIds) {
+                      const info = GetPlatformInfo(cid);
+                      if (info.name !== "Console" && info.name !== "Unknown") {
+                        explicitPlatform = info.name;
+                        explicitPlatformType = info.type;
+                        break; // Found a specific one
+                      }
+
+                      // Only set generic if we haven't found anything yet AND it's not Unknown
+                      if (!explicitPlatform && info.name !== "Unknown") {
+                        explicitPlatform = info.name;
+                        explicitPlatformType = info.type;
+                      }
                     }
                   }
-                }
 
-                // Final display platform: Explicit Category > Detected Title Analysis
-                // If explicit is empty (because all were Unknown), it falls back to detected.
-                const displayPlatform = explicitPlatform || analysis.detectedPlatform;
+                  // Final display platform: Explicit Category > Detected Title Analysis
+                  // If explicit is empty (because all were Unknown), it falls back to detected.
+                  const displayPlatform = explicitPlatform || analysis.detectedPlatform;
 
-                // Adjust color using Type
-                let finalColor = platformStyle;
-                if (explicitPlatformType) {
-                  switch (explicitPlatformType) {
-                    case 'Nintendo': finalColor = PLATFORM_CONFIG['Nintendo Switch'].color; break;
-                    case 'PlayStation': finalColor = PLATFORM_CONFIG['PlayStation 5'].color; break;
-                    case 'Xbox': finalColor = PLATFORM_CONFIG['Xbox Series'].color; break;
-                    case 'PC': finalColor = PLATFORM_CONFIG['PC'].color; break;
-                    default: finalColor = '#45475a'; break;
+                  // Adjust color using Type
+                  let finalColor = platformStyle;
+                  if (explicitPlatformType) {
+                    switch (explicitPlatformType) {
+                      case 'Nintendo': finalColor = PLATFORM_CONFIG['Nintendo Switch'].color; break;
+                      case 'PlayStation': finalColor = PLATFORM_CONFIG['PlayStation 5'].color; break;
+                      case 'Xbox': finalColor = PLATFORM_CONFIG['Xbox Series'].color; break;
+                      case 'PC': finalColor = PLATFORM_CONFIG['PC'].color; break;
+                      default: finalColor = '#45475a'; break;
+                    }
                   }
-                }
 
-                return (
-                  <div key={index} className={`results-row ${analysis.confidence}`}>
-                    <div className="col-protocol">
-                      <span className={`protocol-badge ${(result.protocol || 'torrent').toLowerCase()}`}>
-                        {(result.protocol || 'TORRENT').toUpperCase()}
-                      </span>
-                    </div>
-
+                  return (
+                    <div key={index} className={`results-row ${analysis.confidence}`}>
+                      <div className="col-protocol">
+                        <span className={`protocol-badge ${(result.protocol || 'torrent').toLowerCase()}`}>
+                          {(result.protocol || 'TORRENT').toUpperCase()}
+                        </span>
+                      </div>
 
 
-                    <div className="col-title">
-                      <div className="title-content">
-                        {result.infoUrl ? (
-                          <a href={result.infoUrl} target="_blank" rel="noopener noreferrer" className="title-link">
-                            {result.title}
-                          </a>
-                        ) : (
-                          <span className="title-text">{result.title}</span>
-                        )}
-                        <div className="title-meta">
-                          {result.releaseGroup && (
-                            <span className="release-group">{result.releaseGroup}</span>
+
+                      <div className="col-title">
+                        <div className="title-content">
+                          {result.infoUrl ? (
+                            <a href={result.infoUrl} target="_blank" rel="noopener noreferrer" className="title-link">
+                              {result.title}
+                            </a>
+                          ) : (
+                            <span className="title-text">{result.title}</span>
                           )}
-                          {analysis.tags.map((tag, i) => (
-                            <span key={i} className={`title-tag ${tag.toLowerCase()}`}>[{tag}]</span>
-                          ))}
+                          <div className="title-meta">
+                            {result.releaseGroup && (
+                              <span className="release-group">{result.releaseGroup}</span>
+                            )}
+                            {analysis.tags.map((tag, i) => (
+                              <span key={i} className={`title-tag ${tag.toLowerCase()}`}>[{tag}]</span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-indexer">
+                        <span className="indexer-name">{result.indexer || result.indexerName}</span>
+                      </div>
+
+                      <div className="col-platform">
+                        <span className="platform-tag" style={{ backgroundColor: finalColor }} title={`Category IDs: ${result.category || 'None'}`}>
+                          {displayPlatform}
+                        </span>
+                      </div>
+
+                      <div className="col-size">
+                        <span className="size">{result.formattedSize || `${(result.size / (1024 * 1024 * 1024)).toFixed(2)} GB`}</span>
+                      </div>
+
+                      <div className="col-peers">
+                        {result.protocol?.toLowerCase() === 'usenet' || result.protocol?.toLowerCase() === 'nzb' ? (
+                          <span className="peers-info">-</span>
+                        ) : (
+                          <div className="peers-info">
+                            <span className={`seeders ${getSeedersClass(result.seeders)}`}>
+                              {result.seeders ?? 0}
+                            </span>
+                            <span className="separator">/</span>
+                            <span className="leechers">
+                              {result.leechers ?? 0}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+
+
+                      <div className="col-actions">
+                        <div className="download-buttons">
+                          {result.magnetUrl && (
+                            <button
+                              className={`download-btn magnet ${downloadingUrl === result.magnetUrl ? 'loading' : ''}`}
+                              title="Send to Download Client"
+                              onClick={() => handleDownload(result.magnetUrl, result.protocol)}
+                              disabled={!!downloadingUrl}
+                            >
+                              {downloadingUrl === result.magnetUrl ? '⏳' : '🧲'}
+                            </button>
+                          )}
+                          {result.downloadUrl && (
+                            <button
+                              className={`download-btn direct ${downloadingUrl === result.downloadUrl ? 'loading' : ''}`}
+                              title="Send to Download Client"
+                              onClick={() => handleDownload(result.downloadUrl, result.protocol)}
+                              disabled={!!downloadingUrl}
+                            >
+                              {downloadingUrl === result.downloadUrl ? '⏳' : '⬇️'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
-
-                    <div className="col-indexer">
-                      <span className="indexer-name">{result.indexer || result.indexerName}</span>
-                    </div>
-
-                    <div className="col-platform">
-                      <span className="platform-tag" style={{ backgroundColor: finalColor }} title={`Category IDs: ${result.category || 'None'}`}>
-                        {displayPlatform}
-                      </span>
-                    </div>
-
-                    <div className="col-size">
-                      <span className="size">{result.formattedSize || `${(result.size / (1024 * 1024 * 1024)).toFixed(2)} GB`}</span>
-                    </div>
-
-                    <div className="col-peers">
-                      {result.protocol?.toLowerCase() === 'usenet' || result.protocol?.toLowerCase() === 'nzb' ? (
-                        <span className="peers-info">-</span>
-                      ) : (
-                        <div className="peers-info">
-                          <span className={`seeders ${getSeedersClass(result.seeders)}`}>
-                            {result.seeders ?? 0}
-                          </span>
-                          <span className="separator">/</span>
-                          <span className="leechers">
-                            {result.leechers ?? 0}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-
-
-                    <div className="col-actions">
-                      <div className="download-buttons">
-                        {result.magnetUrl && (
-                          <button
-                            className={`download-btn magnet ${downloadingUrl === result.magnetUrl ? 'loading' : ''}`}
-                            title="Send to Download Client"
-                            onClick={() => handleDownload(result.magnetUrl, result.protocol)}
-                            disabled={!!downloadingUrl}
-                          >
-                            {downloadingUrl === result.magnetUrl ? '⏳' : '🧲'}
-                          </button>
-                        )}
-                        {result.downloadUrl && (
-                          <button
-                            className={`download-btn direct ${downloadingUrl === result.downloadUrl ? 'loading' : ''}`}
-                            title="Send to Download Client"
-                            onClick={() => handleDownload(result.downloadUrl, result.protocol)}
-                            disabled={!!downloadingUrl}
-                          >
-                            {downloadingUrl === result.downloadUrl ? '⏳' : '⬇️'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       <div className="back-link">
         <Link to="/library">{t('backToLibrary')}</Link>

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { t as translate } from '../i18n/translations';
 import FolderExplorerModal from './FolderExplorerModal';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faSearch } from '@fortawesome/free-solid-svg-icons';
 import './GameCorrectionModal.css';
 
 interface GameCorrectionModalProps {
@@ -21,7 +23,7 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
     const [selectedMetadata, setSelectedMetadata] = useState<any | null>(null);
 
     // Path State
-    const [installPath, setInstallPath] = useState(game.installPath || '');
+    const [installPath, setInstallPath] = useState(game.installPath || game.path || '');
     const [showFileExplorer, setShowFileExplorer] = useState(false);
 
     const t = (key: string) => translate(key as any, language as any);
@@ -88,8 +90,8 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                                     placeholder={t('searchGame') || 'Buscar juego...'}
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                 />
-                                <button onClick={handleSearch} disabled={searching}>
-                                    {searching ? '...' : '🔍'}
+                                <button onClick={handleSearch} disabled={searching} className="search-btn">
+                                    {searching ? '...' : <FontAwesomeIcon icon={faSearch} />}
                                 </button>
                             </div>
 
