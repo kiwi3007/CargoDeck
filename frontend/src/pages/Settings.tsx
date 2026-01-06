@@ -25,15 +25,18 @@ interface DownloadClient {
   apiKey?: string;
   enable: boolean;
   priority: number;
+  // Remote Path Mapping
+  remotePathMapping?: string;
+  localPathMapping?: string;
 }
 
 const Settings: React.FC = () => {
-  const [prowlarrUrl, setProwlarrUrl] = useState('http://localhost:9696');
+  const [prowlarrUrl, setProwlarrUrl] = useState('');
   const [prowlarrApiKey, setProwlarrApiKey] = useState('');
   const [prowlarrTesting, setProwlarrTesting] = useState(false);
   const [prowlarrTestResult, setProwlarrTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const [jackettUrl, setJackettUrl] = useState('http://localhost:9117');
+  const [jackettUrl, setJackettUrl] = useState('');
   const [jackettApiKey, setJackettApiKey] = useState('');
   const [jackettTesting, setJackettTesting] = useState(false);
   const [jackettTestResult, setJackettTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -47,7 +50,10 @@ const Settings: React.FC = () => {
   const [steamSyncing, setSteamSyncing] = useState(false);
   const [steamSyncResult, setSteamSyncResult] = useState<{ success: boolean; message: string } | null>(null);
   const [folderPath, setFolderPath] = useState('');
+  const [downloadPath, setDownloadPath] = useState('');
+  const [destinationPath, setDestinationPath] = useState('');
   const [scanning, setScanning] = useState(false);
+  const [activeFolderField, setActiveFolderField] = useState<'media' | 'download' | 'destination' | 'clientLocalPath'>('media');
   const [language, setLanguage] = useState<Language>(getSavedLanguage());
   const [forceUpdateCounter, setForceUpdateCounter] = useState(0); // Force re-render trigger
   const [showFolderExplorer, setShowFolderExplorer] = useState(false);
@@ -78,6 +84,15 @@ const Settings: React.FC = () => {
   });
   const [clientTesting, setClientTesting] = useState(false);
   const [clientTestResult, setClientTestResult] = useState<{ success: boolean; message: string; version?: string } | null>(null);
+
+  const [postDownloadSettings, setPostDownloadSettings] = useState({
+    enableAutoMove: true,
+    enableAutoExtract: true,
+    enableDeepClean: true,
+    enableAutoRename: true,
+    monitorIntervalSeconds: 60,
+    unwantedExtensions: ['.txt', '.nfo', '.url']
+  });
 
   useEffect(() => {
     // Load saved language
@@ -129,6 +144,8 @@ const Settings: React.FC = () => {
 
       const mediaResponse = await axios.get('/api/v3/media');
       setFolderPath(mediaResponse.data.folderPath);
+      setDownloadPath(mediaResponse.data.downloadPath || '');
+      setDestinationPath(mediaResponse.data.destinationPath || '');
 
       const jackettResponse = await axios.get('/api/v3/settings/jackett');
       setJackettUrl(jackettResponse.data.url);
@@ -137,6 +154,9 @@ const Settings: React.FC = () => {
       const steamResponse = await axios.get('/api/v3/settings/steam');
       setSteamApiKey(steamResponse.data.apiKey);
       setSteamId(steamResponse.data.steamId);
+
+      const postDownloadResponse = await axios.get('/api/v3/postdownload');
+      setPostDownloadSettings(postDownloadResponse.data);
     } catch (error) {
       console.error('Error loading settings:', error);
     }
@@ -259,7 +279,12 @@ const Settings: React.FC = () => {
     e.preventDefault();
     try {
       // Use PascalCase to ensure backend binding works (if case-sensitive)
-      await axios.post('/api/v3/media', { FolderPath: folderPath, Platform: 'default' });
+      await axios.post('/api/v3/media', {
+        FolderPath: folderPath,
+        DownloadPath: downloadPath,
+        DestinationPath: destinationPath,
+        Platform: 'default'
+      });
       alert(t('mediaSettingsSaved'));
     } catch (error: any) {
       console.error('Error saving media settings:', error);
@@ -444,6 +469,17 @@ const Settings: React.FC = () => {
     setClientTestResult(null);
   };
 
+  const handleSavePostDownload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await axios.post('/api/v3/postdownload', postDownloadSettings);
+      alert(t('postDownloadSettingsSaved'));
+    } catch (error: any) {
+      console.error('Error saving post-download settings:', error);
+      alert(`${t('error')}: ${error.response?.data?.message || error.message}`);
+    }
+  };
+
   const openAddClientModal = () => {
     resetClientForm();
     setShowClientModal(true);
@@ -468,10 +504,14 @@ const Settings: React.FC = () => {
         // Add timestamp to prevent caching
         const response = await axios.get(`/api/v3/media?t=${Date.now()}`);
         const currentPath = response.data.folderPath;
+        const currentDownloadPath = response.data.downloadPath;
+        const currentDestinationPath = response.data.destinationPath;
 
-        if (currentPath !== initialPath) {
+        if (currentPath !== initialPath || currentDownloadPath !== downloadPath || currentDestinationPath !== destinationPath) {
           // Path changed! Update UI and stop polling
           setFolderPath(currentPath);
+          setDownloadPath(currentDownloadPath || '');
+          setDestinationPath(currentDestinationPath || '');
           setForceUpdateCounter(prev => prev + 1); // FORCE React to re-render
           clearInterval(pollInterval);
           setScanning(false);
@@ -524,10 +564,73 @@ const Settings: React.FC = () => {
                     // @ts-ignore
                     window.external.sendMessage('SELECT_FOLDER');
                   } else {
+                    setActiveFolderField('media');
                     setShowFolderExplorer(true);
                   }
                 }}
                 title={t('selectFolder')}
+              >
+                📂
+              </button>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="download-path">{t('downloadPath')}</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input
+                id="download-path"
+                type="text"
+                value={downloadPath}
+                onChange={(e) => setDownloadPath(e.target.value)}
+                placeholder="/Volumes/Downloads"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  // @ts-ignore
+                  if (window.external && window.external.sendMessage) {
+                    startFolderPolling();
+                    // @ts-ignore
+                    window.external.sendMessage('SELECT_FOLDER:DOWNLOAD');
+                  } else {
+                    setActiveFolderField('download');
+                    setShowFolderExplorer(true);
+                  }
+                }}
+              >
+                📂
+              </button>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="destination-path">{t('destinationPath')}</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input
+                id="destination-path"
+                type="text"
+                value={destinationPath}
+                onChange={(e) => setDestinationPath(e.target.value)}
+                placeholder="/Volumes/Media/Games"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  // @ts-ignore
+                  if (window.external && window.external.sendMessage) {
+                    startFolderPolling();
+                    // @ts-ignore
+                    window.external.sendMessage('SELECT_FOLDER:DESTINATION');
+                  } else {
+                    setActiveFolderField('destination');
+                    setShowFolderExplorer(true);
+                  }
+                }}
               >
                 📂
               </button>
@@ -690,6 +793,66 @@ const Settings: React.FC = () => {
           </select>
         </div>
         <button type="button" className="btn-primary" onClick={handleSaveLanguage}>{t('saveLanguage')}</button>
+      </div>
+
+      <div className="settings-section">
+        <div className="section-header-with-logo">
+          <h3>{t('postDownloadTitle')}</h3>
+        </div>
+        <p className="settings-description">
+          {t('postDownloadDesc')}
+        </p>
+        <form onSubmit={handleSavePostDownload}>
+          <div className="form-group checkbox-group">
+            <input
+              type="checkbox"
+              id="enable-auto-move"
+              checked={postDownloadSettings.enableAutoMove}
+              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableAutoMove: e.target.checked })}
+            />
+            <label htmlFor="enable-auto-move">{t('enableAutoMove')}</label>
+          </div>
+          <div className="form-group checkbox-group">
+            <input
+              type="checkbox"
+              id="enable-auto-extract"
+              checked={postDownloadSettings.enableAutoExtract}
+              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableAutoExtract: e.target.checked })}
+            />
+            <label htmlFor="enable-auto-extract">{t('enableAutoExtract')}</label>
+          </div>
+          <div className="form-group checkbox-group">
+            <input
+              type="checkbox"
+              id="enable-deep-clean"
+              checked={postDownloadSettings.enableDeepClean}
+              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableDeepClean: e.target.checked })}
+            />
+            <label htmlFor="enable-deep-clean">{t('enableDeepClean')}</label>
+          </div>
+          <div className="form-group">
+            <label htmlFor="monitor-interval">{t('monitorInterval')}</label>
+            <input
+              type="number"
+              id="monitor-interval"
+              value={postDownloadSettings.monitorIntervalSeconds}
+              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, monitorIntervalSeconds: parseInt(e.target.value) || 60 })}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="unwanted-extensions">{t('unwantedExtensions')}</label>
+            <input
+              type="text"
+              id="unwanted-extensions"
+              value={postDownloadSettings.unwantedExtensions?.join(', ') || ''}
+              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, unwantedExtensions: e.target.value.split(',').map(s => s.trim()) })}
+              placeholder=".txt, .nfo, .url"
+            />
+          </div>
+          <div className="button-group">
+            <button type="submit" className="btn-primary">{t('savePostDownload')}</button>
+          </div>
+        </form>
       </div>
 
       <div className="settings-section">
@@ -949,6 +1112,58 @@ const Settings: React.FC = () => {
                   placeholder={t('categoryPlaceholder')}
                 />
                 <small>{t('torrentsCategoryHint')}</small>
+                <small>{t('torrentsCategoryHint')}</small>
+              </div>
+
+              <h3>{t('remotePathMappingTitle')}</h3>
+              <p className="description" style={{ fontSize: '0.9em', color: '#aaa', marginTop: '-10px', marginBottom: '15px' }}>
+                {t('remotePathMappingDesc')}
+              </p>
+
+              <div className="form-group">
+                <label>{t('remotePath')}</label>
+                <input
+                  type="text"
+                  value={clientForm.remotePathMapping || ''}
+                  onChange={(e) => setClientForm({ ...clientForm, remotePathMapping: e.target.value })}
+                  placeholder="/downloads/"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>{t('localPath')}</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input
+                    type="text"
+                    value={clientForm.localPathMapping || ''}
+                    onChange={(e) => setClientForm({ ...clientForm, localPathMapping: e.target.value })}
+                    placeholder="/Volumes/downloads/"
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      // @ts-ignore
+                      if (window.external && window.external.sendMessage) {
+                        // We need a new handler for this specific field in Program.cs if we want native picker to work nicely
+                        // For now we reuse SELECT_FOLDER:DOWNLOAD technically it sets downloadPath but here we want localPathMapping
+                        // Actually, let's keep it simple for web mode first. Native mode would need Program.cs update.
+                        // Wait, if I trigger polling, I need to know where to put the result.
+                        // Let's implement web-mode explorer support first.
+                        setActiveFolderField('clientLocalPath');
+                        startFolderPolling();
+                        // @ts-ignore
+                        window.external.sendMessage('SELECT_FOLDER:CLIENT_LOCAL');
+                      } else {
+                        setActiveFolderField('clientLocalPath');
+                        setShowFolderExplorer(true);
+                      }
+                    }}
+                  >
+                    📂
+                  </button>
+                </div>
               </div>
 
               <div className="form-group checkbox-group">
@@ -987,9 +1202,18 @@ const Settings: React.FC = () => {
       )}
       {showFolderExplorer && (
         <FolderExplorerModal
-          initialPath={folderPath}
+          initialPath={
+            activeFolderField === 'media' ? folderPath :
+              activeFolderField === 'download' ? downloadPath :
+                activeFolderField === 'destination' ? destinationPath :
+                  (clientForm.localPathMapping || '')
+          }
           onSelect={(path) => {
-            setFolderPath(path);
+            if (activeFolderField === 'media') setFolderPath(path);
+            else if (activeFolderField === 'download') setDownloadPath(path);
+            else if (activeFolderField === 'destination') setDestinationPath(path);
+            else if (activeFolderField === 'clientLocalPath') setClientForm({ ...clientForm, localPathMapping: path });
+
             setShowFolderExplorer(false);
           }}
           onClose={() => setShowFolderExplorer(false)}

@@ -10,7 +10,7 @@ DESCRIPTION = Playerr is a self-hosted game library manager and PVR.
 DISPLAY_NAME = Playerr
 CHANGELOG = "Initial Release"
 
-HOMEPAGE = https://playerr.app
+HOMEPAGE = https://github.com/Maikboarder/Playerr
 LICENSE  = MIT
 
 # Service setup

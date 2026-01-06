@@ -4,7 +4,9 @@ using System.IO;
 using Playerr.Core.Prowlarr;
 using Playerr.Core.Jackett;
 using Playerr.Core.MetadataSource.Igdb;
+using Playerr.Core.Download;
 using System.Diagnostics.CodeAnalysis;
+using System.Collections.Generic;
 
 namespace Playerr.Core.Configuration
 {
@@ -20,13 +22,10 @@ namespace Playerr.Core.Configuration
         private readonly string _downloadClientsConfigFile;
         private readonly string _mediaConfigFile;
         private readonly string _steamConfigFile;
+        private readonly string _postDownloadConfigFile;
 
         public ConfigurationService(string contentRoot)
         {
-            // Determine config directory logic:
-            // 1. Check for 'config' folder in contentRoot (Portable Mode)
-            // 2. If not found, use %AppData%/Playerr/config (Installed Mode - Windows specific)
-            
             var localConfig = Path.Combine(contentRoot, "config");
             
             if (Directory.Exists(localConfig))
@@ -35,7 +34,6 @@ namespace Playerr.Core.Configuration
             }
             else
             {
-                // Fallback to AppData for installed versions
                 var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                 if (!string.IsNullOrEmpty(appData))
                 {
@@ -43,7 +41,6 @@ namespace Playerr.Core.Configuration
                 }
                 else
                 {
-                    // Fallback to local if AppData is not available (e.g. non-Windows or weird environment)
                     _configDirectory = localConfig;
                 }
             }
@@ -54,8 +51,8 @@ namespace Playerr.Core.Configuration
             _downloadClientsConfigFile = Path.Combine(_configDirectory, "downloadclients.json");
             _mediaConfigFile = Path.Combine(_configDirectory, "media.json");
             _steamConfigFile = Path.Combine(_configDirectory, "steam.json");
+            _postDownloadConfigFile = Path.Combine(_configDirectory, "postdownload.json");
             
-            // Ensure config directory exists
             try 
             {
                 Directory.CreateDirectory(_configDirectory);
@@ -63,7 +60,6 @@ namespace Playerr.Core.Configuration
             catch (Exception ex)
             {
                 Console.WriteLine($"Critical Error: Could not create config directory at {_configDirectory}. Details: {ex.Message}");
-                // If we fail here, the app will likely crash, but at least we logged it.
             }
         }
 
@@ -74,37 +70,17 @@ namespace Playerr.Core.Configuration
                 try
                 {
                     var json = File.ReadAllText(_prowlarrConfigFile);
-                    var settings = JsonSerializer.Deserialize<ProwlarrSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (settings != null)
-                    {
-                        return settings;
-                    }
+                    return JsonSerializer.Deserialize<ProwlarrSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new ProwlarrSettings { Url = string.Empty };
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error loading Prowlarr settings: {ex.Message}");
-                }
+                catch (Exception ex) { Console.WriteLine($"Error loading Prowlarr settings: {ex.Message}"); }
             }
-            
-            // Return default settings
-            return new ProwlarrSettings
-            {
-                Url = "http://localhost:9696",
-                ApiKey = ""
-            };
+            return new ProwlarrSettings { Url = string.Empty };
         }
 
         public void SaveProwlarrSettings(ProwlarrSettings settings)
         {
-            try
-            {
-                var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_prowlarrConfigFile, json);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error saving Prowlarr settings: {ex.Message}");
-            }
+            try { File.WriteAllText(_prowlarrConfigFile, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true })); }
+            catch (Exception ex) { Console.WriteLine($"Error saving Prowlarr settings: {ex.Message}"); }
         }
 
         public JackettSettings LoadJackettSettings()
@@ -114,37 +90,17 @@ namespace Playerr.Core.Configuration
                 try
                 {
                     var json = File.ReadAllText(_jackettConfigFile);
-                    var settings = JsonSerializer.Deserialize<JackettSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (settings != null)
-                    {
-                        return settings;
-                    }
+                    return JsonSerializer.Deserialize<JackettSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new JackettSettings { Url = string.Empty };
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error loading Jackett settings: {ex.Message}");
-                }
+                catch (Exception ex) { Console.WriteLine($"Error loading Jackett settings: {ex.Message}"); }
             }
-            
-            // Return default settings
-            return new JackettSettings
-            {
-                Url = "http://localhost:9117",
-                ApiKey = ""
-            };
+            return new JackettSettings { Url = string.Empty };
         }
 
         public void SaveJackettSettings(JackettSettings settings)
         {
-            try
-            {
-                var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_jackettConfigFile, json);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error saving Jackett settings: {ex.Message}");
-            }
+            try { File.WriteAllText(_jackettConfigFile, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true })); }
+            catch (Exception ex) { Console.WriteLine($"Error saving Jackett settings: {ex.Message}"); }
         }
 
         public IgdbSettings LoadIgdbSettings()
@@ -154,75 +110,37 @@ namespace Playerr.Core.Configuration
                 try
                 {
                     var json = File.ReadAllText(_igdbConfigFile);
-                    var settings = JsonSerializer.Deserialize<IgdbSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (settings != null)
-                    {
-                        return settings;
-                    }
+                    return JsonSerializer.Deserialize<IgdbSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new IgdbSettings();
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error loading IGDB settings: {ex.Message}");
-                }
+                catch (Exception ex) { Console.WriteLine($"Error loading IGDB settings: {ex.Message}"); }
             }
-            
-            // Try environment variables as fallback
-            var clientId = Environment.GetEnvironmentVariable("IGDB_CLIENT_ID") ?? string.Empty;
-            var clientSecret = Environment.GetEnvironmentVariable("IGDB_CLIENT_SECRET") ?? string.Empty;
-            
-            return new IgdbSettings
-            {
-                ClientId = clientId,
-                ClientSecret = clientSecret
-            };
+            return new IgdbSettings { ClientId = Environment.GetEnvironmentVariable("IGDB_CLIENT_ID") ?? "", ClientSecret = Environment.GetEnvironmentVariable("IGDB_CLIENT_SECRET") ?? "" };
         }
 
         public void SaveIgdbSettings(IgdbSettings settings)
         {
-            try
-            {
-                var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_igdbConfigFile, json);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error saving IGDB settings: {ex.Message}");
-            }
+            try { File.WriteAllText(_igdbConfigFile, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true })); }
+            catch (Exception ex) { Console.WriteLine($"Error saving IGDB settings: {ex.Message}"); }
         }
 
-        public System.Collections.Generic.List<Playerr.Core.Download.DownloadClient> LoadDownloadClients()
+        public List<Playerr.Core.Download.DownloadClient> LoadDownloadClients()
         {
             if (File.Exists(_downloadClientsConfigFile))
             {
                 try
                 {
                     var json = File.ReadAllText(_downloadClientsConfigFile);
-                    var clients = JsonSerializer.Deserialize<System.Collections.Generic.List<Playerr.Core.Download.DownloadClient>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (clients != null)
-                    {
-                        return clients;
-                    }
+                    return JsonSerializer.Deserialize<List<Playerr.Core.Download.DownloadClient>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<Playerr.Core.Download.DownloadClient>();
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error loading download clients: {ex.Message}");
-                }
+                catch (Exception ex) { Console.WriteLine($"Error loading download clients: {ex.Message}"); }
             }
-            
-            return new System.Collections.Generic.List<Playerr.Core.Download.DownloadClient>();
+            return new List<Playerr.Core.Download.DownloadClient>();
         }
 
-        public void SaveDownloadClients(System.Collections.Generic.List<Playerr.Core.Download.DownloadClient> clients)
+        public void SaveDownloadClients(List<Playerr.Core.Download.DownloadClient> clients)
         {
-            try
-            {
-                var json = JsonSerializer.Serialize(clients, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_downloadClientsConfigFile, json);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error saving download clients: {ex.Message}");
-            }
+            try { File.WriteAllText(_downloadClientsConfigFile, JsonSerializer.Serialize(clients, new JsonSerializerOptions { WriteIndented = true })); }
+            catch (Exception ex) { Console.WriteLine($"Error saving download clients: {ex.Message}"); }
         }
 
         public MediaSettings LoadMediaSettings()
@@ -232,32 +150,17 @@ namespace Playerr.Core.Configuration
                 try
                 {
                     var json = File.ReadAllText(_mediaConfigFile);
-                    var settings = JsonSerializer.Deserialize<MediaSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (settings != null)
-                    {
-                        return settings;
-                    }
+                    return JsonSerializer.Deserialize<MediaSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new MediaSettings();
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error loading media settings: {ex.Message}");
-                }
+                catch (Exception ex) { Console.WriteLine($"Error loading media settings: {ex.Message}"); }
             }
-            
             return new MediaSettings();
         }
 
         public void SaveMediaSettings(MediaSettings settings)
         {
-            try
-            {
-                var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_mediaConfigFile, json);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error saving media settings: {ex.Message}");
-            }
+            try { File.WriteAllText(_mediaConfigFile, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true })); }
+            catch (Exception ex) { Console.WriteLine($"Error saving media settings: {ex.Message}"); }
         }
 
         public SteamSettings LoadSteamSettings()
@@ -267,32 +170,37 @@ namespace Playerr.Core.Configuration
                 try
                 {
                     var json = File.ReadAllText(_steamConfigFile);
-                    var settings = JsonSerializer.Deserialize<SteamSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (settings != null)
-                    {
-                        return settings;
-                    }
+                    return JsonSerializer.Deserialize<SteamSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new SteamSettings();
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error loading Steam settings: {ex.Message}");
-                }
+                catch (Exception ex) { Console.WriteLine($"Error loading Steam settings: {ex.Message}"); }
             }
-            
             return new SteamSettings();
         }
 
         public void SaveSteamSettings(SteamSettings settings)
         {
-            try
+            try { File.WriteAllText(_steamConfigFile, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true })); }
+            catch (Exception ex) { Console.WriteLine($"Error saving Steam settings: {ex.Message}"); }
+        }
+
+        public PostDownloadSettings LoadPostDownloadSettings()
+        {
+            if (File.Exists(_postDownloadConfigFile))
             {
-                var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_steamConfigFile, json);
+                try
+                {
+                    var json = File.ReadAllText(_postDownloadConfigFile);
+                    return JsonSerializer.Deserialize<PostDownloadSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new PostDownloadSettings();
+                }
+                catch { }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error saving Steam settings: {ex.Message}");
-            }
+            return new PostDownloadSettings();
+        }
+
+        public void SavePostDownloadSettings(PostDownloadSettings settings)
+        {
+            try { File.WriteAllText(_postDownloadConfigFile, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true })); }
+            catch { }
         }
     }
 
@@ -300,7 +208,6 @@ namespace Playerr.Core.Configuration
     {
         public string ClientId { get; set; } = string.Empty;
         public string ClientSecret { get; set; } = string.Empty;
-        
         public bool IsConfigured => !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret);
     }
 
@@ -308,7 +215,16 @@ namespace Playerr.Core.Configuration
     {
         public string ApiKey { get; set; } = string.Empty;
         public string SteamId { get; set; } = string.Empty;
-
         public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey) && !string.IsNullOrWhiteSpace(SteamId);
+    }
+
+    public class PostDownloadSettings
+    {
+        public bool EnableAutoMove { get; set; } = true;
+        public bool EnableAutoExtract { get; set; } = true;
+        public bool EnableDeepClean { get; set; } = true;
+        public bool EnableAutoRename { get; set; } = true;
+        public int MonitorIntervalSeconds { get; set; } = 60;
+        public List<string> UnwantedExtensions { get; set; } = new List<string> { ".txt", ".nfo", ".url" };
     }
 }

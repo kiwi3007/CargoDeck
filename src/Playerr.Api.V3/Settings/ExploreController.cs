@@ -20,6 +20,11 @@ namespace Playerr.Api.V3.Settings
                 // Default to root if no path provided
                 string targetPath = string.IsNullOrWhiteSpace(path) ? "/" : path;
 
+                if (targetPath.StartsWith("smb://", StringComparison.OrdinalIgnoreCase))
+                {
+                    return BadRequest(new { error = "Protocol 'smb://' is not supported. Please mount the network drive in Finder (Cmd+K) and use the path in '/Volumes'." });
+                }
+
                 // For Windows compatibility during development, if path is empty or "/", use a default drive
                 if (targetPath == "/" && System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
                 {
@@ -31,17 +36,31 @@ namespace Playerr.Api.V3.Settings
                     return BadRequest(new { error = "Directory does not exist" });
                 }
 
-                var entries = Directory.GetDirectories(targetPath)
-                    .Select(d => new 
+                var entries = Directory.EnumerateDirectories(targetPath)
+                    .Select(d => 
                     {
-                        Name = Path.GetFileName(d),
-                        Path = d.Replace("\\", "/"), // Normalize for web
-                        IsDirectory = true
+                        try 
+                        {
+                            return new 
+                            {
+                                Name = Path.GetFileName(d),
+                                Path = d.Replace("\\", "/"),
+                                IsDirectory = true
+                            };
+                        }
+                        catch { return null; }
                     })
-                    .OrderBy(d => d.Name)
+                    .Where(d => d != null)
+                    .OrderBy(d => d!.Name)
                     .ToList();
 
                 var parentPath = Path.GetDirectoryName(targetPath)?.Replace("\\", "/");
+                
+                // If we are at the root, ensure parent is null to hide back button
+                if (targetPath == "/" || (targetPath.Length == 3 && targetPath.EndsWith(":/", StringComparison.Ordinal)))
+                {
+                    parentPath = null;
+                }
 
                 return Ok(new
                 {

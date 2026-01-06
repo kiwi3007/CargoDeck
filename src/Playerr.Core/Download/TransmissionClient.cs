@@ -17,7 +17,7 @@ namespace Playerr.Core.Download
     [SuppressMessage("Microsoft.Usage", "CA2234:PassSystemUriObjectsInsteadOfStrings")]
     [SuppressMessage("Microsoft.Design", "CA1062:ValidateArgumentsOfPublicMethods")]
     [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope")]
-    public class TransmissionClient
+    public class TransmissionClient : IDownloadClient
     {
         private readonly HttpClient _httpClient;
         private readonly string _rpcUrl;
@@ -186,6 +186,86 @@ namespace Playerr.Core.Download
             }
 
             return false;
+        }
+
+        public Task<bool> AddNzbAsync(string url, string? category = null)
+        {
+            return Task.FromResult(false); // Not supported
+        }
+
+        public async Task<bool> RemoveDownloadAsync(string id)
+        {
+            var args = new Dictionary<string, object>
+            {
+                { "ids", new[] { id } },
+                { "delete-local-data", true }
+            };
+
+            var response = await SendRequestAsync("torrent-remove", args);
+            return response.IsSuccessStatusCode;
+        }
+
+        public async Task<bool> PauseDownloadAsync(string id)
+        {
+            var args = new Dictionary<string, object> { { "ids", new[] { id } } };
+            var response = await SendRequestAsync("torrent-stop", args);
+            return response.IsSuccessStatusCode;
+        }
+
+        public async Task<bool> ResumeDownloadAsync(string id)
+        {
+            var args = new Dictionary<string, object> { { "ids", new[] { id } } };
+            var response = await SendRequestAsync("torrent-start", args);
+            return response.IsSuccessStatusCode;
+        }
+
+        public async Task<List<DownloadStatus>> GetDownloadsAsync()
+        {
+            var args = new
+            {
+                fields = new[] { "id", "name", "totalSize", "percentDone", "status", "downloadDir", "error", "errorString" }
+            };
+
+            var response = await SendRequestAsync("torrent-get", args);
+            if (!response.IsSuccessStatusCode) return new List<DownloadStatus>();
+
+            var json = await response.Content.ReadAsStringAsync();
+            var statusList = new List<DownloadStatus>();
+
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("arguments", out var arguments) &&
+                arguments.TryGetProperty("torrents", out var torrents))
+            {
+                foreach (var torrent in torrents.EnumerateArray())
+                {
+                    statusList.Add(new DownloadStatus
+                    {
+                        Id = torrent.GetProperty("id").GetInt32().ToString(),
+                        Name = torrent.GetProperty("name").GetString() ?? string.Empty,
+                        Size = torrent.GetProperty("totalSize").GetInt64(),
+                        Progress = (float)torrent.GetProperty("percentDone").GetDouble() * 100,
+                        State = MapState(torrent.GetProperty("status").GetInt32()),
+                        DownloadPath = torrent.GetProperty("downloadDir").GetString()
+                    });
+                }
+            }
+
+            return statusList;
+        }
+
+        private DownloadState MapState(int status)
+        {
+            return status switch
+            {
+                0 => DownloadState.Paused,     // TR_STATUS_STOPPED
+                1 => DownloadState.Checking,   // TR_STATUS_CHECK_WAIT
+                2 => DownloadState.Checking,   // TR_STATUS_CHECK
+                3 => DownloadState.Queued,     // TR_STATUS_DOWNLOAD_WAIT
+                4 => DownloadState.Downloading, // TR_STATUS_DOWNLOAD
+                5 => DownloadState.Queued,     // TR_STATUS_SEED_WAIT
+                6 => DownloadState.Completed,   // TR_STATUS_SEED
+                _ => DownloadState.Unknown
+            };
         }
     }
 }

@@ -15,16 +15,15 @@ namespace Playerr.Api.V3.DownloadClients
     [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
     public class DownloadClientController : ControllerBase
     {
-        private static List<DownloadClient> _clients = new();
-        private readonly Core.Configuration.ConfigurationService _configService;
+        private readonly List<DownloadClient> _clients; // Changed from static to readonly, type remains DownloadClient
+        private readonly ConfigurationService _configService; // Changed type to ConfigurationService
+        private readonly ImportStatusService _importStatus; // Added new field
 
-        public DownloadClientController(Core.Configuration.ConfigurationService configService)
+        public DownloadClientController(ConfigurationService configService, ImportStatusService importStatus) // Added ImportStatusService to constructor
         {
             _configService = configService;
-            if (!_clients.Any())
-            {
-                _clients = _configService.LoadDownloadClients();
-            }
+            _importStatus = importStatus; // Assigned new field
+            _clients = _configService.LoadDownloadClients(); // Initialized _clients in constructor
         }
 
         [HttpGet]
@@ -73,6 +72,8 @@ namespace Playerr.Api.V3.DownloadClients
             existingClient.ApiKey = client.ApiKey;
             existingClient.Enable = client.Enable;
             existingClient.Priority = client.Priority;
+            existingClient.RemotePathMapping = client.RemotePathMapping;
+            existingClient.LocalPathMapping = client.LocalPathMapping;
 
             _configService.SaveDownloadClients(_clients);
 
@@ -91,6 +92,151 @@ namespace Playerr.Api.V3.DownloadClients
             _clients.Remove(client);
             _configService.SaveDownloadClients(_clients);
             return NoContent();
+        }
+
+        [HttpGet("queue")]
+        public async Task<ActionResult<List<DownloadStatus>>> GetQueue()
+        {
+            var allDownloads = new List<DownloadStatus>();
+
+            foreach (var config in _clients.Where(c => c.Enable))
+            {
+                try
+                {
+                    IDownloadClient? client = null;
+                    if (config.Implementation.Equals("qBittorrent", StringComparison.OrdinalIgnoreCase))
+                    {
+                        client = new QBittorrentClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+                    }
+                    else if (config.Implementation.Equals("Transmission", StringComparison.OrdinalIgnoreCase))
+                    {
+                        client = new TransmissionClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "");
+                    }
+                    else if (config.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase))
+                    {
+                        client = new SabnzbdClient(config.Host, config.Port, config.ApiKey ?? "", config.UrlBase);
+                IDownloadClient? client = null;
+                if (config.Implementation.Equals("qBittorrent", StringComparison.OrdinalIgnoreCase))
+                {
+                    client = new QBittorrentClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+                }
+                else if (config.Implementation.Equals("Transmission", StringComparison.OrdinalIgnoreCase))
+                {
+                    client = new TransmissionClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "");
+                }
+                else if (config.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase))
+                {
+                    client = new SabnzbdClient(config.Host, config.Port, config.ApiKey ?? "", config.UrlBase);
+                }
+                else if (config.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase))
+                {
+                    client = new NzbgetClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+                }
+
+                if (client != null)
+                {
+                    try
+                    {
+                        var downloads = await client.GetDownloadsAsync();
+                        foreach (var d in downloads) 
+                        {
+                            d.ClientId = config.Id;
+                            if (_importStatus.IsImporting(d.Id))
+                            {
+                                d.State = DownloadState.Importing;
+                            }
+                        }
+                        allDownloads.AddRange(downloads);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error fetching downloads for client {config.Name}: {ex.Message}");
+                    }
+                }
+            }
+
+            return Ok(allDownloads);
+        }
+
+        [HttpDelete("queue/{clientId}/{downloadId}")]
+        public async Task<ActionResult> DeleteDownload(int clientId, string downloadId)
+        {
+            var config = _clients.FirstOrDefault(c => c.Id == clientId);
+            if (config == null) return NotFound("Client not found");
+
+            IDownloadClient? client = null;
+            if (config.Implementation.Equals("qBittorrent", StringComparison.OrdinalIgnoreCase))
+            {
+                client = new QBittorrentClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+            }
+            else if (config.Implementation.Equals("Transmission", StringComparison.OrdinalIgnoreCase))
+            {
+                client = new TransmissionClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "");
+            }
+            else if (config.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase))
+            {
+                client = new SabnzbdClient(config.Host, config.Port, config.ApiKey ?? "", config.UrlBase);
+            }
+            else if (config.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase))
+            {
+                client = new NzbgetClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+            }
+
+            if (client == null) return BadRequest("Unsupported client implementation");
+
+            try 
+            {
+                // Decode URL encoded ID (especially for SABnzbd/Transmission which might have funky chars, although unlikely for IDs)
+                var decodedId = Uri.UnescapeDataString(downloadId);
+                var result = await client.RemoveDownloadAsync(decodedId);
+                if (result) return Ok();
+                return BadRequest("Failed to delete download from client.");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Error deleting download: {ex.Message}");
+            }
+        }
+
+        [HttpPost("queue/{clientId}/{downloadId}/pause")]
+        public async Task<ActionResult> PauseDownload(int clientId, string downloadId)
+        {
+            var result = await HandleDownloadAction(clientId, downloadId, (client, id) => client.PauseDownloadAsync(id));
+            if (result) return Ok();
+            return BadRequest("Failed to pause download.");
+        }
+
+        [HttpPost("queue/{clientId}/{downloadId}/resume")]
+        public async Task<ActionResult> ResumeDownload(int clientId, string downloadId)
+        {
+            var result = await HandleDownloadAction(clientId, downloadId, (client, id) => client.ResumeDownloadAsync(id));
+            if (result) return Ok();
+            return BadRequest("Failed to resume download.");
+        }
+
+        private async Task<bool> HandleDownloadAction(int clientId, string downloadId, Func<IDownloadClient, string, Task<bool>> action)
+        {
+            var config = _clients.FirstOrDefault(c => c.Id == clientId);
+            if (config == null) return false;
+
+            IDownloadClient? client = null;
+            if (config.Implementation.Equals("qBittorrent", StringComparison.OrdinalIgnoreCase))
+                client = new QBittorrentClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+            else if (config.Implementation.Equals("Transmission", StringComparison.OrdinalIgnoreCase))
+                client = new TransmissionClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "");
+            else if (config.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase))
+                client = new SabnzbdClient(config.Host, config.Port, config.ApiKey ?? "", config.UrlBase);
+            else if (config.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase))
+                client = new NzbgetClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+
+            if (client == null) return false;
+
+            try 
+            {
+                var decodedId = Uri.UnescapeDataString(downloadId);
+                return await action(client, decodedId);
+            }
+            catch { return false; }
         }
 
         [HttpPost("test")]

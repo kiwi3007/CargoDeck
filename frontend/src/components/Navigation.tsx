@@ -20,10 +20,22 @@ const Navigation: React.FC = () => {
       </div>
       <ul className="nav-links">
         <li><NavLink to="/library">{t('library')}</NavLink></li>
+        <li><NavLink to="/status">Status</NavLink></li>
         <li><NavLink to="/user">{t('user')}</NavLink></li>
         <li><NavLink to="/settings">{t('settings')}</NavLink></li>
         <li><NavLink to="/about">{t('about')}</NavLink></li>
       </ul>
+      <div className="nav-branch-tag" style={{
+        fontSize: '10px',
+        opacity: 0.6,
+        padding: '2px 6px',
+        border: '1px solid currentColor',
+        borderRadius: '4px',
+        marginLeft: '10px',
+        whiteSpace: 'nowrap'
+      }}>
+        BETA: post-download
+      </div>
     </nav>
   );
 };

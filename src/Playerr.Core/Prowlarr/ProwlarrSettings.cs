@@ -9,5 +9,6 @@ namespace Playerr.Core.Prowlarr
         public string ApiKey { get; set; } = string.Empty;
 
         public bool IsConfigured => !string.IsNullOrWhiteSpace(Url) && !string.IsNullOrWhiteSpace(ApiKey);
+        public bool IsConfiguredSetter { private get; set; } // Dummy to prevent issues if present in JSON
     }
 }

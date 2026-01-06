@@ -126,6 +126,10 @@ namespace Playerr.Core.Games
             if (string.IsNullOrEmpty(folderPath) || !Directory.Exists(folderPath))
             {
                 var skipMsg = $"Media scanner skip: Path not configured or doesn't exist: '{folderPath}'";
+                if (folderPath != null && folderPath.StartsWith("smb://", StringComparison.OrdinalIgnoreCase))
+                {
+                    skipMsg = "The address starts with 'smb://'. This is a protocol, not a path. Please mount the drive in Finder and use the path in '/Volumes/'.";
+                }
                 Console.WriteLine(skipMsg);
                 Log(skipMsg);
                 return 0;

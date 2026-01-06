@@ -62,3 +62,5 @@ x86/
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+my_debug_log*.txt
+my_test_log.txt

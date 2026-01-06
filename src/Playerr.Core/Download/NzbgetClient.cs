@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -20,7 +21,7 @@ namespace Playerr.Core.Download
     [SuppressMessage("Microsoft.Performance", "CA1867:UseCharOverload")]
     [SuppressMessage("Microsoft.Design", "CA1062:ValidateArgumentsOfPublicMethods")]
     [SuppressMessage("Microsoft.Performance", "CA1825:AvoidZeroLengthArrayAllocations")]
-    public class NzbgetClient
+    public class NzbgetClient : IDownloadClient
     {
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
@@ -106,7 +107,12 @@ namespace Playerr.Core.Download
             }
         }
 
-        public async Task<bool> AddNzbAsync(string nzbUrl, string category)
+        public Task<bool> AddTorrentAsync(string url, string? category = null)
+        {
+            return Task.FromResult(false); // Not supported
+        }
+
+        public async Task<bool> AddNzbAsync(string nzbUrl, string? category = null)
         {
             try
             {
@@ -154,6 +160,161 @@ namespace Playerr.Core.Download
                 Console.WriteLine($"[NZBGet] Error adding NZB: {ex.Message}");
                 return false;
             }
+        }
+
+        public async Task<bool> RemoveDownloadAsync(string id)
+        {
+            try
+            {
+                int nzbId;
+                if (!int.TryParse(id, out nzbId)) return false;
+
+                // Try deleting from Queue
+                var queueReq = new 
+                { 
+                    method = "editqueue", 
+                    @params = new object[] { "GroupDelete", 0, new[] { nzbId } }, 
+                    id = 10 
+                };
+                await SendRpcRequestAsync(queueReq);
+
+                // Try deleting from History
+                var historyReq = new 
+                { 
+                    method = "editqueue", 
+                    @params = new object[] { "HistoryDelete", 0, new[] { nzbId } }, 
+                    id = 11 
+                };
+                await SendRpcRequestAsync(historyReq);
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> PauseDownloadAsync(string id)
+        {
+             try {
+                int nzbId;
+                if (!int.TryParse(id, out nzbId)) return false;
+                var req = new { method = "editqueue", @params = new object[] { "GroupPause", 0, new[] { nzbId } }, id = 20 };
+                await SendRpcRequestAsync(req);
+                return true;
+            } catch { return false; }
+        }
+
+        public async Task<bool> ResumeDownloadAsync(string id)
+        {
+             try {
+                int nzbId;
+                if (!int.TryParse(id, out nzbId)) return false;
+                var req = new { method = "editqueue", @params = new object[] { "GroupResume", 0, new[] { nzbId } }, id = 21 };
+                await SendRpcRequestAsync(req);
+                return true;
+            } catch { return false; }
+        }
+
+        public async Task<List<DownloadStatus>> GetDownloadsAsync()
+        {
+            var statusList = new List<DownloadStatus>();
+
+            try
+            {
+                // 1. Get Queue (ListGroups)
+                var listGroupsRequest = new { method = "listgroups", @params = new object[] { }, id = 3 };
+                var queueContent = await SendRpcRequestAsync(listGroupsRequest);
+                if (queueContent.HasValue)
+                {
+                    foreach (var group in queueContent.Value.EnumerateArray())
+                    {
+                        statusList.Add(new DownloadStatus
+                        {
+                            Id = group.GetProperty("NZBID").GetInt32().ToString(),
+                            Name = group.GetProperty("NZBName").GetString() ?? string.Empty,
+                            Size = group.GetProperty("FileSizeLo").GetInt64(), // Simple approach, NZBGet splits 64bit into Lo/Hi
+                            Progress = CalculateProgress(group),
+                            State = MapQueueStatus(group.GetProperty("Status").GetString()),
+                            Category = group.GetProperty("Category").GetString(),
+                            DownloadPath = group.GetProperty("DestDir").GetString()
+                        });
+                    }
+                }
+
+                // 2. Get History
+                var historyRequest = new { method = "history", @params = new object[] { false }, id = 4 };
+                var historyContent = await SendRpcRequestAsync(historyRequest);
+                if (historyContent.HasValue)
+                {
+                    foreach (var item in historyContent.Value.EnumerateArray())
+                    {
+                        statusList.Add(new DownloadStatus
+                        {
+                            Id = item.GetProperty("NZBID").GetInt32().ToString(),
+                            Name = item.GetProperty("NZBName").GetString() ?? string.Empty,
+                            Size = item.GetProperty("FileSizeLo").GetInt64(),
+                            Progress = 100,
+                            State = MapHistoryStatus(item.GetProperty("Status").GetString()),
+                            Category = item.GetProperty("Category").GetString(),
+                            DownloadPath = item.GetProperty("DestDir").GetString()
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[NZBGet] Error getting downloads: {ex.Message}");
+            }
+
+            return statusList;
+        }
+
+        private async Task<JsonElement?> SendRpcRequestAsync(object request)
+        {
+            var json = JsonSerializer.Serialize(request);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(_baseUrl, content);
+            if (!response.IsSuccessStatusCode) return null;
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(responseContent);
+            if (doc.RootElement.TryGetProperty("result", out var result))
+            {
+                return result.Clone();
+            }
+            return null;
+        }
+
+        private float CalculateProgress(JsonElement group)
+        {
+            long fileSize = group.GetProperty("FileSizeLo").GetInt64();
+            long remaining = group.GetProperty("RemainingSizeLo").GetInt64();
+            if (fileSize == 0) return 100;
+            return (float)((fileSize - remaining) / (double)fileSize * 100);
+        }
+
+        private DownloadState MapQueueStatus(string? status)
+        {
+            return status?.ToUpper() switch
+            {
+                "DOWNLOADING" => DownloadState.Downloading,
+                "PAUSED" => DownloadState.Paused,
+                "QUEUED" => DownloadState.Queued,
+                _ => DownloadState.Unknown
+            };
+        }
+
+        private DownloadState MapHistoryStatus(string? status)
+        {
+            return status?.ToUpper() switch
+            {
+                "SUCCESS" => DownloadState.Completed,
+                "FAILURE" => DownloadState.Error,
+                "DELETED" => DownloadState.Deleted,
+                _ => DownloadState.Unknown
+            };
         }
     }
 }

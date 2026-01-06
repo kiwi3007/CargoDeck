@@ -19,5 +19,9 @@ namespace Playerr.Core.Download
         public string? ApiKey { get; set; }
         public bool Enable { get; set; } = true;
         public int Priority { get; set; }
+        
+        // Remote Path Mapping
+        public string? RemotePathMapping { get; set; }
+        public string? LocalPathMapping { get; set; }
     }
 }

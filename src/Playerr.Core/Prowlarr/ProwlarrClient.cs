@@ -57,32 +57,6 @@ namespace Playerr.Core.Prowlarr
 
         public async Task<List<SearchResult>> SearchAsync(string query, int[]? indexerIds = null, int[]? categories = null)
         {
-            // If using development API key, return mock data
-            if (_apiKey == "test-api-key-for-development")
-            {
-                await Task.Delay(1000); // Simulate network delay
-                
-                return new List<SearchResult>
-                {
-                    new SearchResult
-                    {
-                        Title = $"Sample Game Pack - {query}",
-                        Size = 5368709120, // 5 GB
-                        Seeders = 42,
-                        Leechers = 8,
-                        PeersFromIndexer = 50,
-                        Protocol = "torrent",
-                        IndexerId = 1,
-                        IndexerName = "MockIndexer",
-                        Guid = "mock-guid-1",
-                        DownloadUrl = "https://example.com/download/1",
-                        MagnetUrl = "magnet:?xt=urn:btih:mock1",
-                        PublishDate = DateTime.UtcNow.AddDays(-2),
-                        InfoUrl = "https://example.com/info/1",
-                        Categories = new List<ProwlarrCategory> { new ProwlarrCategory { Id = 4000, Name = "Games" } } 
-                    }
-                };
-            }
             
             // Build categories query
 
@@ -281,8 +255,6 @@ namespace Playerr.Core.Prowlarr
 
         public async Task<bool> TestConnectionAsync()
         {
-            if (_apiKey == "test-api-key-for-development") return true;
-            
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/health");

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Diagnostics.CodeAnalysis;
 
@@ -26,7 +27,7 @@ namespace Playerr.Core.Download
     [SuppressMessage("Microsoft.Performance", "CA1869:CacheAndReuseJsonSerializerOptions")]
     [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope")]
     [SuppressMessage("Microsoft.Performance", "CA1866:UseCharOverload")]
-    public class QBittorrentClient
+    public class QBittorrentClient : IDownloadClient
     {
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
@@ -125,7 +126,7 @@ namespace Playerr.Core.Download
             catch (Exception ex)
             {
                 Console.WriteLine($"[qBittorrent] Test connection exception: {ex.Message}");
-                throw;
+                return false;
             }
         }
 
@@ -137,14 +138,14 @@ namespace Playerr.Core.Download
             return await response.Content.ReadAsStringAsync();
         }
 
-        public async Task<bool> AddTorrentAsync(string magnetUrl, string? category = null)
+        public async Task<bool> AddTorrentAsync(string url, string? category = null)
         {
             await EnsureAuthenticatedAsync();
 
             var content = new MultipartFormDataContent();
             
             // urls field must be strings separated by newlines
-            content.Add(new StringContent(magnetUrl), "urls");
+            content.Add(new StringContent(url), "urls");
 
             if (!string.IsNullOrEmpty(category))
             {
@@ -161,6 +162,95 @@ namespace Playerr.Core.Download
             }
 
             return true;
+        }
+
+        public Task<bool> AddNzbAsync(string url, string? category = null)
+        {
+            return Task.FromResult(false); // Not supported
+        }
+
+        public async Task<bool> RemoveDownloadAsync(string id)
+        {
+            await EnsureAuthenticatedAsync();
+            
+            // hashes format: id|id|id... but we only have one
+            var content = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("hashes", id),
+                new KeyValuePair<string, string>("deleteFiles", "true")
+            });
+
+            var response = await _httpClient.PostAsync($"{_baseUrl}/torrents/delete", content);
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[qBittorrent] Failed to delete torrent {id}. Status: {response.StatusCode}");
+                return false;
+            }
+            return true;
+        }
+
+        public async Task<bool> PauseDownloadAsync(string id)
+        {
+            await EnsureAuthenticatedAsync();
+            var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("hashes", id) });
+            var response = await _httpClient.PostAsync($"{_baseUrl}/torrents/stop", content);
+            return response.IsSuccessStatusCode;
+        }
+
+        public async Task<bool> ResumeDownloadAsync(string id)
+        {
+            await EnsureAuthenticatedAsync();
+            var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("hashes", id) });
+            var response = await _httpClient.PostAsync($"{_baseUrl}/torrents/start", content);
+            return response.IsSuccessStatusCode;
+        }
+
+        public async Task<List<DownloadStatus>> GetDownloadsAsync()
+        {
+            var torrents = await GetTorrentsAsync();
+            var statusList = new List<DownloadStatus>();
+
+            foreach (var torrent in torrents)
+            {
+                statusList.Add(new DownloadStatus
+                {
+                    Id = torrent.Hash,
+                    Name = torrent.Name,
+                    Size = torrent.Size,
+                    Progress = torrent.Progress * 100, // qBittorrent returns 0.0 to 1.0
+                    State = MapState(torrent.State),
+                    Category = torrent.Category,
+                    DownloadPath = !string.IsNullOrEmpty(torrent.Save_Path) 
+                        ? System.IO.Path.Combine(torrent.Save_Path, torrent.Name) 
+                        : null
+                });
+            }
+
+            return statusList;
+        }
+
+        private DownloadState MapState(string state)
+        {
+            return state.ToLower() switch
+            {
+                "downloading" => DownloadState.Downloading,
+                "stalleddl" => DownloadState.Downloading,
+                "pauseddl" => DownloadState.Paused,
+                "stoppeddl" => DownloadState.Paused,
+                "queueddl" => DownloadState.Queued,
+                "checkingdl" => DownloadState.Checking,
+                "checkingresumeData" => DownloadState.Checking,
+                "uploading" => DownloadState.Completed,
+                "stalledup" => DownloadState.Completed,
+                "pausedup" => DownloadState.Completed, // Technically completed
+                "stoppedup" => DownloadState.Completed,
+                "queuedup" => DownloadState.Completed,
+                "checkingup" => DownloadState.Completed,
+                "moving" => DownloadState.Completed,
+                "missingfiles" => DownloadState.Error,
+                "error" => DownloadState.Error,
+                _ => DownloadState.Unknown
+            };
         }
 
         public async Task<List<TorrentInfo>> GetTorrentsAsync()
@@ -192,5 +282,7 @@ namespace Playerr.Core.Download
         public int NumSeeds { get; set; }
         public int NumLeechs { get; set; }
         public string Category { get; set; } = string.Empty;
+        [JsonPropertyName("save_path")]
+        public string Save_Path { get; set; } = string.Empty;
     }
 }

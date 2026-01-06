@@ -12,6 +12,7 @@ using Playerr.Core.Games;
 using Playerr.Core.MetadataSource;
 using Playerr.Core.MetadataSource.Steam;
 using Playerr.Core.MetadataSource.Igdb;
+using Playerr.Core.Download;
 using Playerr.Core.Prowlarr;
 using Playerr.Core.Jackett;
 using Playerr.Core.Configuration;
@@ -111,6 +112,12 @@ namespace Playerr.Host
             // IO Services
             builder.Services.AddSingleton<Playerr.Core.IO.IFileMoverService, Playerr.Core.IO.FileMoverService>();
 
+            // Post-Download Management
+            builder.Services.AddSingleton<Playerr.Core.Download.PostDownloadProcessor>();
+            builder.Services.AddSingleton<Playerr.Core.Download.DownloadMonitorService>();
+            builder.Services.AddHostedService(sp => sp.GetRequiredService<Playerr.Core.Download.DownloadMonitorService>());
+            builder.Services.AddSingleton<Playerr.Core.Download.ImportStatusService>();
+
             // Register SteamClient for direct usage (e.g. Settings Test/Sync)
             builder.Services.AddTransient<SteamClient>();
             
@@ -142,13 +149,10 @@ namespace Playerr.Host
             
             Console.WriteLine($"[Startup] Checking Headless Mode: Args={string.Join(",", args)}, EnvVar={envVar}, Result={isHeadless}");
 
-            if (!isHeadless)
+            builder.WebHost.ConfigureKestrel(serverOptions =>
             {
-                builder.WebHost.ConfigureKestrel(serverOptions =>
-                {
-                    serverOptions.Listen(System.Net.IPAddress.Loopback, 5002);
-                });
-            }
+                serverOptions.Listen(System.Net.IPAddress.Loopback, 5002);
+            });
             // ELSE: Let Kestrel use default config (ASPNETCORE_URLS) which is ideal for Docker
 
             var app = builder.Build();
@@ -310,34 +314,40 @@ namespace Playerr.Host
                                var url = message.Substring("OPEN_URL:".Length);
                                OpenBrowser(url);
                            }
-                           else if (message == "SELECT_FOLDER")
+                           else if (message.StartsWith("SELECT_FOLDER"))
                            {
                                var folders = windowInstance.ShowOpenFolder();
                                if (folders != null && folders.Length > 0)
                                {
                                    var selectedPath = folders[0];
-                                   // Direct Save to Backend Configuration
-                                   // Resolving service from app.Services (which we need access to here, but scope is tricky)
-                                   // We need capturing 'app' variable or 'configService' variable into this closure.
-                                   // Fortunately, this lambda captures local variables of Main method.
                                    
                                    try 
                                    {
                                         var currentMediaSettings = configService.LoadMediaSettings();
-                                        currentMediaSettings.FolderPath = selectedPath;
+                                        
+                                        if (message.Contains("DOWNLOAD"))
+                                        {
+                                            currentMediaSettings.DownloadPath = selectedPath;
+                                        }
+                                        else if (message.Contains("DESTINATION"))
+                                        {
+                                            currentMediaSettings.DestinationPath = selectedPath;
+                                        }
+                                        else
+                                        {
+                                            currentMediaSettings.FolderPath = selectedPath;
+                                        }
+
                                         configService.SaveMediaSettings(currentMediaSettings);
                                         
-                                        // 1. Notify UI with specific path for immediate feedback
-                                        windowInstance.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
-    
-                                        // 2. Notify UI that settings have changed (reload for consistency)
+                                        // Notify UI that settings have changed (this triggers SETTINGS_UPDATED_EVENT in JS)
                                         windowInstance.SendWebMessage("SETTINGS_UPDATED");
+                                        // Also send specific signal for immediate UI update if desired
+                                        windowInstance.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
                                    }
                                    catch (Exception ex)
                                    {
                                         Console.WriteLine($"Error saving folder selection: {ex.Message}");
-                                        // Fallback: try to send path anyway for debug
-                                        windowInstance.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
                                    }
                                }
                            }

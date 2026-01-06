@@ -48,6 +48,7 @@ namespace Playerr.Api.V3.Settings
         [HttpPost("prowlarr")]
         public IActionResult SaveProwlarrSettings([FromBody] ProwlarrSettings request)
         {
+            // Update the injected singleton so other services see the change immediately
             _prowlarrSettings.Url = request.Url;
             _prowlarrSettings.ApiKey = request.ApiKey;
             
@@ -60,12 +61,14 @@ namespace Playerr.Api.V3.Settings
         [HttpGet("prowlarr")]
         public ActionResult<ProwlarrSettings> GetProwlarrSettings()
         {
-            return Ok(_prowlarrSettings);
+            // Load directly from disk to ensure persistence is verified
+            return Ok(_configService.LoadProwlarrSettings());
         }
 
         [HttpPost("jackett")]
         public IActionResult SaveJackettSettings([FromBody] JackettSettings request)
         {
+            // Update the injected singleton so other services see the change immediately
             _jackettSettings.Url = request.Url;
             _jackettSettings.ApiKey = request.ApiKey;
             
@@ -78,7 +81,8 @@ namespace Playerr.Api.V3.Settings
         [HttpGet("jackett")]
         public ActionResult<JackettSettings> GetJackettSettings()
         {
-            return Ok(_jackettSettings);
+            // Load directly from disk to ensure persistence is verified
+            return Ok(_configService.LoadJackettSettings());
         }
 
         [HttpPost("/api/v3/metadata/igdb")]
