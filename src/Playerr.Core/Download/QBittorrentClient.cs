@@ -220,9 +220,11 @@ namespace Playerr.Core.Download
                     Progress = torrent.Progress * 100, // qBittorrent returns 0.0 to 1.0
                     State = MapState(torrent.State),
                     Category = torrent.Category,
-                    DownloadPath = !string.IsNullOrEmpty(torrent.Save_Path) 
-                        ? System.IO.Path.Combine(torrent.Save_Path, torrent.Name) 
-                        : null
+                    DownloadPath = !string.IsNullOrEmpty(torrent.Content_Path)
+                        ? torrent.Content_Path
+                        : (!string.IsNullOrEmpty(torrent.Save_Path) 
+                            ? System.IO.Path.Combine(torrent.Save_Path, torrent.Name) 
+                            : null)
                 });
             }
 
@@ -284,5 +286,7 @@ namespace Playerr.Core.Download
         public string Category { get; set; } = string.Empty;
         [JsonPropertyName("save_path")]
         public string Save_Path { get; set; } = string.Empty;
+        [JsonPropertyName("content_path")]
+        public string Content_Path { get; set; } = string.Empty;
     }
 }

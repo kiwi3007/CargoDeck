@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { t, getLanguage } from '../i18n/translations';
+import GameCorrectionModal from '../components/GameCorrectionModal';
 import './GameDetails.css';
 
 interface Game {
@@ -70,6 +71,7 @@ const GameDetails: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
 
   useEffect(() => {
     if (notification) {
@@ -381,6 +383,21 @@ const GameDetails: React.FC = () => {
     }
   };
 
+  const handleCorrectionSave = async (updates: any) => {
+    if (!game) return;
+    try {
+      await axios.put(`/api/v3/game/${game.id}`, updates);
+      setNotification({ message: t('gameUpdated' as any) || 'Juego actualizado', type: 'success' });
+      setShowCorrectionModal(false);
+      // Reload game to reflect changes
+      const response = await axios.get(`/api/v3/game/${game.id}?lang=${language}`);
+      setGame(response.data);
+    } catch (err: any) {
+      console.error(err);
+      setNotification({ message: t('errorUpdating' as any) || 'Error al actualizar', type: 'error' });
+    }
+  };
+
   if (loading) {
     return <div className="game-details"><p>{t('loadingGame')}</p></div>;
   }
@@ -405,7 +422,17 @@ const GameDetails: React.FC = () => {
           )}
         </div>
         <div className="game-details-info">
-          <h1>{game.title}</h1>
+          <div className="title-row" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <h1>{game.title}</h1>
+            <button
+              className="btn-icon"
+              onClick={() => setShowCorrectionModal(true)}
+              title={t('correctGame' as any) || 'Corregir'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2em' }}
+            >
+              ✏️
+            </button>
+          </div>
           <div className="meta">
             <span>{game.year}</span>
             {game.platform && <span>{game.platform.name}</span>}
@@ -602,6 +629,15 @@ const GameDetails: React.FC = () => {
       <div className="back-link">
         <Link to="/library">{t('backToLibrary')}</Link>
       </div>
+
+      {showCorrectionModal && game && (
+        <GameCorrectionModal
+          game={game}
+          language={language}
+          onClose={() => setShowCorrectionModal(false)}
+          onSave={handleCorrectionSave}
+        />
+      )}
     </div>
   );
 };

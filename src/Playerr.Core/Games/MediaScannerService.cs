@@ -240,9 +240,20 @@ namespace Playerr.Core.Games
         {
             try
             {
-                var files = Directory.GetFiles(dirPath);
+                // Recursive search to handle nested folders (e.g. Library/Game/Release/setup.exe)
+                var files = Directory.EnumerateFiles(dirPath, "*.*", SearchOption.AllDirectories);
+                
+                // Signatures that strongly indicate a game folder, even if typical extensions are missing or ambiguous
+                var signatureFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "steam_api.dll", "steam_emu.ini", "autorun.inf", "verify.bat", "setup.exe", "installer.exe", "game.exe"
+                };
+
                 foreach (var file in files)
                 {
+                    var fileName = Path.GetFileName(file);
+                    if (signatureFiles.Contains(fileName)) return true; // Strong signal
+
                     var ext = Path.GetExtension(file);
                     if (_globalBlacklist.Contains(ext)) continue;
                     
@@ -250,7 +261,7 @@ namespace Playerr.Core.Games
                     {
                         return true;
                     }
-                    if (Path.GetFileName(file).Equals("eboot.bin", StringComparison.OrdinalIgnoreCase))
+                    if (fileName.Equals("eboot.bin", StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }
@@ -282,6 +293,20 @@ namespace Playerr.Core.Games
                     if (IsValidFile(file, extensionsToUse))
                     {
                         var name = Path.GetFileNameWithoutExtension(file);
+                        
+                        // Fix for generic filenames: use parent folder name instead
+                        if (name.Equals("setup", StringComparison.OrdinalIgnoreCase) || 
+                            name.Equals("installer", StringComparison.OrdinalIgnoreCase) || 
+                            name.Equals("game", StringComparison.OrdinalIgnoreCase) ||
+                            name.Equals("autorun", StringComparison.OrdinalIgnoreCase) ||
+                            name.StartsWith("setup", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var parentDir = Path.GetDirectoryName(file);
+                            if (parentDir != null)
+                            {
+                                name = new DirectoryInfo(parentDir).Name;
+                            }
+                        }
                         Log($"Found valid file: {file}");
                         
                         // Smart platform detection for each file in universal mode
@@ -508,7 +533,8 @@ namespace Playerr.Core.Games
                 "OPOISSO893", "OPOISSO", "CyB1K", "DLPSGAME.COM", "DLPSGAME", 
                 "RPGONLY.COM", "RPGONLY", "NSW2U.COM", "NSW2U.IN", "NSW2U",
                 "QUARK", "VENOM", "RAZOR1911", "RELOADED", "SKIDROW", "CODEX",
-                "FitGirl", "DODI", "EMPRESS"
+                "FitGirl", "DODI", "EMPRESS", "GOG", "xatab", "gamesfull", "bitsearch", 
+                "www", "com", "app", "org", "net"
             };
             
             foreach (var n in noise)

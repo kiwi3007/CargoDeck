@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Playerr.Core.Download;
+using Playerr.Core.Configuration;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Api.V3.DownloadClients
@@ -115,27 +116,13 @@ namespace Playerr.Api.V3.DownloadClients
                     else if (config.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase))
                     {
                         client = new SabnzbdClient(config.Host, config.Port, config.ApiKey ?? "", config.UrlBase);
-                IDownloadClient? client = null;
-                if (config.Implementation.Equals("qBittorrent", StringComparison.OrdinalIgnoreCase))
-                {
-                    client = new QBittorrentClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
-                }
-                else if (config.Implementation.Equals("Transmission", StringComparison.OrdinalIgnoreCase))
-                {
-                    client = new TransmissionClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "");
-                }
-                else if (config.Implementation.Equals("SABnzbd", StringComparison.OrdinalIgnoreCase))
-                {
-                    client = new SabnzbdClient(config.Host, config.Port, config.ApiKey ?? "", config.UrlBase);
-                }
-                else if (config.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase))
-                {
-                    client = new NzbgetClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
-                }
+                    }
+                    else if (config.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase))
+                    {
+                        client = new NzbgetClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+                    }
 
-                if (client != null)
-                {
-                    try
+                    if (client != null)
                     {
                         var downloads = await client.GetDownloadsAsync();
                         foreach (var d in downloads) 
@@ -148,10 +135,10 @@ namespace Playerr.Api.V3.DownloadClients
                         }
                         allDownloads.AddRange(downloads);
                     }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error fetching downloads for client {config.Name}: {ex.Message}");
-                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error fetching downloads for client {config.Name}: {ex.Message}");
                 }
             }
 
