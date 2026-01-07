@@ -164,6 +164,7 @@ export const translations = {
         failedToDeleteDownload: 'Error al eliminar la descarga',
 
         // Game Details
+        loading: 'Cargando...',
         loadingGame: 'Cargando juego...',
         gameNotFound: 'Juego no encontrado',
         backToLibrary: '← Volver a la biblioteca',
@@ -384,6 +385,7 @@ export const translations = {
         failedToDeleteDownload: 'Failed to delete download',
 
         // Game Details
+        loading: 'Loading...',
         loadingGame: 'Loading game...',
         gameNotFound: 'Game not found',
         backToLibrary: '← Back to library',
@@ -578,6 +580,7 @@ export const translations = {
         deleteConfirm: 'Êtes-vous sûr de vouloir supprimer ce jeu de votre bibliothèque ?',
 
         // Game Details
+        loading: 'Chargement...',
         loadingGame: 'Chargement du jeu...',
         gameNotFound: 'Jeu non trouvé',
         backToLibrary: '← Retour à la bibliothèque',
@@ -758,6 +761,7 @@ export const translations = {
         deleteConfirm: 'Sind Sie sicher, dass Sie dieses Spiel aus Ihrer Bibliothek löschen möchten?',
 
         // Game Details
+        loading: 'Laden...',
         loadingGame: 'Spiel wird geladen...',
         gameNotFound: 'Spiel nicht gefunden',
         backToLibrary: '← Zurück zur Bibliothek',
@@ -941,6 +945,7 @@ export const translations = {
         deleteConfirm: 'Вы уверены, что хотите удалить эту игру из своей библиотеки?',
 
         // Game Details
+        loading: 'Загрузка...',
         loadingGame: 'Загрузка игры...',
         gameNotFound: 'Игра не найдена',
         backToLibrary: '← Вернуться в библиотеку',
@@ -1120,6 +1125,7 @@ export const translations = {
         deleteConfirm: '您确定要从库中删除此游戏吗？',
 
         // Game Details
+        loading: '加载中...',
         loadingGame: '加载中...',
         gameNotFound: '未找到游戏',
         backToLibrary: '← 返回库',
@@ -1291,6 +1297,7 @@ export const translations = {
         deleteConfirm: 'このゲームをライブラリから削除してもよろしいですか？',
 
         // Game Details
+        loading: '読み込み中...',
         loadingGame: '読み込み中...',
         gameNotFound: 'ゲームが見つかりません',
         backToLibrary: '← ライブラリに戻る',
