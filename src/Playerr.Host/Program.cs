@@ -35,8 +35,12 @@ namespace Playerr.Host
         [STAThread]
         public static void Main(string[] args)
         {
-            var builder = WebApplication.CreateBuilder(args);
-
+            var exePath = AppContext.BaseDirectory;
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+            {
+                Args = args,
+                ContentRootPath = exePath
+            });
             // Add services
             System.Console.WriteLine("DEBUG: Registering Services...");
             builder.Services.AddControllers()
@@ -59,7 +63,6 @@ namespace Playerr.Host
             });
 
             // Configuration service for persistence
-            var exePath = AppContext.BaseDirectory;
             var configPath = Path.Combine(exePath, "config");
             
             // In development/build scenarios, the exe is deep in _output/net8.0/osx-arm64/

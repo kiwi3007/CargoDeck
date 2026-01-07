@@ -48,6 +48,15 @@ rm -f $OUTPUT_DIR/linux-x64/config/*.json
 rm -f $OUTPUT_DIR/linux-x64/settings/*.json
 
 echo "    Packaging Linux..."
+# Create Launcher for Linux
+cat > $OUTPUT_DIR/linux-x64/Playerr <<EOF
+#!/bin/bash
+DIR="\$( cd "\$( dirname "\${BASH_SOURCE[0]}" )" && pwd )"
+cd "\$DIR"
+./Playerr.Host "\$@"
+EOF
+chmod +x $OUTPUT_DIR/linux-x64/Playerr
+
 cd $OUTPUT_DIR
 tar -czf "Playerr-Linux-x64.tar.gz" "linux-x64"
 cd ..
