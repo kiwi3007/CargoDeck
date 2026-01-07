@@ -121,6 +121,7 @@ namespace Playerr.Host
             
             // IO Services
             builder.Services.AddSingleton<Playerr.Core.IO.IFileMoverService, Playerr.Core.IO.FileMoverService>();
+            builder.Services.AddSingleton<Playerr.Core.IO.IArchiveService, Playerr.Core.IO.ArchiveService>();
 
             // Post-Download Management
             builder.Services.AddSingleton<Playerr.Core.Download.PostDownloadProcessor>();

@@ -145,16 +145,46 @@ namespace Playerr.Core.Configuration
 
         public MediaSettings LoadMediaSettings()
         {
+            MediaSettings settings = new MediaSettings();
             if (File.Exists(_mediaConfigFile))
             {
                 try
                 {
                     var json = File.ReadAllText(_mediaConfigFile);
-                    return JsonSerializer.Deserialize<MediaSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new MediaSettings();
+                    settings = JsonSerializer.Deserialize<MediaSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new MediaSettings();
                 }
                 catch (Exception ex) { Console.WriteLine($"Error loading media settings: {ex.Message}"); }
             }
-            return new MediaSettings();
+
+            // Apply Defaults if paths are empty
+            var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var documents = Path.Combine(userProfile, "Documents");
+            var downloads = Path.Combine(userProfile, "Downloads");
+
+            // Ensure base processing folder exists in Downloads
+            var defaultDownloadPath = Path.Combine(downloads, "Playerr");
+            
+            // Ensure Library folder exists in Documents
+            var defaultLibraryPath = Path.Combine(documents, "Playerr", "Library");
+            var defaultGamesPath = Path.Combine(documents, "Playerr", "Games");
+
+            if (string.IsNullOrWhiteSpace(settings.DownloadPath)) settings.DownloadPath = defaultDownloadPath;
+            if (string.IsNullOrWhiteSpace(settings.DestinationPath)) settings.DestinationPath = defaultLibraryPath;
+            if (string.IsNullOrWhiteSpace(settings.FolderPath)) settings.FolderPath = defaultGamesPath;
+            
+            // Create directories if they don't exist (UX convenience)
+            try 
+            {
+                if (!Directory.Exists(settings.DownloadPath)) Directory.CreateDirectory(settings.DownloadPath);
+                if (!Directory.Exists(settings.DestinationPath)) Directory.CreateDirectory(settings.DestinationPath);
+                if (!Directory.Exists(settings.FolderPath)) Directory.CreateDirectory(settings.FolderPath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Config] Warning: Could not create default directories: {ex.Message}");
+            }
+
+            return settings;
         }
 
         public void SaveMediaSettings(MediaSettings settings)

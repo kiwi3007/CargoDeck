@@ -24,17 +24,22 @@ namespace Playerr.Core.Download
         private readonly IGameRepository _gameRepository;
 
         private readonly IGameMetadataServiceFactory _metadataFactory;
+        private readonly IArchiveService _archiveService;
+
+
 
         public PostDownloadProcessor(
             ConfigurationService configService,
             IFileMoverService fileMover,
             IGameRepository gameRepository,
-            IGameMetadataServiceFactory metadataFactory)
+            IGameMetadataServiceFactory metadataFactory,
+            IArchiveService archiveService)
         {
             _configService = configService;
             _fileMover = fileMover;
             _gameRepository = gameRepository;
             _metadataFactory = metadataFactory;
+            _archiveService = archiveService;
         }
 
         public async System.Threading.Tasks.Task ProcessCompletedDownloadAsync(DownloadStatus download)
@@ -72,45 +77,18 @@ namespace Playerr.Core.Download
 
         private void ExtractArchives(string path)
         {
-            var extensions = new[] { ".zip", ".rar", ".7z" };
             var archives = Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories)
-                .Where(f => extensions.Contains(Path.GetExtension(f).ToLower()))
+                .Where(f => _archiveService.IsArchive(f))
                 .ToList();
 
             foreach (var archivePath in archives)
             {
                 try
                 {
-                    string ext = Path.GetExtension(archivePath).ToLower();
-
                     // Check if it's a multi-part archive and skip if not the first part
                     if (IsMultiPartNotFirst(archivePath)) continue;
 
-                    Console.WriteLine($"[PostDownload] Extracting {ext.ToUpper()}: {archivePath}");
-                    
-                    bool success = false;
-                    if (ext == ".zip")
-                    {
-                        ZipFile.ExtractToDirectory(archivePath, path, overwriteFiles: true);
-                        success = true;
-                    }
-                    else if (ext == ".rar" || ext == ".7z")
-                    {
-                        using (var archive = ArchiveFactory.Open(archivePath))
-                        {
-                            foreach (var entry in archive.Entries.Where(entry => !entry.IsDirectory))
-                            {
-                                entry.WriteToDirectory(path, new ExtractionOptions()
-                                {
-                                    ExtractFullPath = true,
-                                    Overwrite = true
-                                });
-                            }
-                        }
-                        success = true;
-                    }
-
-                    if (success)
+                    if (_archiveService.Extract(archivePath, path))
                     {
                         Console.WriteLine($"[PostDownload] Extraction successful. Deleting archive: {archivePath}");
                         File.Delete(archivePath);
@@ -118,7 +96,7 @@ namespace Playerr.Core.Download
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[PostDownload] Extraction failed for {archivePath}: {ex.Message}");
+                    Console.WriteLine($"[PostDownload] Scan/Extract failed for {archivePath}: {ex.Message}");
                 }
             }
         }

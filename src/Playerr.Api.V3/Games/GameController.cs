@@ -4,6 +4,7 @@ using Playerr.Core.MetadataSource;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
@@ -15,11 +16,13 @@ namespace Playerr.Api.V3.Games
     {
         private readonly IGameRepository _repository;
         private readonly IGameMetadataServiceFactory _metadataServiceFactory;
+        private readonly Playerr.Core.IO.IArchiveService _archiveService;
 
-        public GameController(IGameRepository repository, IGameMetadataServiceFactory metadataServiceFactory)
+        public GameController(IGameRepository repository, IGameMetadataServiceFactory metadataServiceFactory, Playerr.Core.IO.IArchiveService archiveService)
         {
             _repository = repository;
             _metadataServiceFactory = metadataServiceFactory;
+            _archiveService = archiveService;
         }
 
         [HttpGet]
@@ -152,7 +155,25 @@ namespace Playerr.Api.V3.Games
             string targetPath = game.Path;
             System.Console.WriteLine($"[Install] Target Path: {targetPath}");
 
-            // Case 0: ISO Image (MacOS only for now)
+            // Case 0.1: Archive (Zip, Rar, 7z)
+            if (_archiveService.IsArchive(targetPath))
+            {
+                var extractDir = Path.Combine(Path.GetDirectoryName(targetPath), Path.GetFileNameWithoutExtension(targetPath));
+                if (_archiveService.Extract(targetPath, extractDir))
+                {
+                     // Update the game path to the new directory so subsequent scans/installs work
+                     game.Path = extractDir;
+                     await _repository.UpdateAsync(id, game);
+                     
+                     return Ok(new { message = $"Archive extracted to {extractDir}. Please Scan or Install again from the new folder.", path = extractDir });
+                }
+                else
+                {
+                    return BadRequest("Failed to extract archive.");
+                }
+            }
+
+            // Case 0.2: ISO Image (MacOS only for now)
             if (System.IO.File.Exists(targetPath) && 
                 System.IO.Path.GetExtension(targetPath).Equals(".iso", System.StringComparison.OrdinalIgnoreCase))
             {
@@ -228,13 +249,55 @@ namespace Playerr.Api.V3.Games
         {
             try 
             {
-                System.Console.WriteLine($"[Install] Launching: {path}");
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                var startInfo = new System.Diagnostics.ProcessStartInfo();
+                
+                // GOG / Inno Setup Detection
+                var fileName = System.IO.Path.GetFileName(path).ToLower();
+                var isGog = fileName.StartsWith("setup_") || fileName.StartsWith("setup.exe");
+                var silentArgs = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-";
+
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    FileName = path,
-                    UseShellExecute = true
-                });
-                return Ok(new { message = "Installer launched", path = path });
+                    startInfo.FileName = path;
+                    startInfo.WorkingDirectory = System.IO.Path.GetDirectoryName(path);
+                    startInfo.UseShellExecute = true; // Use shell for .exe on Windows
+                    
+                    if (isGog) 
+                    {
+                        System.Console.WriteLine("[Install] Detected likely GOG/Inno Installer. Applying Silent Flags.");
+                        startInfo.Arguments = silentArgs;
+                    }
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    // macOS -> Use 'open' command which delegates to system association (Crossover, Wine, etc.)
+                    System.Console.WriteLine($"[Install] macOS detected. Delegating to 'open': {path}");
+                    startInfo.FileName = "open";
+                    startInfo.WorkingDirectory = System.IO.Path.GetDirectoryName(path);
+                    
+                    // Arguments for open: just the file path.
+                    // Note: 'open' doesn't easily accept args for the target executable unless using --args (and complex escaping)
+                    // For now, we launch the installer. Silent flags might propagate if configured in 'open', but standard 'open file.exe' is safest.
+                    startInfo.Arguments = $"\"{path}\"";
+                    startInfo.UseShellExecute = false;
+                }
+                else
+                {
+                    // Linux/Docker -> Try Wine
+                    System.Console.WriteLine($"[Install] Linux/Docker detected. Attempting to launch via Wine: {path}");
+                    
+                    startInfo.FileName = "wine";
+                    startInfo.WorkingDirectory = System.IO.Path.GetDirectoryName(path);
+                    
+                    var wineArgs = $"\"{path}\"";
+                    if (isGog) wineArgs += $" {silentArgs}";
+                    
+                    startInfo.Arguments = wineArgs;
+                    startInfo.UseShellExecute = false; 
+                }
+
+                System.Diagnostics.Process.Start(startInfo);
+                return Ok(new { message = $"Installer launched: {System.IO.Path.GetFileName(path)}" });
             }
             catch (System.Exception ex)
             {
