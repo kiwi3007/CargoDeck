@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.EntityFrameworkCore;
+using Playerr.Core.Data;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -104,9 +106,12 @@ namespace Playerr.Host
             var configService = new ConfigurationService(exePath);
             builder.Services.AddSingleton(configService);
 
-            // IGDB metadata services - use factory pattern for dynamic configuration
-            builder.Services.AddSingleton<IGameMetadataServiceFactory, GameMetadataServiceFactory>();
-            builder.Services.AddSingleton<IGameRepository, InMemoryGameRepository>();
+            // Persistence with SQLite
+            var dbPath = Path.Combine(configPath, "playerr.db");
+            builder.Services.AddDbContextFactory<PlayerrDbContext>(options =>
+                options.UseSqlite($"Data Source={dbPath}"));
+
+            builder.Services.AddSingleton<IGameRepository, SqliteGameRepository>();
             builder.Services.AddSingleton<MediaScannerService>();
             
             // IO Services
@@ -162,6 +167,21 @@ namespace Playerr.Host
             {
                 app.UseSwagger();
                 app.UseSwaggerUI();
+            }
+
+            // Initialize database
+            using (var scope = app.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<PlayerrDbContext>();
+                try
+                {
+                    context.Database.EnsureCreated();
+                    Console.WriteLine($"[Database] SQLite initialized at: {dbPath}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Database] Error initializing SQLite: {ex.Message}");
+                }
             }
 
             app.UseCors();

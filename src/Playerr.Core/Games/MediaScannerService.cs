@@ -414,10 +414,23 @@ namespace Playerr.Core.Games
 
         private async Task<bool> ProcessPotentialGame(string gameTitle, List<Game> existingGames, GameMetadataService metadataService, string? localPath = null, string? platformKey = null, string? serial = null)
         {
-            if (existingGames.Any(g => g.Title.Equals(gameTitle, StringComparison.OrdinalIgnoreCase)))
+            // 1. Check if a game with exactly this path already exists
+            var existingByPath = existingGames.FirstOrDefault(g => g.Path == localPath);
+            if (existingByPath != null)
             {
-                Log($"Game already exists in DB: {gameTitle}");
+                Log($"Game at path '{localPath}' already exists in library: {existingByPath.Title}");
                 return false;
+            }
+
+            // 2. Check if a game with this title already exists but at a different path
+            // (Moved Game or different folder name but same game)
+            var existingByTitle = existingGames.FirstOrDefault(g => g.Title.Equals(gameTitle, StringComparison.OrdinalIgnoreCase));
+            if (existingByTitle != null)
+            {
+                Log($"Game '{gameTitle}' already exists with a different path. Updating path to: {localPath}");
+                existingByTitle.Path = localPath;
+                await _gameRepository.UpdateAsync(existingByTitle.Id, existingByTitle);
+                return true;
             }
 
             try
@@ -428,18 +441,18 @@ namespace Playerr.Core.Games
                 if (searchResults != null && searchResults.Any())
                 {
                     var gameData = searchResults.First();
-                    
-                    // Debug Log
                     Log($"Processing potential match: {gameData.Title} (IGDB: {gameData.IgdbId})");
                     
-                    // NEW CHECK: Verify if this IGDB ID is already in our database
+                    // 3. Verify if this IGDB ID is already in our database
                     if (gameData.IgdbId.HasValue)
                     {
                         var match = existingGames.FirstOrDefault(g => g.IgdbId == gameData.IgdbId);
                         if (match != null)
                         {
-                            Log($"DUPLICATE DETECTED: {gameData.Title} (ID: {gameData.IgdbId}) matches existing game '{match.Title}' (ID: {match.Id}). SKIPPING.");
-                            return false;
+                            Log($"ID match found: {gameData.Title} (ID: {gameData.IgdbId}) is already in library as '{match.Title}'. Updating its path.");
+                            match.Path = localPath;
+                            await _gameRepository.UpdateAsync(match.Id, match);
+                            return true;
                         }
                     }
 
@@ -448,11 +461,8 @@ namespace Playerr.Core.Games
                         var fullMetadata = await metadataService.GetGameMetadataAsync(gameData.IgdbId.Value);
                         if (fullMetadata != null)
                         {
-                            // CRITICAL: Set the local path so the frontend knows where this game is (and can filter by .nsp)
                             fullMetadata.Path = localPath;
-                            
                             var newGame = await _gameRepository.AddAsync(fullMetadata);
-                            // CRITICAL: Update the local list so subsequent files in this SAME scan don't add it again
                             existingGames.Add(newGame);
                             
                             Log($"Added new game: {newGame.Title} (Local ID: {newGame.Id})");
