@@ -6,8 +6,8 @@
 !define COMPANYNAME "Maikboarder"
 !define DESCRIPTION "Self-Hosted Game Library Manager & PVR"
 !define VERSIONmajor 0
-!define VERSIONminor 1
-!define VERSIONbuild 2
+!define VERSIONminor 3
+!define VERSIONbuild 0
 !define HELPURL "https://playerr.app"
 !define UPDATEURL "https://github.com/Maikboarder/Playerr/releases"
 !define ABOUTURL "https://playerr.app"
