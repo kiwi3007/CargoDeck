@@ -4,7 +4,7 @@ import axios from 'axios';
 import { t, getLanguage } from '../i18n/translations';
 import GameCorrectionModal from '../components/GameCorrectionModal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faPen, faFolderOpen, faDownload, faGamepad } from '@fortawesome/free-solid-svg-icons';
+import { faSearch, faPen, faFolderOpen, faDownload, faGamepad, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown } from '@fortawesome/free-solid-svg-icons';
 import './GameDetails.css';
 
 interface Game {
@@ -159,8 +159,8 @@ const GameDetails: React.FC = () => {
   });
 
   const getSortIcon = (field: keyof TorrentResult) => {
-    if (sortField !== field) return '↕️';
-    return sortOrder === 'asc' ? '🔼' : '🔽';
+    if (sortField !== field) return <FontAwesomeIcon icon={faSort} style={{ opacity: 0.3, marginLeft: '5px' }} />;
+    return sortOrder === 'asc' ? <FontAwesomeIcon icon={faSortUp} style={{ marginLeft: '5px' }} /> : <FontAwesomeIcon icon={faSortDown} style={{ marginLeft: '5px' }} />;
   };
 
   const getSeedersClass = (seeders?: number) => {
@@ -635,11 +635,11 @@ const GameDetails: React.FC = () => {
                         ) : (
                           <div className="peers-info">
                             <span className={`seeders ${getSeedersClass(result.seeders)}`}>
-                              {result.seeders ?? 0}
+                              <FontAwesomeIcon icon={faArrowUp} /> {result.seeders ?? 0}
                             </span>
                             <span className="separator">/</span>
                             <span className="leechers">
-                              {result.leechers ?? 0}
+                              <FontAwesomeIcon icon={faArrowDown} /> {result.leechers ?? 0}
                             </span>
                           </div>
                         )}
@@ -656,7 +656,7 @@ const GameDetails: React.FC = () => {
                               onClick={() => handleDownload(result.magnetUrl, result.protocol)}
                               disabled={!!downloadingUrl}
                             >
-                              {downloadingUrl === result.magnetUrl ? '⏳' : '🧲'}
+                              {downloadingUrl === result.magnetUrl ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faMagnet} />}
                             </button>
                           )}
                           {result.downloadUrl && (
@@ -666,7 +666,7 @@ const GameDetails: React.FC = () => {
                               onClick={() => handleDownload(result.downloadUrl, result.protocol)}
                               disabled={!!downloadingUrl}
                             >
-                              {downloadingUrl === result.downloadUrl ? '⏳' : '⬇️'}
+                              {downloadingUrl === result.downloadUrl ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faDownload} />}
                             </button>
                           )}
                         </div>
