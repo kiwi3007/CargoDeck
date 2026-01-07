@@ -64,3 +64,8 @@ x86/
 !.vscode/extensions.json
 my_debug_log*.txt
 my_test_log.txt
+
+# Additional Logs
+*_log.txt
+backend_log.txt
+build_log.txt
