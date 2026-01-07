@@ -157,6 +157,7 @@ export const translations = {
         deleteConfirm: '¿Estás seguro de que quieres eliminar este juego de la biblioteca?',
 
         // Status
+        status: 'Estado',
         statusPageTitle: 'Estado',
         statusPageDesc: 'Descargas activas y cola de procesamiento.',
         noActiveDownloads: 'No hay descargas activas',
@@ -378,6 +379,7 @@ export const translations = {
         deleteConfirm: 'Are you sure you want to delete this game from your library?',
 
         // Status
+        status: 'Status',
         statusPageTitle: 'Status',
         statusPageDesc: 'Active downloads and processing queue.',
         noActiveDownloads: 'No active downloads',
@@ -587,6 +589,14 @@ export const translations = {
         deleteFromLibrary: 'Supprimer de la bibliothèque',
         deleteConfirm: 'Êtes-vous sûr de vouloir supprimer ce jeu de votre bibliothèque ?',
 
+        // Status
+        status: 'État',
+        statusPageTitle: 'État',
+        statusPageDesc: 'Téléchargements actifs et file d\'attente.',
+        noActiveDownloads: 'Aucun téléchargement actif',
+        confirmDeleteDownload: 'Êtes-vous sûr de vouloir supprimer ce téléchargement ?',
+        failedToDeleteDownload: 'Échec de la suppression du téléchargement',
+
         // Game Details
         loading: 'Chargement...',
         loadingGame: 'Chargement du jeu...',
@@ -783,6 +793,14 @@ export const translations = {
         statusUnknown: 'Unbekannt',
         deleteFromLibrary: 'Aus der Bibliothek löschen',
         deleteConfirm: 'Sind Sie sicher, dass Sie dieses Spiel aus Ihrer Bibliothek löschen möchten?',
+
+        // Status
+        status: 'Status',
+        statusPageTitle: 'Status',
+        statusPageDesc: 'Aktive Downloads und Warteschlange.',
+        noActiveDownloads: 'Keine aktiven Downloads',
+        confirmDeleteDownload: 'Sind Sie sicher, dass Sie diesen Download löschen möchten?',
+        failedToDeleteDownload: 'Fehler beim Löschen des Downloads',
 
         // Game Details
         loading: 'Laden...',
@@ -984,6 +1002,14 @@ export const translations = {
         deleteFromLibrary: 'Удалить из библиотеки',
         deleteConfirm: 'Вы уверены, что хотите удалить эту игру из своей библиотеки?',
 
+        // Status
+        status: 'Статус',
+        statusPageTitle: 'Статус',
+        statusPageDesc: 'Активные загрузки и очередь.',
+        noActiveDownloads: 'Нет активных загрузок',
+        confirmDeleteDownload: 'Вы уверены, что хотите удалить эту загрузку?',
+        failedToDeleteDownload: 'Ошибка удаления загрузки',
+
         // Game Details
         loading: 'Загрузка...',
         loadingGame: 'Загрузка игры...',
@@ -1180,6 +1206,14 @@ export const translations = {
         deleteFromLibrary: '从库中删除',
         deleteConfirm: '您确定要从库中删除此游戏吗？',
 
+        // Status
+        status: '状态',
+        statusPageTitle: '状态',
+        statusPageDesc: '活跃下载和队列。',
+        noActiveDownloads: '当前无活跃下载',
+        confirmDeleteDownload: '您确定要删除此下载吗？',
+        failedToDeleteDownload: '删除下载失败',
+
         // Game Details
         loading: '加载中...',
         loadingGame: '加载中...',
@@ -1367,6 +1401,14 @@ export const translations = {
         statusUnknown: '不明',
         deleteFromLibrary: 'ライブラリから削除',
         deleteConfirm: 'このゲームをライブラリから削除してもよろしいですか？',
+
+        // Status
+        status: 'ステータス',
+        statusPageTitle: 'ステータス',
+        statusPageDesc: 'アクティブなダウンロードとキュー。',
+        noActiveDownloads: 'アクティブなダウンロードはありません',
+        confirmDeleteDownload: 'このダウンロードを削除してもよろしいですか？',
+        failedToDeleteDownload: 'ダウンロードの削除に失敗しました',
 
         // Game Details
         loading: '読み込み中...',

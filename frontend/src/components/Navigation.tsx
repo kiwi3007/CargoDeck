@@ -20,7 +20,7 @@ const Navigation: React.FC = () => {
       </div>
       <ul className="nav-links">
         <li><NavLink to="/library">{t('library')}</NavLink></li>
-        <li><NavLink to="/status">Status</NavLink></li>
+        <li><NavLink to="/status">{t('status')}</NavLink></li>
         <li><NavLink to="/user">{t('user')}</NavLink></li>
         <li><NavLink to="/settings">{t('settings')}</NavLink></li>
         <li><NavLink to="/about">{t('about')}</NavLink></li>
