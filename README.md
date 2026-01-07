@@ -21,10 +21,10 @@ Inspired by the workflow of Radarr and Sonarr, Playerr is designed to be the def
 *   **Rich Metadata Integration:** Native hooks into IGDB and Steam APIs to fetch high-quality artwork, descriptions, ratings, and release dates.
 *   **Seamless PVR Workflow:** Support for Prowlarr and Jackett for automated indexer management and advanced searching.
 *   **NZB Protocol Support:** Native integration for Usenet downloads via NZB files, automatically handling protocol associations. Compatible with **SABnzbd** and **NZBGet**.
-*   **Integrated Download Management:** Native control for industry-standard clients like qBittorrent and Transmission via API.
+*   **Download Client Connectivity:** Native API integration for managing transfers via industry-standard clients (qBittorrent, Transmission, SABnzbd).
 *   **Modern Web GUI:** A vibrant, dark-themed responsive interface designed for both desktop and containerized environments.
 *   **Smart Path & File Management:** Automatic folder renaming based on sanitized IGDB titles, preserving original release structure while keeping the library clean and organized.
-*   **Integrated Package Manager:** Detects and launches installers automatically, identifying the correct executable without manual intervention.
+*   **Automated Deployment Tool:** Efficiently processes local installation packages and identifies primary executables to streamline library organization.
 *   **Unified Library View:** Display your entire gaming collection in one place, including native support for syncing and viewing your **Steam Library**.
 
 ## Screenshots
@@ -130,7 +130,7 @@ If you want to modify the code or build the image locally instead of pulling it 
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
 ### Phase 1: Foundation (v0.1.0 - v0.1.2)
 - [x] **Core PVR Functionality:** Automated search and categorization engine.
@@ -145,12 +145,11 @@ If you want to modify the code or build the image locally instead of pulling it 
   - [x] **Unraid Integration:** Community XML template support (`_unraid/playerr.xml`).
   - [x] **Smart API Handling:** Advanced rate-limiting and batching for metadata providers.
 - [/] **One-Click Launch Integration:** Direct execution support for installed local assets with automated path detection.
-- [x] **Refined UI/UX:** Premium iconography (FontAwesome) and consistent Nord-themed design.
 
 ### Phase 3: Ecosystem & Future Vision
 - [ ] **Bazzite & Linux Gaming:** Specialized compatibility hooks for Lutris, Proton, and Steam Deck.
-- [ ] **DBI Protocol Support:** Advanced USB file transfer and management for portable console environments.
-- [ ] **Official App Stores:** Integration into official CasaOS and Synology app manifests.
+- [ ] **DBI Protocol Support:** Advanced USB file transfer and management for handheld hardware devices.
+- [ ] **Official App Stores:** Integration into official Unraid, CasaOS, and Synology app manifests.
 - [ ] **Extensibility Engine:** Support for community-driven scripts and metadata plugins.
 
 ## Community & Support
@@ -201,10 +200,10 @@ Inspirado en el flujo de trabajo de Radarr y Sonarr, Playerr está diseñado par
 *   **Integración de metadatos:** Conexión nativa con IGDB y Steam para obtener imágenes, descripciones, valoraciones y fechas de lanzamiento.
 *   **Flujo PVR automatizado:** Soporte para Prowlarr y Jackett para gestión avanzada de indexadores y búsquedas.
 *   **Soporte Protocolo NZB:** Integración nativa para descargas Usenet mediante archivos NZB, gestionando automáticamente la asociación de protocolos. Compatible con **SABnzbd** y **NZBGet**.
-*   **Gestión de descargas integrada:** Control nativo de clientes como qBittorrent y Transmission.
+*   **Conectividad con Clientes de Descarga:** Integración nativa mediante API para gestionar transferencias en los estándares de la industria (qBittorrent, Transmission, SABnzbd).
 *   **Interfaz web moderna:** GUI oscura, responsiva y pensada para escritorio y contenedores.
 *   **Gestión automática de rutas y archivos:** Renombrado inteligente de carpetas basado en títulos de IGDB, preservando la estructura original mientras se mantiene la biblioteca limpia y organizada.
-*   **Gestor de Paquetes integrado:** Detecta y lanza instaladores automáticamente, identificando el ejecutable correcto sin intervención manual.
+*   **Herramienta de Despliegue Automatizado:** Procesa eficientemente paquetes de instalación locales e identifica los ejecutables primarios para optimizar la organización de la biblioteca.
 *   **Vista unificada:** Muestra toda tu colección en un solo lugar, incluyendo sincronización y visualización de tu biblioteca de Steam.
 
 ## Plataformas soportadas
@@ -313,8 +312,9 @@ Si quieres modificar el código o construir la imagen localmente:
 
 ### Fase 3: Ecosistema y Visión de Futuro
 - [ ] **Bazzite y Gaming en Linux:** Hooks de compatibilidad especializados para Lutris, Proton y Steam Deck.
-- [ ] **Protocolo DBI:** Transferencia avanzada de archivos por USB para la gestión de consolas portátiles.
-- [ ] **Tiendas Oficiales:** Integración en los catálogos oficiales de aplicaciones de CasaOS y Synology.
+- [ ] **Protocolo DBI:** Transferencia avanzada de archivos por USB para la gestión de dispositivos de hardware portátiles.
+- [x] **Refinamiento de UI/UX:** Iconografía premium (FontAwesome) y diseño consistente basado en el tema Nord.
+- [ ] **Tiendas Oficiales:** Integración en los catálogos oficiales de aplicaciones de Unraid, CasaOS y Synology.
 - [ ] **Motor de Extensibilidad:** Soporte para scripts de la comunidad y plugins de metadatos.
 
 ## Comunidad y soporte
