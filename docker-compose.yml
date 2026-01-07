@@ -10,6 +10,7 @@ services:
       - ./downloads:/downloads
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:2727
     restart: unless-stopped
     networks:
       - arr-network
