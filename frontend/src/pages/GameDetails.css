@@ -514,6 +514,11 @@
   color: #1e1e2e;
 }
 
+.col-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .col-actions .download-buttons {
   display: flex;
   gap: 8px;

@@ -4,6 +4,8 @@ using Playerr.Core.MetadataSource;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 
 namespace Playerr.Api.V3.Games
 {
@@ -150,6 +152,43 @@ namespace Playerr.Api.V3.Games
             string targetPath = game.Path;
             System.Console.WriteLine($"[Install] Target Path: {targetPath}");
 
+            // Case 0: ISO Image (MacOS only for now)
+            if (System.IO.File.Exists(targetPath) && 
+                System.IO.Path.GetExtension(targetPath).Equals(".iso", System.StringComparison.OrdinalIgnoreCase))
+            {
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    var mountPoint = await MountIsoMacOS(targetPath);
+                    if (!string.IsNullOrEmpty(mountPoint))
+                    {
+                        System.Console.WriteLine($"[Install] ISO Mounted at: {mountPoint}");
+                        // Update targetPath to the mount point so the Directory logic below takes over
+                        targetPath = mountPoint; 
+                    }
+                    else
+                    {
+                        return BadRequest("Failed to mount ISO image on macOS.");
+                    }
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    var mountPoint = await MountIsoWindows(targetPath);
+                    if (!string.IsNullOrEmpty(mountPoint))
+                    {
+                        System.Console.WriteLine($"[Install] ISO Mounted at: {mountPoint}");
+                        targetPath = mountPoint;
+                    }
+                    else
+                    {
+                        return BadRequest("Failed to mount ISO image on Windows.");
+                    }
+                }
+                else
+                {
+                    return BadRequest("ISO mounting and installation is not supported in Docker/Headless mode. Please install manually.");
+                }
+            }
+
             // Case 1: Target is a file
             if (System.IO.File.Exists(targetPath))
             {
@@ -209,6 +248,93 @@ namespace Playerr.Api.V3.Games
         {
             await _repository.DeleteAllAsync();
             return NoContent();
+        }
+
+        private async Task<string?> MountIsoMacOS(string isoPath)
+        {
+            try
+            {
+                var process = new System.Diagnostics.Process
+                {
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "hdiutil",
+                        Arguments = $"mount \"{isoPath}\"",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                process.Start();
+                string output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode == 0)
+                {
+                    // Output format: /dev/diskXsY   Apple_HFS   /Volumes/VolumeName
+                    // We need to capture the /Volumes/... part
+                    var match = Regex.Match(output, @"(/Volumes/.+)");
+                    if (match.Success)
+                    {
+                        return match.Groups[1].Value.Trim();
+                    }
+                }
+                else
+                {
+                     string error = await process.StandardError.ReadToEndAsync();
+                     System.Console.WriteLine($"[Mount] Error: {error}");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                System.Console.WriteLine($"[Mount] Exception: {ex.Message}");
+            }
+            return null;
+        }
+
+        private async Task<string?> MountIsoWindows(string isoPath)
+        {
+            try
+            {
+                // PowerShell command to mount and get the drive letter
+                // Mount-DiskImage -ImagePath "C:\path\to.iso" -PassThru | Get-Volume | Select-Object -ExpandProperty DriveLetter
+                var psCommand = $"Mount-DiskImage -ImagePath \"{isoPath}\" -PassThru | Get-Volume | Select-Object -ExpandProperty DriveLetter";
+                
+                var process = new System.Diagnostics.Process
+                {
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "powershell",
+                        Arguments = $"-Command \"{psCommand}\"",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                process.Start();
+                string output = await process.StandardOutput.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+                {
+                    var driveLetter = output.Trim().Substring(0, 1);
+                    return $"{driveLetter}:\\";
+                }
+                else
+                {
+                     string error = await process.StandardError.ReadToEndAsync();
+                     System.Console.WriteLine($"[Mount-Win] Error: {error}");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                System.Console.WriteLine($"[Mount-Win] Exception: {ex.Message}");
+            }
+            return null;
         }
     }
 }

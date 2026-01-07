@@ -327,6 +327,19 @@ namespace Playerr.Core.Games
                                 PlatformKey = finalPlatformKey, 
                                 Serial = serial 
                             });
+                            
+                            // Smart Platform Detection Update:
+                            // If we were in default mode but found a serial, checking if we can upgrade the platform key
+                            if (platformKey == "default" && !string.IsNullOrEmpty(serial))
+                            {
+                                var detectedPlatform = ResolvePlatformFromSerial(serial);
+                                if (detectedPlatform != "default")
+                                {
+                                    candidates.Last().PlatformKey = detectedPlatform;
+                                    Log($"[SmartDetect] Upgraded '{cleanName}' from default to {detectedPlatform} (Serial: {serial})");
+                                }
+                            }
+
                             if(cleanName != name) Log($"Collected Candidate: '{cleanName}'" + (serial != null ? $" (Serial: {serial})" : ""));
                         }
                         else
@@ -462,10 +475,15 @@ namespace Playerr.Core.Games
                         if (fullMetadata != null)
                         {
                             fullMetadata.Path = localPath;
+                            
+                            // CRITICAL FIX: Set PlatformId to avoid Foreign Key constraint violation
+                            // If platformKey is null or "default", assume PC (Id 1)
+                            fullMetadata.PlatformId = ResolvePlatformId(platformKey);
+
                             var newGame = await _gameRepository.AddAsync(fullMetadata);
                             existingGames.Add(newGame);
                             
-                            Log($"Added new game: {newGame.Title} (Local ID: {newGame.Id})");
+                            Log($"Added new game: {newGame.Title} (Local ID: {newGame.Id}, Platform ID: {newGame.PlatformId})");
                             LastGameFound = newGame.Title;
                             GamesAddedCount++;
                             OnGameAdded?.Invoke(newGame);
@@ -568,10 +586,62 @@ namespace Playerr.Core.Games
             // 6. Replace separators (dots, underscores, dashes) with spaces
             title = Regex.Replace(title, @"[._-]", " ");
 
-            // 7. Remove extra spaces and trim
             title = Regex.Replace(title, @"\s+", " ").Trim();
 
             return (title, serial);
+        }
+
+        private string ResolvePlatformFromSerial(string serial)
+        {
+            if (string.IsNullOrEmpty(serial)) return "default";
+            
+            // PlayStation 4 / 5
+            if (serial.StartsWith("CUSA") || serial.StartsWith("PLAS")) return "ps4";
+            if (serial.StartsWith("PPSA")) return "ps5";
+
+            // PlayStation 3
+            if (serial.StartsWith("BLES") || serial.StartsWith("BLUS") || 
+                serial.StartsWith("BCES") || serial.StartsWith("BCUS") ||
+                serial.StartsWith("NPEB") || serial.StartsWith("NPUB") ||
+                serial.StartsWith("NPEA") || serial.StartsWith("NPUA")) return "ps3";
+            
+            // PlayStation 2 / 1 (SLES/SLUS/SCES/SCUS)
+            // Typically 5 digits. PS1 also uses these. 
+            // Since User asked for "PS1/2", lets look at ID pattern or just map to 'ps2' as default retro target
+            if (serial.StartsWith("SLES") || serial.StartsWith("SLUS") || 
+                serial.StartsWith("SCES") || serial.StartsWith("SCUS"))
+            {
+               // Just map to PS2 for now, logic can be improved later
+               return "ps2"; 
+            }
+            
+            // PlayStation Portable (PSP)
+            if (serial.StartsWith("ULES") || serial.StartsWith("ULUS") ||
+                serial.StartsWith("UCES") || serial.StartsWith("UCUS")) return "psp";
+
+            return "default";
+        }
+
+        private int ResolvePlatformId(string? platformKey)
+        {
+            if (string.IsNullOrEmpty(platformKey) || platformKey.Equals("default", StringComparison.OrdinalIgnoreCase))
+            {
+                return 1; // Default to PC (Windows)
+            }
+
+            return platformKey.ToLower() switch
+            {
+                "pc_windows" => 1,
+                "ps4" => 48,
+                "nintendo_switch" => 130,
+                "ps5" => 167,
+                "xbox_series" => 169,
+                "ps3" => 9,
+                "ps2" => 8,
+                "ps1" => 7,
+                // If it's something valid but not seeded, fallback to PC (1) to prevent crash
+                _ => 1 
+            };
         }
     }
 }

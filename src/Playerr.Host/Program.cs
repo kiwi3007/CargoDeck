@@ -192,6 +192,9 @@ namespace Playerr.Host
                         Console.WriteLine("[Database] Seeding default platforms...");
                         context.Platforms.AddRange(
                             new Playerr.Core.Games.Platform { Id = 1, Name = "PC (Microsoft Windows)", Slug = "pc", Type = Playerr.Core.Games.PlatformType.PC },
+                            new Playerr.Core.Games.Platform { Id = 7, Name = "PlayStation", Slug = "ps1", Type = Playerr.Core.Games.PlatformType.PlayStation },
+                            new Playerr.Core.Games.Platform { Id = 8, Name = "PlayStation 2", Slug = "ps2", Type = Playerr.Core.Games.PlatformType.PlayStation2 },
+                            new Playerr.Core.Games.Platform { Id = 9, Name = "PlayStation 3", Slug = "ps3", Type = Playerr.Core.Games.PlatformType.PlayStation3 },
                             new Playerr.Core.Games.Platform { Id = 48, Name = "PlayStation 4", Slug = "ps4", Type = Playerr.Core.Games.PlatformType.PlayStation4 },
                             new Playerr.Core.Games.Platform { Id = 130, Name = "Nintendo Switch", Slug = "switch", Type = Playerr.Core.Games.PlatformType.Switch },
                             new Playerr.Core.Games.Platform { Id = 167, Name = "PlayStation 5", Slug = "ps5", Type = Playerr.Core.Games.PlatformType.PlayStation5 },
