@@ -7,6 +7,8 @@ import { t, getLanguage } from '../i18n/translations';
 import appLogo from '../assets/app_logo.png';
 import './Library.css';
 import { useUI } from '../context/UIContext';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faTrash, faThLarge, faBars } from '@fortawesome/free-solid-svg-icons';
 
 interface Game {
   id: number;
@@ -363,7 +365,7 @@ const Library: React.FC = () => {
             onClick={handleClearLibrary}
             title={t('clearLibrary')}
           >
-            🗑️
+            <FontAwesomeIcon icon={faTrash} />
           </button>
 
           <div className="view-toggle">
@@ -372,14 +374,14 @@ const Library: React.FC = () => {
               onClick={() => setViewMode('grid')}
               title={t('grid')}
             >
-              ⊞
+              <FontAwesomeIcon icon={faThLarge} />
             </button>
             <button
               className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
               onClick={() => setViewMode('list')}
               title={t('list')}
             >
-              ☰
+              <FontAwesomeIcon icon={faBars} />
             </button>
           </div>
         </div>
@@ -525,7 +527,7 @@ const Library: React.FC = () => {
         options={[
           {
             label: t('deleteFromLibrary'),
-            icon: '🗑️',
+            icon: <FontAwesomeIcon icon={faTrash} />,
             danger: true,
             onClick: () => contextMenu.game && handleDeleteGame(contextMenu.game)
           }
