@@ -393,24 +393,24 @@ const GameDetails: React.FC = () => {
     if (!game) return;
     try {
       await axios.put(`/api/v3/game/${game.id}`, updates);
-      setNotification({ message: t('gameUpdated' as any) || 'Juego actualizado', type: 'success' });
+      setNotification({ message: t('gameUpdated'), type: 'success' });
       setShowCorrectionModal(false);
       // Reload game to reflect changes
       const response = await axios.get(`/api/v3/game/${game.id}?lang=${language}`);
       setGame(response.data);
     } catch (err: any) {
       console.error(err);
-      setNotification({ message: t('errorUpdating' as any) || 'Error al actualizar', type: 'error' });
+      setNotification({ message: t('errorUpdating'), type: 'error' });
     }
   };
   const handleInstall = async () => {
     try {
-      setNotification({ message: t('searchingInstaller' as any) || 'Buscando instalador...', type: 'info' });
+      setNotification({ message: t('searchingInstaller'), type: 'info' });
       const res = await axios.post(`/api/v3/game/${id}/install`);
-      setNotification({ message: `${t('installerLaunched' as any) || 'Instalador lanzado'}: ${res.data.path}`, type: 'success' });
+      setNotification({ message: `${t('installerLaunched')}: ${res.data.path}`, type: 'success' });
     } catch (err: any) {
       console.error(err);
-      setNotification({ message: err.response?.data || t('errorLaunchingInstaller' as any) || 'Error al lanzar instalador', type: 'error' });
+      setNotification({ message: err.response?.data || t('errorLaunchingInstaller'), type: 'error' });
     }
   };
 
@@ -449,35 +449,35 @@ const GameDetails: React.FC = () => {
                 setActiveTab('search');
                 handleSearchTorrents();
               }}
-              title={t('searchLinks' as any) || 'Buscar Enlaces'}
+              title={t('searchLinks')}
             >
               <FontAwesomeIcon icon={faSearch} />
-              <span>{t('search' as any) || 'Buscar'}</span>
+              <span>{t('search')}</span>
             </button>
             <button
               className="action-btn"
               onClick={() => setShowCorrectionModal(true)}
-              title={t('correctMetadata' as any) || 'Corregir Metadatos'}
+              title={t('correctMetadata')}
             >
               <FontAwesomeIcon icon={faPen} />
-              <span>{t('correct' as any) || 'Corregir'}</span>
+              <span>{t('correct')}</span>
             </button>
 
             <button
               className="action-btn"
               onClick={handleInstall}
-              title={t('install' as any) || 'Instalar'}
+              title={t('install')}
             >
               <FontAwesomeIcon icon={faDownload} />
-              <span>{t('install' as any) || 'Instalar'}</span>
+              <span>{t('install')}</span>
             </button>
             <button
               className="action-btn"
               onClick={() => console.log('Play clicked')}
-              title={t('play' as any) || 'Jugar'}
+              title={t('play')}
             >
               <FontAwesomeIcon icon={faGamepad} />
-              <span>{t('play' as any) || 'Jugar'}</span>
+              <span>{t('play')}</span>
             </button>
           </div>
           <div className="meta">

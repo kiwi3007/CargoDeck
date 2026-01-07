@@ -70,7 +70,7 @@ const Status: React.FC = () => {
 
     const handleDelete = async (clientId: number, downloadId: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!window.confirm('Are you sure you want to delete this download? This action is aggressive and will try to delete files.')) {
+        if (!window.confirm(t('confirmDeleteDownload'))) {
             return;
         }
 
@@ -82,11 +82,11 @@ const Status: React.FC = () => {
             if (response.ok) {
                 setDownloads(prev => prev.filter(d => d.id !== downloadId));
             } else {
-                alert('Failed to delete download');
+                alert(t('failedToDeleteDownload'));
             }
         } catch (error) {
             console.error('Error deleting download:', error);
-            alert('Error deleting download');
+            alert(t('failedToDeleteDownload'));
         }
     };
 
@@ -114,8 +114,8 @@ const Status: React.FC = () => {
     return (
         <div className="status-page">
             <div className="status-header">
-                <h1>Status</h1>
-                <p>Active downloads and queue</p>
+                <h1>{t('statusPageTitle')}</h1>
+                <p>{t('statusPageDesc')}</p>
             </div>
 
             <div className="downloads-table-container">
@@ -133,7 +133,7 @@ const Status: React.FC = () => {
                         {downloads.length === 0 ? (
                             <tr>
                                 <td colSpan={5} className="empty-state">
-                                    {loading ? 'Loading...' : 'No active downloads'}
+                                    {loading ? t('loading') : t('noActiveDownloads')}
                                 </td>
                             </tr>
                         ) : (
@@ -176,7 +176,7 @@ const Status: React.FC = () => {
                                             <button
                                                 className="delete-btn"
                                                 onClick={(e) => handleDelete(download.clientId, download.id, e)}
-                                                title="Remove download and files"
+                                                title={t('remove')}
                                             >
                                                 ✕
                                             </button>
