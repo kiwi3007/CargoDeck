@@ -14,7 +14,7 @@ const About: React.FC = () => {
                     <div onClick={toggleKofi} style={{ cursor: 'pointer', display: 'inline-block' }}>
                         <img src={appLogo} alt="Playerr" style={{ width: '100px', height: 'auto', marginBottom: '0.75rem' }} />
                     </div>
-                    <h3>Playerr v0.1.2 (Beta)</h3>
+                    <h3>Playerr v0.3.0</h3>
                 </div>
 
                 <div className="settings-section" style={{ border: 'none', padding: 0, backgroundColor: 'transparent' }}>
@@ -37,6 +37,8 @@ const About: React.FC = () => {
                         <ul style={{ listStyleType: 'none', padding: 0, color: '#a6adc8', lineHeight: '1.6', fontSize: '0.9rem' }}>
                             <li>• {t('roadmapBazzite')}</li>
                             <li>• {t('roadmapUsb')}</li>
+                            <li>• {t('roadmapAppStores')}</li>
+                            <li>• {t('roadmapExtensibility')}</li>
                         </ul>
                     </div>
 
