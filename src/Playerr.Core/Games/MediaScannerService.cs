@@ -392,8 +392,8 @@ namespace Playerr.Core.Games
         {
             try
             {
-                // Simple debug logging to absolute path to be sure
-                string logPath = "/Users/imaik/Documents/Playerr/Proyecto/scanner_log.txt";
+                // Log to the executable directory
+                string logPath = Path.Combine(AppContext.BaseDirectory, "scanner_log.txt");
                 File.AppendAllText(logPath, $"{DateTime.Now}: {message}\n");
                 Console.WriteLine(message);
             }

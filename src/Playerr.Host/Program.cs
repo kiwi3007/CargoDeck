@@ -38,6 +38,7 @@ namespace Playerr.Host
             var builder = WebApplication.CreateBuilder(args);
 
             // Add services
+            System.Console.WriteLine("DEBUG: Registering Services...");
             builder.Services.AddControllers()
                 .AddApplicationPart(typeof(Playerr.Api.V3.Games.GameController).Assembly)
                 .AddApplicationPart(typeof(Playerr.Api.V3.Settings.MediaController).Assembly);
@@ -89,15 +90,15 @@ namespace Playerr.Host
                 // 2. Fallback for macOS App Translocation / Sandbox (works for .app double-click)
                 if (!found)
                 {
-                     // Explicit development path fallback
-                     var explicitDevPath = "/Users/imaik/Documents/Playerr/Proyecto/config";
-                     if (Directory.Exists(explicitDevPath))
+                     // Use standard ApplicationData folder as ultimate fallback for config
+                     var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                     var appDataConfig = Path.Combine(appData, "Playerr", "config");
+                     
+                     if (Directory.Exists(appDataConfig))
                      {
-                         Console.WriteLine($"[Config] Using explicit development configuration at: {explicitDevPath}");
-                         configPath = explicitDevPath;
-                         // CRITICAL FIX: Update exePath to the PARENT of the config folder
-                         // ConfigurationService does Path.Combine(root, "config")
-                         exePath = "/Users/imaik/Documents/Playerr/Proyecto"; 
+                         Console.WriteLine($"[Config] Using AppData configuration at: {appDataConfig}");
+                         configPath = appDataConfig;
+                         // exePath remains where the executable is
                      }
                 }
             }
@@ -178,6 +179,21 @@ namespace Playerr.Host
                 {
                     context.Database.EnsureCreated();
                     Console.WriteLine($"[Database] SQLite initialized at: {dbPath}");
+
+                    // Seed Platforms if empty
+                    if (!context.Platforms.Any())
+                    {
+                        Console.WriteLine("[Database] Seeding default platforms...");
+                        context.Platforms.AddRange(
+                            new Playerr.Core.Games.Platform { Id = 1, Name = "PC (Microsoft Windows)", Slug = "pc", Type = Playerr.Core.Games.PlatformType.PC },
+                            new Playerr.Core.Games.Platform { Id = 48, Name = "PlayStation 4", Slug = "ps4", Type = Playerr.Core.Games.PlatformType.PlayStation4 },
+                            new Playerr.Core.Games.Platform { Id = 130, Name = "Nintendo Switch", Slug = "switch", Type = Playerr.Core.Games.PlatformType.Switch },
+                            new Playerr.Core.Games.Platform { Id = 167, Name = "PlayStation 5", Slug = "ps5", Type = Playerr.Core.Games.PlatformType.PlayStation5 },
+                            new Playerr.Core.Games.Platform { Id = 169, Name = "Xbox Series X|S", Slug = "xbox-series-x", Type = Playerr.Core.Games.PlatformType.XboxSeriesX }
+                        );
+                        context.SaveChanges();
+                        Console.WriteLine("[Database] Platforms seeded.");
+                    }
                 }
                 catch (Exception ex)
                 {
