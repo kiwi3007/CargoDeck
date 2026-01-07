@@ -55,7 +55,6 @@ namespace Playerr.Core.Download
             if (settings.EnableAutoExtract && Directory.Exists(download.DownloadPath))
             {
                 ExtractArchives(download.DownloadPath);
-                ExtractRarArchives(download.DownloadPath);
             }
 
             // 2. Deep Clean
@@ -73,67 +72,76 @@ namespace Playerr.Core.Download
 
         private void ExtractArchives(string path)
         {
+            var extensions = new[] { ".zip", ".rar", ".7z" };
             var archives = Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories)
-                .Where(f => f.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
-
-            foreach (var archive in archives)
-            {
-                try
-                {
-                    Console.WriteLine($"[PostDownload] Extracting: {archive}");
-                    ZipFile.ExtractToDirectory(archive, path, overwriteFiles: true);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[PostDownload] Extraction failed for {archive}: {ex.Message}");
-                }
-            }
-        }
-
-        private void ExtractRarArchives(string path)
-        {
-            var archives = Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories)
-                .Where(f => f.EndsWith(".rar", StringComparison.OrdinalIgnoreCase));
+                .Where(f => extensions.Contains(Path.GetExtension(f).ToLower()))
+                .ToList();
 
             foreach (var archivePath in archives)
             {
                 try
                 {
-                    // Check if it's a multi-part RAR (part01.rar, etc) and only extract the first one to avoid redundancy
+                    string ext = Path.GetExtension(archivePath).ToLower();
+
+                    // Check if it's a multi-part archive and skip if not the first part
                     if (IsMultiPartNotFirst(archivePath)) continue;
 
-                    Console.WriteLine($"[PostDownload] Extracting RAR: {archivePath}");
-                    using (var archive = RarArchive.Open(archivePath))
+                    Console.WriteLine($"[PostDownload] Extracting {ext.ToUpper()}: {archivePath}");
+                    
+                    bool success = false;
+                    if (ext == ".zip")
                     {
-                        foreach (var entry in archive.Entries.Where(entry => !entry.IsDirectory))
+                        ZipFile.ExtractToDirectory(archivePath, path, overwriteFiles: true);
+                        success = true;
+                    }
+                    else if (ext == ".rar" || ext == ".7z")
+                    {
+                        using (var archive = ArchiveFactory.Open(archivePath))
                         {
-                            entry.WriteToDirectory(path, new ExtractionOptions()
+                            foreach (var entry in archive.Entries.Where(entry => !entry.IsDirectory))
                             {
-                                ExtractFullPath = true,
-                                Overwrite = true
-                            });
+                                entry.WriteToDirectory(path, new ExtractionOptions()
+                                {
+                                    ExtractFullPath = true,
+                                    Overwrite = true
+                                });
+                            }
                         }
+                        success = true;
+                    }
+
+                    if (success)
+                    {
+                        Console.WriteLine($"[PostDownload] Extraction successful. Deleting archive: {archivePath}");
+                        File.Delete(archivePath);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[PostDownload] RAR Extraction failed for {archivePath}: {ex.Message}");
+                    Console.WriteLine($"[PostDownload] Extraction failed for {archivePath}: {ex.Message}");
                 }
             }
         }
 
         private bool IsMultiPartNotFirst(string path)
         {
-            // Simple heuristic for partNN.rar
-            // If it ends in part02.rar ... part99.rar, skip it. Only process part01.rar or .rar
-            // Or .r00, .r01 legacy style.
+            var fileName = Path.GetFileName(path).ToLower();
             
-            var name = Path.GetFileName(path).ToLower();
-            if (System.Text.RegularExpressions.Regex.IsMatch(name, @"\.part[0-9]{2,}\.rar$"))
+            // Standard RAR parts: .part01.rar, .part1.rar
+            if (fileName.Contains(".part"))
             {
-                 // Check if it is part01 or part1
-                 if (!name.EndsWith("part01.rar") && !name.EndsWith("part1.rar")) return true;
+                return !fileName.Contains(".part01.") && 
+                       !fileName.Contains(".part1.") && 
+                       !fileName.EndsWith(".part01.rar") && 
+                       !fileName.EndsWith(".part1.rar");
             }
+            
+            // Numerical parts: .001, .002
+            if (System.Text.RegularExpressions.Regex.IsMatch(fileName, @"\.\d{3}$"))
+            {
+                return !fileName.EndsWith(".001");
+            }
+
             return false;
         }
 
