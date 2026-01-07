@@ -164,6 +164,18 @@ export const translations = {
         confirmDeleteDownload: '¿Estás seguro de que quieres eliminar esta descarga? Esta acción es agresiva e intentará borrar los archivos.',
         failedToDeleteDownload: 'Error al eliminar la descarga',
 
+        // Scanner
+        scanningLibrary: 'Escaneando biblioteca...',
+        scanComplete: '✅ Escaneo completo',
+        stopScanConfirm: '¿Deseas detener el escaneo actual?',
+        stopScanTitle: 'Haz clic para detener el escaneo',
+        refreshListTitle: 'Haz clic para refrescar la lista',
+        latest: 'Último: ',
+        newGames: 'nuevos juegos',
+        clickToCancel: 'Haz clic para cancelar',
+        gamesAdded: 'juegos añadidos',
+        clickToUpdate: 'Haz clic para actualizar lista',
+
         // Game Details
         loading: 'Cargando...',
         loadingGame: 'Cargando juego...',
@@ -386,6 +398,18 @@ export const translations = {
         confirmDeleteDownload: 'Are you sure you want to delete this download? This action is aggressive and will try to delete files.',
         failedToDeleteDownload: 'Failed to delete download',
 
+        // Scanner
+        scanningLibrary: 'Scanning library...',
+        scanComplete: '✅ Scan complete',
+        stopScanConfirm: 'Do you want to stop the current scan?',
+        stopScanTitle: 'Click to stop scanning',
+        refreshListTitle: 'Click to refresh list',
+        latest: 'Latest: ',
+        newGames: 'new games',
+        clickToCancel: 'Click to cancel',
+        gamesAdded: 'games added',
+        clickToUpdate: 'Click to refresh list',
+
         // Game Details
         loading: 'Loading...',
         loadingGame: 'Loading game...',
@@ -597,6 +621,18 @@ export const translations = {
         confirmDeleteDownload: 'Êtes-vous sûr de vouloir supprimer ce téléchargement ?',
         failedToDeleteDownload: 'Échec de la suppression du téléchargement',
 
+        // Scanner
+        scanningLibrary: 'Analyse de la bibliothèque...',
+        scanComplete: '✅ Analyse terminée',
+        stopScanConfirm: 'Voulez-vous arrêter l\'analyse en cours ?',
+        stopScanTitle: 'Cliquez pour arrêter l\'analyse',
+        refreshListTitle: 'Cliquez pour rafraîchir la liste',
+        latest: 'Dernier : ',
+        newGames: 'nouveaux jeux',
+        clickToCancel: 'Cliquez pour annuler',
+        gamesAdded: 'jeux ajoutés',
+        clickToUpdate: 'Cliquez pour mettre à jour la liste',
+
         // Game Details
         loading: 'Chargement...',
         loadingGame: 'Chargement du jeu...',
@@ -801,6 +837,18 @@ export const translations = {
         noActiveDownloads: 'Keine aktiven Downloads',
         confirmDeleteDownload: 'Sind Sie sicher, dass Sie diesen Download löschen möchten?',
         failedToDeleteDownload: 'Fehler beim Löschen des Downloads',
+
+        // Scanner
+        scanningLibrary: 'Bibliothek wird gescannt...',
+        scanComplete: '✅ Scan abgeschlossen',
+        stopScanConfirm: 'Möchten Sie den aktuellen Scan beenden?',
+        stopScanTitle: 'Klicken zum Beenden des Scans',
+        refreshListTitle: 'Klicken zum Aktualisieren der Liste',
+        latest: 'Letzter: ',
+        newGames: 'neue Spiele',
+        clickToCancel: 'Klicken zum Abbrechen',
+        gamesAdded: 'Spiele hinzugefügt',
+        clickToUpdate: 'Klicken zum Aktualisieren der Liste',
 
         // Game Details
         loading: 'Laden...',
@@ -1010,6 +1058,18 @@ export const translations = {
         confirmDeleteDownload: 'Вы уверены, что хотите удалить эту загрузку?',
         failedToDeleteDownload: 'Ошибка удаления загрузки',
 
+        // Scanner
+        scanningLibrary: 'Сканирование библиотеки...',
+        scanComplete: '✅ Сканирование завершено',
+        stopScanConfirm: 'Вы хотите остановить текущее сканирование?',
+        stopScanTitle: 'Нажмите, чтобы остановить сканирование',
+        refreshListTitle: 'Нажмите, чтобы обновить список',
+        latest: 'Последний: ',
+        newGames: 'новых игр',
+        clickToCancel: 'Нажмите для отмены',
+        gamesAdded: 'игр добавлено',
+        clickToUpdate: 'Нажмите для обновления списка',
+
         // Game Details
         loading: 'Загрузка...',
         loadingGame: 'Загрузка игры...',
@@ -1214,6 +1274,18 @@ export const translations = {
         confirmDeleteDownload: '您确定要删除此下载吗？',
         failedToDeleteDownload: '删除下载失败',
 
+        // Scanner
+        scanningLibrary: '正在扫描库...',
+        scanComplete: '✅ 扫描完成',
+        stopScanConfirm: '您要停止当前扫描吗？',
+        stopScanTitle: '点击停止扫描',
+        refreshListTitle: '点击刷新列表',
+        latest: '最新：',
+        newGames: '新游戏',
+        clickToCancel: '点击取消',
+        gamesAdded: '游戏已添加',
+        clickToUpdate: '点击更新列表',
+
         // Game Details
         loading: '加载中...',
         loadingGame: '加载中...',
@@ -1409,6 +1481,18 @@ export const translations = {
         noActiveDownloads: 'アクティブなダウンロードはありません',
         confirmDeleteDownload: 'このダウンロードを削除してもよろしいですか？',
         failedToDeleteDownload: 'ダウンロードの削除に失敗しました',
+
+        // Scanner
+        scanningLibrary: 'ライブラリをスキャン中...',
+        scanComplete: '✅ スキャン完了',
+        stopScanConfirm: '現在のスキャンを停止しますか？',
+        stopScanTitle: 'クリックしてスキャンを停止',
+        refreshListTitle: 'クリックしてリストを更新',
+        latest: '最新：',
+        newGames: '新しいゲーム',
+        clickToCancel: 'クリックしてキャンセル',
+        gamesAdded: 'ゲームが追加されました',
+        clickToUpdate: 'クリックしてリストを更新',
 
         // Game Details
         loading: '読み込み中...',

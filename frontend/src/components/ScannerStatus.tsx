@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { useTranslation, t } from '../i18n/translations';
 import './ScannerStatus.css';
 
 const ScannerStatus: React.FC = () => {
+    useTranslation(); // Subscribe to language changes
     const [status, setStatus] = useState<{
         isScanning: boolean;
         lastGameFound: string | null;
@@ -61,7 +63,7 @@ const ScannerStatus: React.FC = () => {
             window.dispatchEvent(new Event('LIBRARY_UPDATED_EVENT'));
             setShowFinished(false);
         } else if (status.isScanning) {
-            if (window.confirm("¿Deseas detener el escaneo actual?")) {
+            if (window.confirm(t('stopScanConfirm'))) {
                 try {
                     await axios.post('/api/v3/media/scan/stop');
                     console.log("ScannerStatus: Scan stop requested");
@@ -79,26 +81,26 @@ const ScannerStatus: React.FC = () => {
         <div className={`scanner-status ${showFinished ? 'finished' : 'scanning'}`}
             style={{ cursor: 'pointer' }}
             onClick={handleBannerClick}
-            title={status.isScanning ? "Haz clic para detener el escaneo" : "Haz clic para refrescar la lista"}
+            title={status.isScanning ? t('stopScanTitle') : t('refreshListTitle')}
         >
             <div className="scanner-status-content">
                 {status.isScanning ? (
                     <>
                         <div className="scanner-spinner"></div>
                         <div className="scanner-text">
-                            <span className="status-label">Escaneando biblioteca...</span>
+                            <span className="status-label">{t('scanningLibrary')}</span>
                             {status.lastGameFound && (
-                                <span className="game-label">Ultimo: <strong>{status.lastGameFound}</strong></span>
+                                <span className="game-label">{t('latest')} <strong>{status.lastGameFound}</strong></span>
                             )}
-                            <span className="count-label">({status.gamesAddedCount} nuevos juegos)</span>
-                            <span className="status-hint">Haz click para cancelar</span>
+                            <span className="count-label">({status.gamesAddedCount} {t('newGames')})</span>
+                            <span className="status-hint">{t('clickToCancel')}</span>
                         </div>
                     </>
                 ) : (
                     <div className="scanner-text">
-                        <span className="status-label">✅ Escaneo completo</span>
-                        <span className="count-label">Se añadieron {status.gamesAddedCount} juegos</span>
-                        <span className="status-hint">Haz click para actualizar lista</span>
+                        <span className="status-label">{t('scanComplete')}</span>
+                        <span className="count-label">{status.gamesAddedCount} {t('gamesAdded')}</span>
+                        <span className="status-hint">{t('clickToUpdate')}</span>
                     </div>
                 )}
             </div>
