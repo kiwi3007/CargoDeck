@@ -112,6 +112,7 @@ namespace Playerr.Host
                 options.UseSqlite($"Data Source={dbPath}"));
 
             builder.Services.AddSingleton<IGameRepository, SqliteGameRepository>();
+            builder.Services.AddSingleton<IGameMetadataServiceFactory, GameMetadataServiceFactory>();
             builder.Services.AddSingleton<MediaScannerService>();
             
             // IO Services
