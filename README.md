@@ -144,7 +144,8 @@ If you want to modify the code or build the image locally instead of pulling it 
   - [x] **Atomic Move (Hardlinks):** Instant file management without data fragmentation.
   - [x] **Unraid Integration:** Community XML template support (`_unraid/playerr.xml`).
   - [x] **Smart API Handling:** Advanced rate-limiting and batching for metadata providers.
-- [/] **One-Click Launch Integration:** Direct execution support for installed local assets with automated path detection.
+- [ ] **One-Click Launch Integration:** Direct execution support for installed local assets with automated path detection.
+- [x] **UI/UX Refinement:** Premium iconography (FontAwesome) and consistent Nord-themed design.
 
 ### Phase 3: Ecosystem & Future Vision
 - [ ] **Bazzite & Linux Gaming:** Specialized compatibility hooks for Lutris, Proton, and Steam Deck.
@@ -307,13 +308,12 @@ Si quieres modificar el código o construir la imagen localmente:
   - [x] **Hardlinks (Atomic Move):** Gestión instantánea de archivos sin fragmentación de datos.
   - [x] **Integración con Unraid:** Soporte mediante plantilla XML comunitaria (`_unraid/playerr.xml`).
   - [x] **Gestión Inteligente de API:** Control de límites y procesamiento por lotes para proveedores de metadatos.
-- [/] **Integración "One-Click Launch":** Soporte de ejecución directa para juegos instalados con detección automática de rutas.
+- [ ] **Integración "One-Click Launch":** Soporte de ejecución directa para juegos instalados con detección automática de rutas.
 - [x] **Refinamiento de UI/UX:** Iconografía premium (FontAwesome) y diseño consistente basado en el tema Nord.
 
 ### Fase 3: Ecosistema y Visión de Futuro
 - [ ] **Bazzite y Gaming en Linux:** Hooks de compatibilidad especializados para Lutris, Proton y Steam Deck.
 - [ ] **Protocolo DBI:** Transferencia avanzada de archivos por USB para la gestión de dispositivos de hardware portátiles.
-- [x] **Refinamiento de UI/UX:** Iconografía premium (FontAwesome) y diseño consistente basado en el tema Nord.
 - [ ] **Tiendas Oficiales:** Integración en los catálogos oficiales de aplicaciones de Unraid, CasaOS y Synology.
 - [ ] **Motor de Extensibilidad:** Soporte para scripts de la comunidad y plugins de metadatos.
 
