@@ -137,9 +137,9 @@ If you want to modify the code or build the image locally instead of pulling it 
     - [x] **Release:** Builds (Win/Lin/Mac-Arm/Intel), Docs updated, Tag pushed.
     - [x] **Installer:** Windows NSIS Installer (.exe) with icon and shortcuts.
 - [x] **Unraid Support:** XML template created (`_unraid/playerr.xml`).
-    - **Optimization:** IGDB Rate Limit handling (batching + delays).
-    - **Feature:** Hardlink Support (Atomic Move) with fallback to Copy.
-    - **Integration:** qBittorrent UrlBase support for Reverse Proxies.
+    - [x] **Optimization:** IGDB Rate Limit handling (batching + delays).
+    - [x] **Feature:** Hardlink Support (Atomic Move) with fallback to Copy.
+    - [x] **Integration:** qBittorrent UrlBase support for Reverse Proxies.
 - [ ] **One-Click Launch Integration:** Direct execution support for installed local assets, including automated path detection and process monitoring for a consolidated gaming experience.
 - [ ] **Bazzite Support:** Researching compatibility with Lutris and Proton.
 - [ ] **DBI Protocol Integration:** Advanced USB file transfer and management for Portable Consoles environments.
