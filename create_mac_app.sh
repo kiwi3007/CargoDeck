@@ -55,9 +55,9 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <key>CFBundleDisplayName</key>
     <string>$APP_NAME</string>
     <key>CFBundleIdentifier</key>
-    <string>com.playerr.app</string>
+    <string>app.playerr.desktop</string>
     <key>CFBundleVersion</key>
-    <string>0.1.2-beta</string>
+    <string>0.3.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -86,10 +86,24 @@ chmod +x "$APP_BUNDLE/Contents/MacOS/Launcher"
 echo "Copying application files..."
 cp -R "$BUILD_DIR/"* "$APP_BUNDLE/Contents/MacOS/"
 
-# Also ensure UI assets are included
+# Copy UI assets
 echo "Copying UI assets..."
 mkdir -p "$APP_BUNDLE/Contents/MacOS/_output/UI"
 cp -a _output/UI/* "$APP_BUNDLE/Contents/MacOS/_output/UI/" 2>/dev/null || true
+
+echo "Applying permissions and signing..."
+chmod +x "$APP_BUNDLE/Contents/MacOS/Launcher"
+chmod +x "$APP_BUNDLE/Contents/MacOS/Playerr.Host"
+chmod +x "$APP_BUNDLE/Contents/MacOS/Photino.Native.dylib"
+
+# Remove quarantine attributes to avoid "App is damaged" errors
+xattr -cr "$APP_BUNDLE"
+
+# Ad-hoc signing to satisfy Gatekeeper requirements
+if command -v codesign >/dev/null; then
+    echo "Ad-hoc signing the app bundle..."
+    codesign --force --deep --sign - "$APP_BUNDLE"
+fi
 
 echo "=================================="
 echo "Bundle Created Successfully!"
