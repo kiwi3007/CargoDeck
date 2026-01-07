@@ -439,6 +439,18 @@ export const translations = {
         license: 'Licensed under MIT License.',
     },
     fr: {
+        // Post-Download Management
+        postDownloadTitle: 'Gestion Post-Téléchargement',
+        postDownloadDesc: 'Configurez les actions automatiques après la fin d\'un téléchargement.',
+        enableAutoMove: 'Déplacer automatiquement vers la bibliothèque',
+        enableAutoExtract: 'Extraire les fichiers compressés (.zip, .rar, .7z)',
+        enableDeepClean: 'Nettoyage en profondeur (Supprimer les fichiers indésirables)',
+        enableAutoRename: 'Renommage automatique (Bientôt)',
+        monitorInterval: 'Intervalle de surveillance (secondes)',
+        unwantedExtensions: 'Extensions indésirables (séparées par des virgules)',
+        savePostDownload: 'Enregistrer les paramètres Post-Téléchargement',
+        postDownloadSettingsSaved: 'Paramètres post-téléchargement enregistrés !',
+
         settings: 'Paramètres',
         languageTitle: 'Langue',
         languageDesc: "Sélectionnez la langue de l'interface de l'application.",
@@ -608,6 +620,18 @@ export const translations = {
         license: 'Sous licence MIT.',
     },
     de: {
+        // Post-Download Management
+        postDownloadTitle: 'Post-Download Management',
+        postDownloadDesc: 'Configure automatic actions after a download completes.',
+        enableAutoMove: 'Automatically move to library',
+        enableAutoExtract: 'Extract compressed files (.zip, .rar, .7z)',
+        enableDeepClean: 'Deep Clean (Delete unwanted files)',
+        enableAutoRename: 'Automatically rename (Coming soon)',
+        monitorInterval: 'Monitor Interval (seconds)',
+        unwantedExtensions: 'Unwanted Extensions (comma separated)',
+        savePostDownload: 'Save Post-Download Settings',
+        postDownloadSettingsSaved: 'Post-download settings saved!',
+
         settings: 'Einstellungen',
         languageTitle: 'Sprache',
         languageDesc: 'Wählen Sie die Sprache der Anwendung aus.',
@@ -780,6 +804,18 @@ export const translations = {
         license: 'Lizenziert unter MIT-Lizenz.',
     },
     ru: {
+        // Post-Download Management
+        postDownloadTitle: 'Управление после загрузки',
+        postDownloadDesc: 'Настройте автоматические действия после завершения загрузки.',
+        enableAutoMove: 'Автоматически перемещать в библиотеку',
+        enableAutoExtract: 'Извлекать сжатые файлы (.zip, .rar, .7z)',
+        enableDeepClean: 'Глубокая очистка (Удалить ненужные файлы)',
+        enableAutoRename: 'Автоматическое переименование (Скоро)',
+        monitorInterval: 'Интервал мониторинга (секунды)',
+        unwantedExtensions: 'Ненужные расширения (через запятую)',
+        savePostDownload: 'Сохранить настройки после загрузки',
+        postDownloadSettingsSaved: 'Настройки после загрузки сохранены!',
+
         settings: 'Настройки',
         languageTitle: 'Язык',
         languageDesc: 'Выберите язык интерфейса приложения.',
@@ -951,6 +987,18 @@ export const translations = {
         license: 'Лицензия MIT.',
     },
     zh: {
+        // Post-Download Management
+        postDownloadTitle: '下载后管理',
+        postDownloadDesc: '配置下载完成后的自动操作。',
+        enableAutoMove: '自动移动到库',
+        enableAutoExtract: '提取压缩文件 (.zip, .rar, .7z)',
+        enableDeepClean: '深度清理 (删除不需要的文件)',
+        enableAutoRename: '自动重命名 (即将推出)',
+        monitorInterval: '监控间隔 (秒)',
+        unwantedExtensions: '不需要的扩展名 (逗号分隔)',
+        savePostDownload: '保存下载后设置',
+        postDownloadSettingsSaved: '下载后设置已保存！',
+
         settings: '设置',
         languageTitle: '语言',
         languageDesc: '选择应用程序的界面语言。',
@@ -1107,6 +1155,18 @@ export const translations = {
         license: 'Licensed under MIT License.',
     },
     ja: {
+        // Post-Download Management
+        postDownloadTitle: 'ダウンロード後の管理',
+        postDownloadDesc: 'ダウンロード完了後の自動アクションを設定します。',
+        enableAutoMove: 'ライブラリに自動移動',
+        enableAutoExtract: '圧縮ファイルを解凍 (.zip, .rar, .7z)',
+        enableDeepClean: 'ディープクリーン (不要なファイルを削除)',
+        enableAutoRename: '自動リネーム (近日公開)',
+        monitorInterval: '監視間隔 (秒)',
+        unwantedExtensions: '不要な拡張子 (カンマ区切り)',
+        savePostDownload: 'ダウンロード後設定を保存',
+        postDownloadSettingsSaved: 'ダウンロード後設定が保存されました！',
+
         settings: '設定',
         languageTitle: '言語',
         languageDesc: 'アプリケーションのインターフェース言語を選択してください。',
