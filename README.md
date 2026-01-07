@@ -21,7 +21,7 @@ Inspired by the workflow of Radarr and Sonarr, Playerr is designed to be the def
 *   **Rich Metadata Integration:** Native hooks into IGDB and Steam APIs to fetch high-quality artwork, descriptions, ratings, and release dates.
 *   **Seamless PVR Workflow:** Support for Prowlarr and Jackett for automated indexer management and advanced searching.
 *   **NZB Protocol Support:** Native integration for Usenet downloads via NZB files, automatically handling protocol associations. Compatible with **SABnzbd** and **NZBGet**.
-*   **Integrated Download Management:** Native control for industry-standard clients like qBittorrent and Transmission.
+*   **Integrated Download Management:** Native control for industry-standard clients like qBittorrent and Transmission via API.
 *   **Modern Web GUI:** A vibrant, dark-themed responsive interface designed for both desktop and containerized environments.
 *   **Smart Path & File Management:** Automatic folder renaming based on sanitized IGDB titles, preserving original release structure while keeping the library clean and organized.
 *   **Integrated Package Manager:** Detects and launches installers automatically, identifying the correct executable without manual intervention.
@@ -140,6 +140,7 @@ If you want to modify the code or build the image locally instead of pulling it 
     - **Optimization:** IGDB Rate Limit handling (batching + delays).
     - **Feature:** Hardlink Support (Atomic Move) with fallback to Copy.
     - **Integration:** qBittorrent UrlBase support for Reverse Proxies.
+- [ ] **One-Click Launch Integration:** Direct execution support for installed local assets, including automated path detection and process monitoring for a consolidated gaming experience.
 - [ ] **Bazzite Support:** Researching compatibility with Lutris and Proton.
 - [ ] **DBI Protocol Integration:** Advanced USB file transfer and management for Portable Consoles environments.
 - [ ] **CasaOS Official App:** Direct integration into the CasaOS App Store.
