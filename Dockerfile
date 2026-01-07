@@ -23,6 +23,8 @@ RUN dotnet restore
 
 # Copy everything else and build
 COPY src/ ./src/
+# Copy the icon file so that the relative path in .csproj (../../frontend/...) resolves correctly
+COPY frontend/src/assets/app_logo.ico ./frontend/src/assets/
 RUN dotnet publish src/Playerr.Host/Playerr.Host.csproj -c Release -o /app/publish
 
 # Stage 3: Final Runtime Image
