@@ -804,31 +804,37 @@ const Settings: React.FC = () => {
         </p>
         <form onSubmit={handleSavePostDownload}>
           <div className="form-group checkbox-group">
-            <input
-              type="checkbox"
-              id="enable-auto-move"
-              checked={postDownloadSettings.enableAutoMove}
-              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableAutoMove: e.target.checked })}
-            />
-            <label htmlFor="enable-auto-move">{t('enableAutoMove')}</label>
+            <label htmlFor="enable-auto-move">
+              <input
+                type="checkbox"
+                id="enable-auto-move"
+                checked={postDownloadSettings.enableAutoMove}
+                onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableAutoMove: e.target.checked })}
+              />
+              {t('enableAutoMove')}
+            </label>
           </div>
           <div className="form-group checkbox-group">
-            <input
-              type="checkbox"
-              id="enable-auto-extract"
-              checked={postDownloadSettings.enableAutoExtract}
-              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableAutoExtract: e.target.checked })}
-            />
-            <label htmlFor="enable-auto-extract">{t('enableAutoExtract')}</label>
+            <label htmlFor="enable-auto-extract">
+              <input
+                type="checkbox"
+                id="enable-auto-extract"
+                checked={postDownloadSettings.enableAutoExtract}
+                onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableAutoExtract: e.target.checked })}
+              />
+              {t('enableAutoExtract')}
+            </label>
           </div>
           <div className="form-group checkbox-group">
-            <input
-              type="checkbox"
-              id="enable-deep-clean"
-              checked={postDownloadSettings.enableDeepClean}
-              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableDeepClean: e.target.checked })}
-            />
-            <label htmlFor="enable-deep-clean">{t('enableDeepClean')}</label>
+            <label htmlFor="enable-deep-clean">
+              <input
+                type="checkbox"
+                id="enable-deep-clean"
+                checked={postDownloadSettings.enableDeepClean}
+                onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableDeepClean: e.target.checked })}
+              />
+              {t('enableDeepClean')}
+            </label>
           </div>
           <div className="form-group">
             <label htmlFor="monitor-interval">{t('monitorInterval')}</label>
@@ -1112,13 +1118,14 @@ const Settings: React.FC = () => {
                   placeholder={t('categoryPlaceholder')}
                 />
                 <small>{t('torrentsCategoryHint')}</small>
-                <small>{t('torrentsCategoryHint')}</small>
               </div>
 
-              <h3>{t('remotePathMappingTitle')}</h3>
-              <p className="description" style={{ fontSize: '0.9em', color: '#aaa', marginTop: '-10px', marginBottom: '15px' }}>
-                {t('remotePathMappingDesc')}
-              </p>
+              <div className="form-subsection">
+                <h3>{t('remotePathMappingTitle')}</h3>
+                <p className="description">
+                  {t('remotePathMappingDesc')}
+                </p>
+              </div>
 
               <div className="form-group">
                 <label>{t('remotePath')}</label>
