@@ -496,10 +496,17 @@ const GameDetails: React.FC = () => {
         </div>
       </div>
 
-      {activeTab === 'search' && (
+      {activeTab === 'search' && (results.length > 0 || error || searching) && (
         <div className="torrent-search">
-          <h2>{t('searchTorrents')}</h2>
-          <p>{t('willSearchProwlarr')} <strong>{game.title}</strong></p>
+
+
+
+          {searching && (
+            <div className="search-loading">
+              <FontAwesomeIcon icon={faSearch} spin />
+              <p>{t('searching') || 'Buscando...'}</p>
+            </div>
+          )}
 
           {error && <p className="error">{error}</p>}
 

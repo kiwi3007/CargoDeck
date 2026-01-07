@@ -23,6 +23,8 @@ Inspired by the workflow of Radarr and Sonarr, Playerr is designed to be the def
 *   **NZB Protocol Support:** Native integration for Usenet downloads via NZB files, automatically handling protocol associations. Compatible with **SABnzbd** and **NZBGet**.
 *   **Integrated Download Management:** Native control for industry-standard clients like qBittorrent and Transmission.
 *   **Modern Web GUI:** A vibrant, dark-themed responsive interface designed for both desktop and containerized environments.
+*   **Smart Path & File Management:** Automatic folder renaming based on sanitized IGDB titles, preserving original release structure while keeping the library clean and organized.
+*   **Integrated Package Manager:** Detects and launches installers automatically, identifying the correct executable without manual intervention.
 *   **Unified Library View:** Display your entire gaming collection in one place, including native support for syncing and viewing your **Steam Library**.
 
 ## Screenshots
@@ -130,9 +132,8 @@ If you want to modify the code or build the image locally instead of pulling it 
 
 ## Roadmap
 
-- [x] **v0.1.2 Beta:** NZB Protocol support and Ko-fi Widget.
+- [x] **v0.1.2 Beta:** NZB Protocol support.
     - [x] **Feature:** NZB Support (Search & Download).
-    - [x] **Feature:** Ko-fi Global Widget.
     - [x] **Release:** Builds (Win/Lin/Mac-Arm/Intel), Docs updated, Tag pushed.
     - [x] **Installer:** Windows NSIS Installer (.exe) with icon and shortcuts.
 - [x] **Unraid Support:** XML template created (`_unraid/playerr.xml`).
@@ -152,7 +153,7 @@ I'm building Playerr with the community in mind. Your feedback is the engine tha
 *   **Contribute:** Found a bug? Have a killer feature idea? Open an issue or a PR!
 *   **Support:** If Playerr brings value to your setup, consider supporting the project. Your contributions enable more focused development, better stability, and faster implementation of the roadmap.
 
-[<img src="https://storage.ko-fi.com/cdn/cup-border.png" width="200" alt="Buy Me a Coffee at ko-fi.com" />](https://ko-fi.com/maikboarder)
+
 [![Sponsor on GitHub](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86&style=for-the-badge)](https://github.com/sponsors/Maikboarder)
 
 ## License
@@ -195,6 +196,8 @@ Inspirado en el flujo de trabajo de Radarr y Sonarr, Playerr está diseñado par
 *   **Soporte Protocolo NZB:** Integración nativa para descargas Usenet mediante archivos NZB, gestionando automáticamente la asociación de protocolos. Compatible con **SABnzbd** y **NZBGet**.
 *   **Gestión de descargas integrada:** Control nativo de clientes como qBittorrent y Transmission.
 *   **Interfaz web moderna:** GUI oscura, responsiva y pensada para escritorio y contenedores.
+*   **Gestión automática de rutas y archivos:** Renombrado inteligente de carpetas basado en títulos de IGDB, preservando la estructura original mientras se mantiene la biblioteca limpia y organizada.
+*   **Gestor de Paquetes integrado:** Detecta y lanza instaladores automáticamente, identificando el ejecutable correcto sin intervención manual.
 *   **Vista unificada:** Muestra toda tu colección en un solo lugar, incluyendo sincronización y visualización de tu biblioteca de Steam.
 
 ## Plataformas soportadas

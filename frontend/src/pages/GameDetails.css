@@ -183,8 +183,29 @@
 }
 
 .torrent-search .error {
-  margin-top: 8px;
   color: #f38ba8;
+  margin: 10px 0;
+  text-align: center;
+}
+
+.search-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 15px;
+  color: #89b4fa;
+}
+
+.search-loading .fa-spin {
+  font-size: 2.5rem;
+}
+
+.search-loading p {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #cdd6f4;
 }
 
 .results-container {
