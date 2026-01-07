@@ -61,54 +61,19 @@ namespace Playerr.Api.V3.Search
                                        .ToArray();
             }
 
-            // 1. Search Prowlarr Indexers individually (SearchManager Logic)
+            // 1. Search Prowlarr Unified API (Better normalization than individual proxies)
             if (_prowlarrSettings.IsConfigured)
             {
                 var prowlarrClient = new ProwlarrClient(_prowlarrSettings.Url, _prowlarrSettings.ApiKey);
-                
-                try 
+                tasks.Add(prowlarrClient.SearchAsync(query, categoryIds).ContinueWith(t => 
                 {
-                    // Get ALL indexers
-                    var indexers = await prowlarrClient.GetIndexersAsync();
-                    
-                    foreach (var indexer in indexers.Where(i => i.Enable))
+                    if (t.IsFaulted)
                     {
-                        var proxyUrl = $"{_prowlarrSettings.Url}/{indexer.Id}/api";
-                        Playerr.Core.Indexers.IIndexerClient client;
-
-                        // Determine Client Type
-                        if (indexer.Protocol.Equals("usenet", StringComparison.OrdinalIgnoreCase))
-                        {
-                            client = new Playerr.Core.Indexers.NewznabClient(sharedClient, proxyUrl, _prowlarrSettings.ApiKey);
-                        }
-                        else
-                        {
-                            client = new Playerr.Core.Indexers.TorznabClient(sharedClient, proxyUrl, _prowlarrSettings.ApiKey);
-                        }
-
-                        // Launch Task
-                        tasks.Add(client.SearchAsync(query, categoryIds).ContinueWith(t => 
-                        {
-                            if (t.IsFaulted)
-                            {
-                                Console.WriteLine($"[SearchManager] Indexer {indexer.Name} Failed: {t.Exception?.InnerException?.Message}");
-                                return new List<SearchResult>();
-                            }
-                            var idxResults = t.Result;
-                            // Tag results with Indexer Name if missing
-                            foreach(var r in idxResults) 
-                            { 
-                                if(string.IsNullOrEmpty(r.IndexerName)) r.IndexerName = indexer.Name;
-                                r.IndexerId = indexer.Id;
-                            }
-                            return idxResults;
-                        }));
+                        Console.WriteLine($"[SearchController] Prowlarr Unified Search Failed: {t.Exception?.InnerException?.Message}");
+                        return new List<SearchResult>();
                     }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[SearchManager] Failed to fetch indexers: {ex.Message}");
-                }
+                    return t.Result;
+                }));
             }
 
             // 2. Search Jackett (Legacy/Direct)

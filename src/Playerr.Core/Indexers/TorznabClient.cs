@@ -90,13 +90,20 @@ namespace Playerr.Core.Indexers
                      var name = attr.Attribute("name")?.Value;
                      var val = attr.Attribute("value")?.Value;
                      
-                     if (name == "seeders" && int.TryParse(val, out var seeders)) result.Seeders = seeders;
-                     if (name == "peers" && int.TryParse(val, out var peers)) result.PeersFromIndexer = peers; // "peers" usually means leechers + seeders or just leechers depending on impl
-                     if (name == "leechers" && int.TryParse(val, out var leechers)) result.Leechers = leechers;
-                     if (name == "size" && long.TryParse(val, out var size)) result.Size = size;
-                     if (name == "magneturl") result.MagnetUrl = val;
-                     if (name == "category" && int.TryParse(val, out var cid))
+                     if (string.Equals(name, "seeders", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out var seeders)) result.Seeders = seeders;
+                     if (string.Equals(name, "peers", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out var peers)) result.PeersFromIndexer = peers; 
+                     if (string.Equals(name, "leechers", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out var leechers)) result.Leechers = leechers;
+                     if (string.Equals(name, "size", StringComparison.OrdinalIgnoreCase) && long.TryParse(val, out var size)) result.Size = size;
+                     if (string.Equals(name, "magneturl", StringComparison.OrdinalIgnoreCase)) result.MagnetUrl = val;
+                     if (string.Equals(name, "category", StringComparison.OrdinalIgnoreCase) && int.TryParse(val, out var cid))
                         result.Categories.Add(new ProwlarrCategory { Id = cid, Name = cid.ToString() });
+                 }
+
+                 // NEW: Robust Leechers calculation
+                 // If total peers exists but leechers is 0, calculate it
+                 if (result.PeersFromIndexer.HasValue && result.Leechers == 0)
+                 {
+                     result.Leechers = Math.Max(0, result.PeersFromIndexer.Value - result.Seeders);
                  }
                  
                  // Enclosure fallback for Magnet?

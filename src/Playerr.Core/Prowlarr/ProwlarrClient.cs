@@ -323,8 +323,13 @@ namespace Playerr.Core.Prowlarr
         [JsonPropertyName("seeders")]
         public int Seeders { get; set; }
         
+        private int _leechers;
         [JsonPropertyName("leechers")] 
-        public int Leechers { get; set; }
+        public int Leechers 
+        { 
+            get => _leechers > 0 ? _leechers : (PeersFromIndexer.HasValue ? Math.Max(0, PeersFromIndexer.Value - Seeders) : 0);
+            set => _leechers = value;
+        }
         
         [JsonPropertyName("peers")]
         public int? PeersFromIndexer { get; set; }
