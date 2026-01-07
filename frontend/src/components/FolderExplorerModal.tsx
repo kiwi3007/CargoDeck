@@ -103,9 +103,22 @@ const FolderExplorerModal: React.FC<FolderExplorerModalProps> = ({ initialPath, 
                     <input
                         type="text"
                         value={currentPath}
-                        readOnly
+                        onChange={(e) => setCurrentPath(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                loadPath(currentPath);
+                            }
+                        }}
                         className="path-display"
                     />
+                    <button
+                        className="go-btn"
+                        onClick={() => loadPath(currentPath)}
+                        title="Ir a esta ruta"
+                        style={{ marginLeft: '5px', padding: '0 10px', background: 'var(--primary-color)', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer' }}
+                    >
+                        Go
+                    </button>
                 </div>
 
                 <div className="explorer-content">
