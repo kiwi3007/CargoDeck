@@ -159,10 +159,13 @@ namespace Playerr.Host
             
             Console.WriteLine($"[Startup] Checking Headless Mode: Args={string.Join(",", args)}, EnvVar={envVar}, Result={isHeadless}");
 
-            builder.WebHost.ConfigureKestrel(serverOptions =>
+            if (!isHeadless)
             {
-                serverOptions.Listen(System.Net.IPAddress.Loopback, 5002);
-            });
+                builder.WebHost.ConfigureKestrel(serverOptions =>
+                {
+                    serverOptions.Listen(System.Net.IPAddress.Loopback, 5002);
+                });
+            }
             // ELSE: Let Kestrel use default config (ASPNETCORE_URLS) which is ideal for Docker
 
             var app = builder.Build();
