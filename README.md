@@ -130,22 +130,28 @@ If you want to modify the code or build the image locally instead of pulling it 
 
 ---
 
-## Roadmap
+## 🗺️ Roadmap
 
-- [x] **v0.1.2 Beta:** NZB Protocol support.
-    - [x] **Feature:** NZB Support (Search & Download).
-    - [x] **Release:** Builds (Win/Lin/Mac-Arm/Intel), Docs updated, Tag pushed.
-    - [x] **Installer:** Windows NSIS Installer (.exe) with icon and shortcuts.
-- [x] **Unraid Support:** XML template created (`_unraid/playerr.xml`).
-    - [x] **Optimization:** IGDB Rate Limit handling (batching + delays).
-    - [x] **Feature:** Hardlink Support (Atomic Move) with fallback to Copy.
-    - [x] **Integration:** qBittorrent UrlBase support for Reverse Proxies.
-- [ ] **One-Click Launch Integration:** Direct execution support for installed local assets, including automated path detection and process monitoring for a consolidated gaming experience.
-- [ ] **Bazzite Support:** Researching compatibility with Lutris and Proton.
-- [ ] **DBI Protocol Integration:** Advanced USB file transfer and management for Portable Consoles environments.
-- [ ] **CasaOS Official App:** Direct integration into the CasaOS App Store.
-- [ ] **Legacy Support:** Extended optimization for Intel-based macOS systems.
-- [ ] **Extensibility:** Support for community-driven scripts and metadata plugins.
+### Phase 1: Foundation (v0.1.0 - v0.1.2)
+- [x] **Core PVR Functionality:** Automated search and categorization engine.
+- [x] **NZB Protocol Support:** Native integration for SABnzbd and NZBGet.
+- [x] **Multi-Platform Deployment:** Official builds for Windows, macOS (Apple & Intel), and Linux.
+- [x] **Windows Installer:** Professional NSIS installer for a seamless setup experience.
+- [x] **Persistent Storage:** SQLite integration to ensure library data and metadata longevity.
+
+### Phase 2: Power User Features (Current Focus)
+- [x] **Infrastructure & Storage Optimization:**
+  - [x] **Atomic Move (Hardlinks):** Instant file management without data fragmentation.
+  - [x] **Unraid Integration:** Community XML template support (`_unraid/playerr.xml`).
+  - [x] **Smart API Handling:** Advanced rate-limiting and batching for metadata providers.
+- [/] **One-Click Launch Integration:** Direct execution support for installed local assets with automated path detection.
+- [x] **Refined UI/UX:** Premium iconography (FontAwesome) and consistent Nord-themed design.
+
+### Phase 3: Ecosystem & Future Vision
+- [ ] **Bazzite & Linux Gaming:** Specialized compatibility hooks for Lutris, Proton, and Steam Deck.
+- [ ] **DBI Protocol Support:** Advanced USB file transfer and management for portable console environments.
+- [ ] **Official App Stores:** Integration into official CasaOS and Synology app manifests.
+- [ ] **Extensibility Engine:** Support for community-driven scripts and metadata plugins.
 
 ## Community & Support
 
@@ -285,4 +291,49 @@ Si quieres modificar el código o construir la imagen localmente:
        image: playerr:local
        # ... resto de la config
    ```
+
+---
+
+## 🗺️ Roadmap
+
+### Fase 1: Cimientos (v0.1.0 - v0.1.2)
+- [x] **Funcionalidad PVR Core:** Motor de búsqueda y categorización automática.
+- [x] **Soporte de Protocolo NZB:** Integración nativa con SABnzbd y NZBGet.
+- [x] **Despliegue Multiplataforma:** Binarios oficiales para Windows, macOS (Apple e Intel) y Linux.
+- [x] **Instalador de Windows:** Instalador profesional NSIS para una experiencia de configuración fluida.
+- [x] **Persistencia de Datos:** Integración con SQLite para asegurar la longevidad de tu biblioteca y metadatos.
+
+### Fase 2: Funciones Avanzadas (Enfoque Actual)
+- [x] **Optimización de Infraestructura:**
+  - [x] **Hardlinks (Atomic Move):** Gestión instantánea de archivos sin fragmentación de datos.
+  - [x] **Integración con Unraid:** Soporte mediante plantilla XML comunitaria (`_unraid/playerr.xml`).
+  - [x] **Gestión Inteligente de API:** Control de límites y procesamiento por lotes para proveedores de metadatos.
+- [/] **Integración "One-Click Launch":** Soporte de ejecución directa para juegos instalados con detección automática de rutas.
+- [x] **Refinamiento de UI/UX:** Iconografía premium (FontAwesome) y diseño consistente basado en el tema Nord.
+
+### Fase 3: Ecosistema y Visión de Futuro
+- [ ] **Bazzite y Gaming en Linux:** Hooks de compatibilidad especializados para Lutris, Proton y Steam Deck.
+- [ ] **Protocolo DBI:** Transferencia avanzada de archivos por USB para la gestión de consolas portátiles.
+- [ ] **Tiendas Oficiales:** Integración en los catálogos oficiales de aplicaciones de CasaOS y Synology.
+- [ ] **Motor de Extensibilidad:** Soporte para scripts de la comunidad y plugins de metadatos.
+
+## Comunidad y soporte
+
+Estoy construyendo Playerr con la comunidad en mente. Tu feedback es el motor que impulsa nuestro desarrollo.
+
+*   **Contribuye:** ¿Encontraste un bug? ¿Tienes una idea brillante? ¡Abre un issue o un PR!
+*   **Soporte:** Si Playerr aporta valor a tu setup, considera apoyar el proyecto. Tus contribuciones permiten un desarrollo más enfocado, mejor estabilidad y una implementación más rápida del roadmap.
+
+[![Sponsor on GitHub](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86&style=for-the-badge)](https://github.com/sponsors/Maikboarder)
+
+## Licencia
+
+Distribuido bajo la Licencia MIT. Consulta `LICENSE` para más información.
+
+## Aviso Legal
+
+Playerr es un proyecto de código abierto para la gestión educativa y personal de bibliotecas. **No está afiliado** con ninguna plataforma de juegos o proveedor de metadatos de terceros. Los desarrolladores no aprueban la piratería; los usuarios son responsables de cumplir con las leyes locales de derechos de autor. Consulta `DISCLAIMER.md` para el aviso legal completo.
+
+---
+*Desarrollado por Maikboarder*
 
