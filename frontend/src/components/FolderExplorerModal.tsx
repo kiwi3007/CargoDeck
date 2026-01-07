@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { t as translate } from '../i18n/translations';
 import './FolderExplorerModal.css';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faFolder, faFile, faHdd, faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 
 interface FolderEntry {
     name: string;
@@ -96,7 +98,7 @@ const FolderExplorerModal: React.FC<FolderExplorerModalProps> = ({ initialPath, 
 
                 <div className="explorer-path-bar">
                     <button className="back-btn" onClick={handleBack} disabled={loading}>
-                        ⬅️
+                        <FontAwesomeIcon icon={faArrowLeft} />
                     </button>
                     <input
                         type="text"
@@ -127,7 +129,7 @@ const FolderExplorerModal: React.FC<FolderExplorerModalProps> = ({ initialPath, 
                                     }}
                                 >
                                     <span className="icon">
-                                        {entry.type === 'drive' ? '💾' : (entry.isDirectory ? '📁' : '📄')}
+                                        {entry.type === 'drive' ? <FontAwesomeIcon icon={faHdd} /> : (entry.isDirectory ? <FontAwesomeIcon icon={faFolder} /> : <FontAwesomeIcon icon={faFile} />)}
                                     </span>
                                     <span className="name">{entry.name}</span>
                                 </div>

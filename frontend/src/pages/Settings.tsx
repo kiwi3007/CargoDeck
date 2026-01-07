@@ -11,6 +11,8 @@ import steamLogo from '../assets/steam_logo.png';
 import pcIcon from '../assets/pc_icon.png';
 import torrentNzbIcon from '../assets/TORRENT_NZB_icon.png';
 import FolderExplorerModal from '../components/FolderExplorerModal';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faFolderOpen } from '@fortawesome/free-solid-svg-icons';
 
 interface DownloadClient {
   id?: number;
@@ -570,7 +572,7 @@ const Settings: React.FC = () => {
                 }}
                 title={t('selectFolder')}
               >
-                📂
+                <FontAwesomeIcon icon={faFolderOpen} />
               </button>
             </div>
           </div>
@@ -601,7 +603,7 @@ const Settings: React.FC = () => {
                   }
                 }}
               >
-                📂
+                <FontAwesomeIcon icon={faFolderOpen} />
               </button>
             </div>
           </div>
@@ -632,7 +634,7 @@ const Settings: React.FC = () => {
                   }
                 }}
               >
-                📂
+                <FontAwesomeIcon icon={faFolderOpen} />
               </button>
             </div>
           </div>
