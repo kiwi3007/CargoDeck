@@ -47,3 +47,18 @@ Estas reglas son inmutables a menos que el usuario lo autorice explícitamente. 
 *   **Run Backend:** `dotnet run --project src/Playerr.Host/Playerr.Host.csproj`
 *   **Frontend Dev:** `npx webpack serve --config ./frontend/build/webpack.config.js`
 *   **Debug Output:** `curl -v http://127.0.0.1:5002/api/v3/...`
+
+---
+
+## 6. 🔑 Gestión de Credenciales (The Vault)
+**Importante:** Todas las credenciales sensibles residen en el directorio `config/` y **NUNCA** deben ser hardcodeadas.
+
+*   **Fuentes de Verdad:**
+    *   **Orb (Casa):** Configuración para uso local/potente.
+    *   **Raspberry Pi:** Configuración para entorno ligero.
+*   **Ubicación:** Ambos perfiles ya están configurados en archivos JSON dentro de `config/` (ej: `jackett.json`, `prowlarr.json`).
+*   **Instrucción para el Agente:**
+    *   Si el usuario pide "cambiar a Orb" o "usar Raspberry", no necesitas pedir claves nuevas.
+    *   Simplemente verifica o recarga los archivos en `config/`.
+    *   El backend (`ConfigurationService.cs`) está programado para cargar estos archivos automáticamente al inicio.
+*   **Recuperación:** Si pierdes el contexto, recuerda: **"Las llaves están en `config/`, no las pidas, úsalas."**
