@@ -57,8 +57,7 @@ Estas reglas son inmutables a menos que el usuario lo autorice explícitamente. 
     *   **Orb (Casa):** Configuración para uso local/potente.
     *   **Raspberry Pi:** Configuración para entorno ligero.
 *   **Ubicación:** Ambos perfiles ya están configurados en archivos JSON dentro de `config/` (ej: `jackett.json`, `prowlarr.json`).
-*   **Instrucción para el Agente:**
-    *   Si el usuario pide "cambiar a Orb" o "usar Raspberry", no necesitas pedir claves nuevas.
-    *   Simplemente verifica o recarga los archivos en `config/`.
-    *   El backend (`ConfigurationService.cs`) está programado para cargar estos archivos automáticamente al inicio.
-*   **Recuperación:** Si pierdes el contexto, recuerda: **"Las llaves están en `config/`, no las pidas, úsalas."**
+*   **Protocolo de Activación (User Command):**
+    *   **El Trigger:** El usuario dirá explícitamente comandos como **"Carga Orb"** o **"Carga Raspberry"**.
+    *   **Tu Respuesta:** NUNCA pidas claves o APIs. Tu acción es verificar/asegurar que el backend esté usando los archivos correctos de `config/`.
+    *   **Recuperación:** Si pierdes el contexto y el usuario dice "Carga Orb", no preguntes "¿Qué es Orb?". Ve a `config/`, busca los archivos y confirma la carga.
