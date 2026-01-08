@@ -1,4 +1,6 @@
 # Playerr v0.3.0
+[🇪🇸 Leer en Español](README.es.md)
+
 ### **Self-Hosted Game Library Manager & PVR**
 
 [![Go to Website](https://img.shields.io/badge/Website-playerr.app-6366f1?style=for-the-badge)](https://playerr.app)
