@@ -56,6 +56,8 @@ Playerr is architected for maximum reach, offering multi-platform binaries and c
 
 ## Installation & Setup
 
+> **Note:** Requires valid IGDB API keys (free) for metadata fetching.
+
 ### Docker (Recommended)
 The easiest way to run Playerr is using Docker. It includes everything you need in a single container. Access the UI at `http://your-ip:2727`.
 

@@ -56,6 +56,8 @@ Playerr está diseñado para un alcance máximo, ofreciendo binarios multiplataf
 
 ## Instalación y configuración
 
+> **Nota:** Requiere claves API de IGDB válidas (gratuitas) para la obtención de metadatos.
+
 ### Docker (Recomendado)
 La forma más sencilla de ejecutar Playerr es con Docker. Incluye todo lo necesario en un solo contenedor. Accede a la interfaz en `http://tu-ip:2727`.
 
