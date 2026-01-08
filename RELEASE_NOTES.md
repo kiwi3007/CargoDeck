@@ -1,4 +1,4 @@
-# Playerr v0.3.0: The "Install Anywhere" Update 🚀
+# Playerr v0.3.1: The "Install Anywhere" Update 🚀
 
 We've improved the core engine to be smarter, faster, and more compatible with your messy game libraries.
 
@@ -20,7 +20,7 @@ We've improved the core engine to be smarter, faster, and more compatible with y
 
 ---
 
-# Playerr v0.3.0: La Actualización "Instala Donde Sea" 🚀
+# Playerr v0.3.1: La Actualización "Instala Donde Sea" 🚀
 
 Hemos mejorado el motor principal para que sea más inteligente, rápido y compatible con tus caóticas bibliotecas de juegos.
 
