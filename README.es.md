@@ -7,13 +7,13 @@
 [![Licencia: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Soporte Docker](https://img.shields.io/badge/Docker-amd64%20%2F%20arm64-2496ed?style=for-the-badge&logo=docker)](https://hub.docker.com/r/maikboarder/playerr)
 
-### Descargas (v0.3.0)
-[![Windows](https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr-Windows-x64.zip)
-[![Playerr.exe](https://img.shields.io/badge/Playerr.exe-Installer-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr-Windows-Setup-x64.exe)
-[![Playerr.app](https://img.shields.io/badge/Playerr.app-macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr.dmg)
-[![macOS ARM64](https://img.shields.io/badge/macOS_Apple_Silicon-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr.dmg)
-[![macOS Intel](https://img.shields.io/badge/macOS_Intel-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr-Intel.dmg)
-[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr-Linux-x64.tar.gz)
+### Descargas (Última versión)
+[![Windows](https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Windows-x64.zip)
+[![Playerr.exe](https://img.shields.io/badge/Playerr.exe-Installer-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Windows-Setup-x64.exe)
+[![Playerr.app](https://img.shields.io/badge/Playerr.app-macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr.dmg)
+[![macOS ARM64](https://img.shields.io/badge/macOS_Apple_Silicon-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr.dmg)
+[![macOS Intel](https://img.shields.io/badge/macOS_Intel-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Intel.dmg)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Linux-x64.tar.gz)
 
 Inspirado en el flujo de trabajo de Radarr y Sonarr, Playerr está diseñado para ser la solución definitiva para los entusiastas de los videojuegos que gestionan sus bibliotecas en local. Playerr conecta tus archivos digitales con el mundo del metadato gamer, cerrando la brecha entre tus activos locales y la vasta información disponible en la red.
 
@@ -50,9 +50,9 @@ Inspirado en el flujo de trabajo de Radarr y Sonarr, Playerr está diseñado par
 Playerr está diseñado para un alcance máximo, ofreciendo binarios multiplataforma y soluciones en contenedor:
 
 *   **Docker:** Soporte universal para amd64 y arm64 (Raspberry Pi, CasaOS, Synology, etc.).
-*   **Windows:** Rendimiento nativo 64-bit. [Descargar .exe (Instalador)](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr-Windows-Setup-x64.exe) o [Descargar .zip (Portable)](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr-Windows-x64.zip)
-*   **macOS:** Optimizado para Apple Silicon ([Descargar .dmg](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr.dmg)) y sistemas Intel ([Descargar .dmg](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr-Intel.dmg)).
-*   **Linux:** Distribuciones genéricas 64-bit. [Descargar .tar.gz](https://github.com/Maikboarder/Playerr/releases/download/v0.3.0/Playerr-Linux-x64.tar.gz)
+*   **Windows:** Rendimiento nativo 64-bit. [Descargar .exe (Instalador)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Windows-Setup-x64.exe) o [Descargar .zip (Portable)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Windows-x64.zip)
+*   **macOS:** Optimizado para Apple Silicon ([Descargar .dmg](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr.dmg)) y sistemas Intel ([Descargar .dmg](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Intel.dmg)).
+*   **Linux:** Distribuciones genéricas 64-bit. [Descargar .tar.gz](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Linux-x64.tar.gz)
 
 ## Instalación y configuración
 
