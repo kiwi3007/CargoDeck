@@ -2,9 +2,10 @@
 set -e
 
 APP_NAME="Playerr"
-BUILD_DIR="build_artifacts/osx-arm64"
+ARCH="${1:-osx-arm64}" # Default to osx-arm64 if not provided
+BUILD_DIR="build_artifacts/$ARCH"
 OUTPUT_DIR="build_artifacts"
-APP_BUNDLE="$OUTPUT_DIR/$APP_NAME.app"
+APP_BUNDLE="$OUTPUT_DIR/Playerr-$ARCH.app"
 
 # Ensure build exists
 if [ ! -d "$BUILD_DIR" ]; then
@@ -111,8 +112,8 @@ echo "Location: $APP_BUNDLE"
 echo "=================================="
 
 # Create DMG
-DMG_NAME="$OUTPUT_DIR/Playerr.dmg"
-VOL_NAME="Playerr Installer"
+DMG_NAME="$OUTPUT_DIR/Playerr-$ARCH.dmg"
+VOL_NAME="Playerr Installer ($ARCH)"
 
 echo "Creating DMG Installer: $DMG_NAME..."
 rm -f "$DMG_NAME"

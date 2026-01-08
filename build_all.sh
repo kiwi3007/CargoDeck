@@ -61,16 +61,19 @@ cd $OUTPUT_DIR
 tar -czf "Playerr-Linux-x64.tar.gz" "linux-x64"
 cd ..
 
-# MacOS x64 (Intel) - DISABLED
-# echo " -> Building for MacOS (Intel)..."
-# dotnet publish src/Playerr.Host/Playerr.Host.csproj -c Release -r osx-x64 --self-contained true -o $OUTPUT_DIR/osx-x64
-# echo "    Copying assets..."
-# mkdir -p $OUTPUT_DIR/osx-x64/_output/UI
-# cp -R _output/UI/* $OUTPUT_DIR/osx-x64/_output/UI/
-# cp src/Playerr.Host/appsettings.json $OUTPUT_DIR/osx-x64/
+# MacOS x64 (Intel)
+echo " -> Building for MacOS (Intel)..."
+dotnet publish src/Playerr.Host/Playerr.Host.csproj -c Release -r osx-x64 --self-contained true -o $OUTPUT_DIR/osx-x64
+echo "    Copying assets..."
+mkdir -p $OUTPUT_DIR/osx-x64/_output/UI
+cp -R _output/UI/* $OUTPUT_DIR/osx-x64/_output/UI/
+cp src/Playerr.Host/appsettings.json $OUTPUT_DIR/osx-x64/
 # Ensure no personal configs are included
-# rm -f $OUTPUT_DIR/osx-x64/config/*.json
-# rm -f $OUTPUT_DIR/osx-x64/settings/*.json
+rm -f $OUTPUT_DIR/osx-x64/config/*.json
+rm -f $OUTPUT_DIR/osx-x64/settings/*.json
+
+echo "Packaging MacOS Intel..."
+./create_mac_app.sh osx-x64
 
 # MacOS arm64 (Apple Silicon)
 echo " -> Building for MacOS (Apple Silicon)..."
@@ -84,8 +87,8 @@ rm -f $OUTPUT_DIR/osx-arm64/config/*.json
 rm -f $OUTPUT_DIR/osx-arm64/settings/*.json
 
 echo "=================================="
-echo "Packaging MacOS App..."
-./create_mac_app.sh
+echo "Packaging MacOS Silicon..."
+./create_mac_app.sh osx-arm64
 
 echo "=================================="
 echo "Build Complete!"
