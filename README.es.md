@@ -1,4 +1,4 @@
-# Playerr v0.3.0
+# Playerr
 [🇺🇸 Read in English](README.md)
 
 ### **Gestor de Biblioteca de Videojuegos & PVR (Self-Hosted)**
