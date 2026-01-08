@@ -24,6 +24,7 @@ interface Game {
     name: string;
   };
   status: string | number;
+  isInstallable?: boolean;
 }
 
 interface TorrentResult {
@@ -465,7 +466,7 @@ const GameDetails: React.FC = () => {
             </button>
 
             <button
-              className="action-btn"
+              className={`action-btn ${game.isInstallable ? 'install-ready' : ''}`}
               onClick={handleInstall}
               title={t('install')}
             >

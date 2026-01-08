@@ -2,48 +2,53 @@
 
 Este documento define la lógica "sagrada" para el manejo de diferentes tipos de juegos e instaladores en Playerr.
 
+## ⚠️ Regla General de Escaneo (Discovery Rules)
+Para todas las prioridades abajo descritas, el `MediaScannerService` debe aplicar estas reglas de búsqueda:
+1.  **Patrones Flexibles (Fuzzy Name):** No buscar strings exactos. Usar patrones: `setup*.exe`, `install*.exe`, `installer.exe`.
+2.  **Profundidad (Recursividad Limitada):** Escanear la carpeta raíz de la descarga Y el primer nivel de subdirectorios (`Depth = 1`). Esto es vital para descargas que vienen dentro de una carpeta contenedora (ej: `/Downloads/Juego/Setup/setup.exe`).
+
+---
+
 ## 1. Las Imágenes de Disco (La "Scene" Clásica) 💿
 
 Son copias 1:1 de los discos físicos o digitales originales. Son el estándar de grupos como CODEX, RUNE, PLAZA.
 
-*   **Archivo Contenedor:** `.iso` (99%), a veces `.bin` + `.cue`.
-*   **Estructura Interna:**
+* **Archivo Contenedor:** `.iso` (99%), a veces `.bin` + `.cue`, `.mdf`, `.nrg`.
+* **Estructura Interna:**
     ```text
     [Juego.iso]
-    ├── setup.exe        <-- El instalador
-    ├── autorun.inf      <-- Script antiguo de Windows
-    ├── data.bin         <-- Archivos comprimidos del juego
-    └── CODEX/           <-- (O PLAZA/RUNE) Carpeta con el crack
-        ├── steam_api.dll
-        └── steam_emu.ini
+    ├── setup.exe        <-- (O setup_game.exe)
+    ├── autorun.inf
+    ├── data.bin
+    └── CODEX/           <-- Carpeta con el crack
     ```
 
 ### ¿Cómo lo maneja Playerr?
-1.  **Montar:** Ejecutar el comando de montaje nativo (Windows 10/11, Linux, Mac) para que aparezca como unidad virtual (ej: `E:\`).
-2.  **Instalar:** Ejecutar instalador desde la unidad montada (ej: `E:\setup.exe`).
-3.  **Medicina (Opcional):** Copiar contenido de la carpeta `CODEX` (o equivalente) a la carpeta de instalación final.
+1.  **Montar:** Ejecutar comando de montaje nativo.
+2.  **Instalar:** Buscar ejecutable que cumpla el patrón `setup*.exe` o `install*.exe` en la unidad montada.
+3.  **Medicina:** Copiar carpeta `CODEX`/`RUNE`/`PLAZA` si existe.
 
 ---
 
-## 2. Los "Repacks" (La Pesadilla de la CPU) 📦
+## 2. Los "Repacks" e Instaladores Nativos 📦
 
-Populares (FitGirl, DODI, ElAmigos) por pesar poco, aunque tardan en instalar.
+Populares (FitGirl, DODI, GOG Offline Installers).
 
-*   **Archivo Contenedor:** Carpeta con archivos sueltos o `.rar` que se extrae primero.
-*   **Estructura Interna:**
+* **Archivo Contenedor:** Carpeta con archivos sueltos.
+* **Estructura Interna:**
     ```text
     [Carpeta Descargada]
-    ├── setup.exe        <-- Instalador personalizado (Inno Setup)
-    ├── fg-01.bin        <-- Archivos hiper-comprimidos
-    ├── fg-02.bin
-    ├── Verify.bat       <-- Script para comprobar integridad
-    └── MD5/             <-- Hashes de comprobación
+    ├── setup.exe                     <-- Scene standard
+    ├── setup_hollow_knight_v1.5.exe  <-- GOG standard
+    ├── installer.exe                 <-- Generic standard
+    ├── data-01.bin
+    └── MD5/
     ```
 
 ### ¿Cómo lo maneja Playerr?
-1.  **No hace falta montar.**
-2.  **Instalar:** Ejecutar `setup.exe` directamente desde la carpeta.
-3.  **Automatización:** Intentar pasar argumentos `/SILENT` o `/VERYSILENT` (común en Inno Setup) para instalación desatendida, aunque no siempre funciona.
+1.  **Búsqueda:** Escanear Raíz y Subcarpetas (Nivel 1) buscando `setup*.exe` o `install*.exe`.
+2.  **Validación:** Si hay varios, priorizar el que contenga el nombre del juego o sea el más pesado.
+3.  **Instalar:** Ejecutar con argumentos de automatización (`/SILENT`, `/VERYSILENT`, `/SP-`, `/SUPPRESSMSGBOXES`, `/NOCANCEL`).
 
 ---
 
@@ -51,82 +56,78 @@ Populares (FitGirl, DODI, ElAmigos) por pesar poco, aunque tardan en instalar.
 
 Los más fáciles. Ya instalados y comprimidos.
 
-*   **Archivo Contenedor:** `.zip`, `.7z`, `.rar`.
-*   **Estructura Interna:**
+* **Archivo Contenedor:** `.zip`, `.7z`, `.rar` (archivo único).
+* **Estructura Interna:**
     ```text
     [Juego.zip]
     └── NombreDelJuego/
-        ├── Game.exe     <-- El ejecutable final
-        ├── Data/
-        └── Engine/
+        ├── Game.exe
+        └── Data/
     ```
 
 ### ¿Cómo lo maneja Playerr?
-1.  **Descomprimir:** Usar librería (SevenZipSharp, SharpCompress) para extraer en `/Library`.
-2.  **Jugar:** No hay instalación. Escanear la carpeta para encontrar el `.exe` y jugar.
+1.  **Descomprimir:** Extraer en `/Library`.
+2.  **Jugar:** Ejecutar lógica de "Executable Discovery".
 
 ---
 
 ## 4. Los "Scenedest" / Extracción Directa de Archivos RAR 📚
 
-A diferencia de los Portables (que vienen en un solo `.zip`), muchos grupos de la Scene (FLT, SKIDROW) no usan ISOs, sino que suben el juego en múltiples archivos RAR partidos que, al extraerse, dejan el juego listo para usar.
+Juegos divididos en múltiples volúmenes RAR.
 
-*   **Archivo Contenedor:** `.rar`, `.r00`, `.r01`... (50 o 100 archivos de 500MB).
-*   **Estructura Interna:** Al descomprimir el primero, se genera la carpeta del juego directamente.
+* **Archivo Contenedor:** `.rar`, `.r00`, `.r01`, `part1.rar`...
+* **Estructura Interna:** Al descomprimir el primero, se genera la carpeta del juego.
 
 ### ¿Cómo lo maneja Playerr?
-1.  **Unión:** Detectar la secuencia de archivos (`part01`, `r00`).
-2.  **Extracción en cadena:** Descomprimir el volumen principal.
-3.  **Post-procesado:** A menudo requieren aplicar un crack que viene en una carpeta `Crack` o `Scientific` dentro de la extracción.
+1.  **Unión:** Detectar secuencia.
+2.  **Extracción:** Descomprimir volumen principal.
+3.  **Crack:** Buscar carpeta `Crack` o `Scientific` tras la extracción.
 
 ---
 
-## 5. Scripts de Instalación / GOG Installers 🎮
+## 5. Scripts de Instalación Complejos (GOG Multipart) 🎮
 
-GOG (Good Old Games) usa instaladores propios que son muy limpios, pero a veces vienen divididos en un `.exe` y varios archivos `.bin` de 4GB.
+Instaladores de GOG divididos en binarios.
 
-*   **Archivo Contenedor:** `setup_juego_version.exe` + `setup_juego_version-1.bin`.
-*   **Estructura Interna:** Es un instalador Inno Setup modificado.
+* **Archivo Contenedor:** `setup_juego.exe` + `setup_juego-1.bin`.
 
 ### ¿Cómo lo maneja Playerr?
-1.  **Detección de dependencias:** Asegurarse de que todos los archivos `.bin` están en la misma carpeta antes de lanzar el `.exe`.
-2.  **Modo Silencioso:** Estos son los más agradecidos para la automatización usando los parámetros `/SP-`, `/VERYSILENT`, `/SUPPRESSMSGBOXES`.
+1.  **Detección:** Asegurarse de que el `.exe` y los `.bin` están en la misma carpeta.
+2.  **Ejecución:** Tratar igual que la Prioridad 2 (Native Installer) con argumentos silenciosos.
 
 ---
 
 ## 6. Los Juegos "WINE-Prefix" o Botellas (Linux/Mac) 🍷
 
-Esto es vital si quieres que Playerr brille en Docker, Steam Deck o macOS. Muchos juegos no se "instalan" en el sistema, sino que se preparan dentro de un "prefijo" de Wine o una "botella".
+Carpetas pre-configuradas para Wine.
 
-*   **Archivo Contenedor:** Carpetas de Windows emuladas.
-*   **Estructura Interna:** `drive_c/Program Files/Juego...`.
+* **Archivo Contenedor:** Carpetas `drive_c` o estructuras tipo Botella.
 
 ### ¿Cómo lo maneja Playerr?
-1.  **Creación del entorno:** Playerr debe crear la carpeta del prefijo.
-2.  **Lanzamiento:** No ejecuta el `.exe` directamente, sino que llama a `wine` o `proton` pasando la ruta del binario como argumento.
+1.  **Lanzamiento:** No ejecuta el `.exe` directamente, sino que llama a `wine` o `proton`.
 
 ---
 
 ## 7. Descompresión de "Dump" de Steam ⚙️
 
-Existen herramientas (como Steam-Store-Front) que descargan los archivos crudos de los servidores de Steam (Manifiestos). No hay instalador, solo miles de archivos pequeños.
+Archivos crudos de Steam (Depots).
 
-*   **Archivo Contenedor:** Carpetas con nombres de ID numéricos (AppID).
+* **Archivo Contenedor:** Carpetas numéricas (AppID).
 
 ### ¿Cómo lo maneja Playerr?
-1.  **Mapeo:** Usar el AppID para consultar los metadatos de Steam y renombrar la carpeta de `1245620` a `Elden Ring`.
-2.  **Emulador de Steam:** Casi siempre requieren inyectar una DLL (`steam_api64.dll`) modificada (como Goldberg Emulator) para que el juego arranque sin el cliente de Steam abierto.
+1.  **Mapeo:** Usar AppID para renombrar carpeta.
+2.  **Emulador:** Inyectar `steam_api64.dll` (Goldberg/SSE).
 
 ---
 
-# 📋 Resumen de Lógica Extendida para el Agente
+# 📋 Resumen de Lógica Extendida
 
-Para que el backend de Playerr sea infalible, la jerarquía de detección debería ser:
+Jerarquía de detección actualizada:
 
 | Prioridad | Si encuentra... | Acción de Playerr |
 | :--- | :--- | :--- |
-| 1 | `.iso` | **Montar** -> Buscar `setup.exe` |
-| 2 | `setup.exe` + `.bin` | **Ejecutar** (Modo Silent) |
-| 3 | `.rar` / `.zip` / `.7z` | **Extraer** -> Buscar `.exe` |
-| 4 | Carpeta con `steam_api.dll` | **Portable** -> Aplicar Steam Emulator |
+| 1 | `.iso` / `.bin` | **Montar** -> Buscar `setup*.exe` |
+| 2 | `setup*.exe` / `install*.exe` | **Ejecutar** (Modo Silent) |
+| 3 | `.rar` / `.zip` / `.7z` | **Extraer** -> Buscar Ejecutable |
+| 4 | Carpeta con `steam_api.dll` | **Portable** -> Aplicar Emu |
 | 5 | Solo carpeta | **Escanear** -> Identificar ejecutable principal |

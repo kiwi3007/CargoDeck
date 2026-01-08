@@ -42,6 +42,7 @@ namespace Playerr.Core.Games
         public int? SteamId { get; set; }
         public string? GogId { get; set; }
         public string? InstallPath { get; set; }
+        public bool IsInstallable { get; set; }
     }
     
     public class GameImages

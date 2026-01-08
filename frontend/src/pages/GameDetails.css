@@ -100,6 +100,16 @@
   color: #11111b;
 }
 
+.action-btn.install-ready {
+  background-color: #a6e3a1;
+  /* Green */
+  color: #11111b;
+}
+
+.action-btn.install-ready:hover {
+  background-color: #94e2d5;
+}
+
 .action-btn svg {
   font-size: 1.1em;
 }

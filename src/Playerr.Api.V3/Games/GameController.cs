@@ -1,3 +1,4 @@
+using System;
 using Microsoft.AspNetCore.Mvc;
 using Playerr.Core.Games;
 using Playerr.Core.MetadataSource;
@@ -67,6 +68,8 @@ namespace Playerr.Api.V3.Games
                     // Fallback to stored metadata if IGDB fetch fails
                 }
             }
+
+            game.IsInstallable = IsPathInstallable(game.Path);
 
             return Ok(game);
         }
@@ -173,7 +176,7 @@ namespace Playerr.Api.V3.Games
                 }
             }
 
-            // Case 0.2: ISO Image (MacOS only for now)
+            // Case 0.2: ISO Image (MacOS and Windows supported)
             if (System.IO.File.Exists(targetPath) && 
                 System.IO.Path.GetExtension(targetPath).Equals(".iso", System.StringComparison.OrdinalIgnoreCase))
             {
@@ -183,7 +186,6 @@ namespace Playerr.Api.V3.Games
                     if (!string.IsNullOrEmpty(mountPoint))
                     {
                         System.Console.WriteLine($"[Install] ISO Mounted at: {mountPoint}");
-                        // Update targetPath to the mount point so the Directory logic below takes over
                         targetPath = mountPoint; 
                     }
                     else
@@ -210,39 +212,72 @@ namespace Playerr.Api.V3.Games
                 }
             }
 
-            // Case 1: Target is a file
-            if (System.IO.File.Exists(targetPath))
+            // Common Installer Discovery (Fuzzy + Depth 1)
+            var installerPath = FindInstaller(targetPath, game.Title);
+            if (installerPath != null)
             {
-                if (System.IO.Path.GetExtension(targetPath).ToLower() == ".exe")
-                {
-                    return LaunchInstaller(targetPath);
-                }
-                else
-                {
-                    return BadRequest($"Path is a file but not an .exe: {targetPath}");
-                }
+                return LaunchInstaller(installerPath);
             }
 
-            // Case 2: Target is a directory
-            if (System.IO.Directory.Exists(targetPath))
+            return BadRequest($"No valid installer found in: {targetPath}");
+        }
+
+        private string? FindInstaller(string rootPath, string? gameTitleHint = null)
+        {
+            if (string.IsNullOrEmpty(rootPath)) return null;
+
+            // 1. If path is already an .exe, use it
+            if (System.IO.File.Exists(rootPath) && System.IO.Path.GetExtension(rootPath).Equals(".exe", StringComparison.OrdinalIgnoreCase))
             {
-                var exeFiles = System.IO.Directory.GetFiles(targetPath, "*.exe", System.IO.SearchOption.AllDirectories);
-                if (exeFiles.Length == 0)
-                {
-                    return BadRequest($"No .exe files found in directory: {targetPath}");
-                }
-                else if (exeFiles.Length == 1)
-                {
-                    return LaunchInstaller(exeFiles[0]);
-                }
-                else
-                {
-                    var names = string.Join(", ", exeFiles.Select(System.IO.Path.GetFileName).Take(5));
-                    return BadRequest($"Multiple .exe files found ({exeFiles.Length}). Candidates: {names}...");
-                }
+                return rootPath;
             }
 
-            return BadRequest($"Path does not exist: {targetPath}");
+            // 2. If directory, look for patterns
+            if (System.IO.Directory.Exists(rootPath))
+            {
+                try
+                {
+                    var patterns = new[] { "setup*.exe", "install*.exe", "installer.exe", "game.exe" };
+                    var candidates = new List<string>();
+
+                    // Depth 0: Root
+                    foreach (var pattern in patterns)
+                        candidates.AddRange(System.IO.Directory.GetFiles(rootPath, pattern, System.IO.SearchOption.TopDirectoryOnly));
+
+                    // Depth 1: Immediate subdirs
+                    var subDirs = System.IO.Directory.GetDirectories(rootPath);
+                    foreach (var subDir in subDirs)
+                    {
+                        foreach (var pattern in patterns)
+                            candidates.AddRange(System.IO.Directory.GetFiles(subDir, pattern, System.IO.SearchOption.TopDirectoryOnly));
+                    }
+
+                    if (!candidates.Any()) return null;
+
+                    // Prioritization logic:
+                    // 1. Exact match if possible (or containing game title)
+                    if (!string.IsNullOrEmpty(gameTitleHint))
+                    {
+                        var bestMatch = candidates.FirstOrDefault(c => 
+                            System.IO.Path.GetFileNameWithoutExtension(c).Contains(gameTitleHint, StringComparison.OrdinalIgnoreCase));
+                        if (bestMatch != null) return bestMatch;
+                    }
+
+                    // 2. Smart default prioritized names
+                    var defaults = new[] { "setup.exe", "install.exe", "installer.exe" };
+                    foreach (var def in defaults)
+                    {
+                        var match = candidates.FirstOrDefault(c => System.IO.Path.GetFileName(c).Equals(def, StringComparison.OrdinalIgnoreCase));
+                        if (match != null) return match;
+                    }
+
+                    // 3. Fallback: Heaviest file (usually the main installer)
+                    return candidates.OrderByDescending(c => new System.IO.FileInfo(c).Length).FirstOrDefault();
+                }
+                catch { return null; }
+            }
+
+            return null;
         }
 
         private ActionResult LaunchInstaller(string path)
@@ -311,6 +346,23 @@ namespace Playerr.Api.V3.Games
         {
             await _repository.DeleteAllAsync();
             return NoContent();
+        }
+
+        private bool IsPathInstallable(string? path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+
+            // 1. Handle file directly (Archive or ISO or EXE)
+            if (System.IO.File.Exists(path))
+            {
+                var ext = System.IO.Path.GetExtension(path).ToLower();
+                if (ext == ".exe" || ext == ".iso") return true;
+                if (_archiveService.IsArchive(path)) return true;
+                return false;
+            }
+
+            // 2. Handle directory via FindInstaller
+            return FindInstaller(path) != null;
         }
 
         private async Task<string?> MountIsoMacOS(string isoPath)

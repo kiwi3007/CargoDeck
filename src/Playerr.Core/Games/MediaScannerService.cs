@@ -240,32 +240,48 @@ namespace Playerr.Core.Games
         {
             try
             {
-                // Recursive search to handle nested folders (e.g. Library/Game/Release/setup.exe)
-                var files = Directory.EnumerateFiles(dirPath, "*.*", SearchOption.AllDirectories);
+                // New logic: Check Root (Depth 0) and immediate subdirectories (Depth 1)
+                // Patterns for fuzzy matching
+                var patterns = new[] { "setup*.exe", "install*.exe", "installer.exe", "game.exe" };
                 
-                // Signatures that strongly indicate a game folder, even if typical extensions are missing or ambiguous
+                // Signatures that indicate a game folder
                 var signatureFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    "steam_api.dll", "steam_emu.ini", "autorun.inf", "verify.bat", "setup.exe", "installer.exe", "game.exe"
+                    "steam_api.dll", "steam_emu.ini", "autorun.inf", "verify.bat", "eboot.bin"
                 };
 
-                foreach (var file in files)
+                // Helper to check a specific directory level
+                bool CheckDirectory(string path)
                 {
-                    var fileName = Path.GetFileName(file);
-                    if (signatureFiles.Contains(fileName)) return true; // Strong signal
+                    // 1. Check fuzzy patterns
+                    foreach (var pattern in patterns)
+                    {
+                        if (Directory.GetFiles(path, pattern, SearchOption.TopDirectoryOnly).Any()) return true;
+                    }
 
-                    var ext = Path.GetExtension(file);
-                    if (_globalBlacklist.Contains(ext)) continue;
-                    
-                    if (extensions.Contains(ext, StringComparer.OrdinalIgnoreCase))
+                    // 2. Check other signatures and extensions
+                    var files = Directory.GetFiles(path, "*.*", SearchOption.TopDirectoryOnly);
+                    foreach (var file in files)
                     {
-                        return true;
+                        var fileName = Path.GetFileName(file);
+                        var ext = Path.GetExtension(file);
+
+                        if (signatureFiles.Contains(fileName)) return true;
+                        if (_globalBlacklist.Contains(ext)) continue;
+                        if (extensions != null && extensions.Contains(ext, StringComparer.OrdinalIgnoreCase)) return true;
                     }
-                    if (fileName.Equals("eboot.bin", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
+                    return false;
                 }
+
+                // Check Depth 0: Root
+                if (CheckDirectory(dirPath)) return true;
+
+                // Check Depth 1: Immediate subdirectories
+                foreach (var subDir in Directory.GetDirectories(dirPath))
+                {
+                    if (CheckDirectory(subDir)) return true;
+                }
+
                 return false;
             }
             catch
