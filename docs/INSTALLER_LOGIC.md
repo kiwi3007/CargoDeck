@@ -39,7 +39,7 @@ Populares (FitGirl, DODI, GOG Offline Installers).
     ```text
     [Carpeta Descargada]
     ├── setup.exe                     <-- Scene standard
-    ├── setup_hollow_knight_v1.5.exe  <-- GOG standard
+    ├── setup_example_game_v1.5.exe  <-- GOG standard
     ├── installer.exe                 <-- Generic standard
     ├── data-01.bin
     └── MD5/
