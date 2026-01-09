@@ -41,9 +41,15 @@ El botón de papelera en `Library.tsx` y el botón "Clean Library" en `Settings.
 
 Para publicar una nueva versión, seguir estrictamente estos pasos:
 
-1.  **Preparar Código:**
+1.  **Bump de Versión (Checklist Crítica):**
+    *   [ ] `package.json` -> `version`
+    *   [ ] `build_all.sh` -> `VERSION`
+    *   [ ] `create_mac_app.sh` -> `CFBundleVersion`
+    *   [ ] `src/Playerr.Host/Playerr.Host.csproj` -> `<Version>`
+    *   [ ] `frontend/src/pages/About.tsx` -> Texto `Playerr vX.X.X`
+
+2.  **Documentación:**
     *   Actualizar `RELEASE_NOTES.md` con los cambios.
-    *   Actualizar versión en `build_all.sh` y `create_mac_app.sh`.
     *   (Opcional) Hacer commit: `git commit -am "vX.X.X Release"`
 
 2.  **Compilar (Build Artifacts):**
