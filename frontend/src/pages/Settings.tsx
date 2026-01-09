@@ -311,949 +311,947 @@ const Settings: React.FC = () => {
     } finally {
       setScanning(false);
     }
-    setScanning(false);
-  }
-};
+  };
 
-const handleCleanLibrary = async () => {
-  if (!window.confirm(t('cleanLibraryConfirm'))) return;
+  const handleCleanLibrary = async () => {
+    if (!window.confirm(t('cleanLibraryConfirm'))) return;
 
-  try {
-    await axios.delete('/api/v3/media/clean');
-    alert(t('libraryCleaned'));
-  } catch (error: any) {
-    console.error('Error cleaning library:', error);
-    alert(`${t('error')}: ${error.response?.data?.error || error.message}`);
-  }
-};
-
-const handleSaveProwlarr = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    await axios.post('/api/v3/settings/prowlarr', {
-      url: prowlarrUrl,
-      apiKey: prowlarrApiKey
-    });
-    alert(t('prowlarrSettingsSaved'));
-  } catch (error: any) {
-    console.error('Error saving Prowlarr settings:', error);
-    alert(`${t('error')} ${t('saveProwlarr')}: ${error.response?.data?.error || error.message}`);
-  }
-};
-
-const handleTestProwlarr = async () => {
-  setProwlarrTesting(true);
-  setProwlarrTestResult(null);
-
-  try {
-    const response = await axios.post('/api/v3/search/test', {
-      url: prowlarrUrl,
-      apiKey: prowlarrApiKey
-    });
-
-    setProwlarrTestResult({
-      success: response.data.connected,
-      message: response.data.connected ? t('connectionSuccessful') : t('connectionFailed')
-    });
-  } catch (error: any) {
-    setProwlarrTestResult({
-      success: false,
-      message: `✗ ${t('error')}: ${error.response?.data?.message || error.message}`
-    });
-  } finally {
-    setProwlarrTesting(false);
-  }
-};
-
-const handleSaveJackett = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    await axios.post('/api/v3/settings/jackett', {
-      url: jackettUrl,
-      apiKey: jackettApiKey
-    });
-    alert(t('jackettSettingsSaved'));
-  } catch (error: any) {
-    console.error('Error saving Jackett settings:', error);
-    alert(`${t('error')} ${t('saveJackett')}: ${error.response?.data?.error || error.message}`);
-  }
-};
-
-const handleTestJackett = async () => {
-  setJackettTesting(true);
-  setJackettTestResult(null);
-
-  try {
-    const response = await axios.post('/api/v3/search/test', {
-      url: jackettUrl,
-      apiKey: jackettApiKey,
-      type: 'jackett'
-    });
-
-    setJackettTestResult({
-      success: response.data.connected,
-      message: response.data.connected ? t('connectionSuccessful') : t('connectionFailed')
-    });
-  } catch (error: any) {
-    setJackettTestResult({
-      success: false,
-      message: `✗ ${t('error')}: ${error.response?.data?.message || error.message}`
-    });
-  } finally {
-    setJackettTesting(false);
-  }
-};
-
-const handleTestDownloadClient = async () => {
-  setClientTesting(true);
-  setClientTestResult(null);
-
-  try {
-    const response = await axios.post('/api/v3/downloadclient/test', {
-      implementation: clientForm.implementation,
-      host: clientForm.host,
-      port: clientForm.port,
-      username: clientForm.username,
-      password: clientForm.password,
-      urlBase: clientForm.urlBase,
-      apiKey: clientForm.apiKey
-    });
-
-    setClientTestResult({
-      success: response.data.connected,
-      message: response.data.message,
-      version: response.data.version
-    });
-  } catch (error: any) {
-    setClientTestResult({
-      success: false,
-      message: `${t('error')}: ${error.response?.data?.message || error.message}`
-    });
-  } finally {
-    setClientTesting(false);
-  }
-};
-
-const handleSaveDownloadClient = async (e: React.FormEvent) => {
-  e.preventDefault();
-
-  try {
-    if (editingClient?.id) {
-      await axios.put(`/api/v3/downloadclient/${editingClient.id}`, clientForm);
-    } else {
-      await axios.post('/api/v3/downloadclient', clientForm);
-    }
-
-    await loadDownloadClients();
-    setShowClientModal(false);
-    resetClientForm();
-  } catch (error) {
-    alert(t('failedToSaveClient'));
-  }
-};
-
-const handleDeleteClient = async (id: number) => {
-  // Removed confirmation as per user request to avoid UI issues
-  // if (!confirm(t('confirmDeleteClient'))) {
-  //   return;
-  // }
-
-  try {
-    await axios.delete(`/api/v3/downloadclient/${id}`);
-    await loadDownloadClients();
-  } catch (error) {
-    console.error('Error deleting download client:', error);
-    alert(t('failedToDeleteClient'));
-  }
-};
-
-const resetClientForm = () => {
-  setClientForm({
-    name: '',
-    implementation: 'qBittorrent',
-    host: 'localhost',
-    port: 8080,
-    username: 'admin',
-    password: '',
-    category: 'playerr',
-    urlBase: '',
-    apiKey: '',
-    enable: true,
-    priority: 1
-  });
-  setEditingClient(null);
-  setClientTestResult(null);
-};
-
-const handleSavePostDownload = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    await axios.post('/api/v3/postdownload', postDownloadSettings);
-    alert(t('postDownloadSettingsSaved'));
-  } catch (error: any) {
-    console.error('Error saving post-download settings:', error);
-    alert(`${t('error')}: ${error.response?.data?.message || error.message}`);
-  }
-};
-
-const openAddClientModal = () => {
-  resetClientForm();
-  setShowClientModal(true);
-};
-
-const openEditClientModal = (client: DownloadClient) => {
-  setEditingClient(client);
-  setClientForm({ ...client });
-  setShowClientModal(true);
-};
-
-// Polling mechanism for folder selection
-// This is a robust fallback in case the native message event is lost or delayed
-const startFolderPolling = () => {
-  setScanning(true); // Re-use scanning state or simple UI indication if preferred
-  let attempts = 0;
-  const initialPath = folderPath;
-
-  const pollInterval = setInterval(async () => {
-    attempts++;
     try {
-      // Add timestamp to prevent caching
-      const response = await axios.get(`/api/v3/media?t=${Date.now()}`);
-      const currentPath = response.data.folderPath;
-      const currentDownloadPath = response.data.downloadPath;
-      const currentDestinationPath = response.data.destinationPath;
+      await axios.delete('/api/v3/media/clean');
+      alert(t('libraryCleaned'));
+    } catch (error: any) {
+      console.error('Error cleaning library:', error);
+      alert(`${t('error')}: ${error.response?.data?.error || error.message}`);
+    }
+  };
 
-      if (currentPath !== initialPath || currentDownloadPath !== downloadPath || currentDestinationPath !== destinationPath) {
-        // Path changed! Update UI and stop polling
-        setFolderPath(currentPath);
-        setDownloadPath(currentDownloadPath || '');
-        setDestinationPath(currentDestinationPath || '');
-        setForceUpdateCounter(prev => prev + 1); // FORCE React to re-render
+  const handleSaveProwlarr = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await axios.post('/api/v3/settings/prowlarr', {
+        url: prowlarrUrl,
+        apiKey: prowlarrApiKey
+      });
+      alert(t('prowlarrSettingsSaved'));
+    } catch (error: any) {
+      console.error('Error saving Prowlarr settings:', error);
+      alert(`${t('error')} ${t('saveProwlarr')}: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
+  const handleTestProwlarr = async () => {
+    setProwlarrTesting(true);
+    setProwlarrTestResult(null);
+
+    try {
+      const response = await axios.post('/api/v3/search/test', {
+        url: prowlarrUrl,
+        apiKey: prowlarrApiKey
+      });
+
+      setProwlarrTestResult({
+        success: response.data.connected,
+        message: response.data.connected ? t('connectionSuccessful') : t('connectionFailed')
+      });
+    } catch (error: any) {
+      setProwlarrTestResult({
+        success: false,
+        message: `✗ ${t('error')}: ${error.response?.data?.message || error.message}`
+      });
+    } finally {
+      setProwlarrTesting(false);
+    }
+  };
+
+  const handleSaveJackett = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await axios.post('/api/v3/settings/jackett', {
+        url: jackettUrl,
+        apiKey: jackettApiKey
+      });
+      alert(t('jackettSettingsSaved'));
+    } catch (error: any) {
+      console.error('Error saving Jackett settings:', error);
+      alert(`${t('error')} ${t('saveJackett')}: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
+  const handleTestJackett = async () => {
+    setJackettTesting(true);
+    setJackettTestResult(null);
+
+    try {
+      const response = await axios.post('/api/v3/search/test', {
+        url: jackettUrl,
+        apiKey: jackettApiKey,
+        type: 'jackett'
+      });
+
+      setJackettTestResult({
+        success: response.data.connected,
+        message: response.data.connected ? t('connectionSuccessful') : t('connectionFailed')
+      });
+    } catch (error: any) {
+      setJackettTestResult({
+        success: false,
+        message: `✗ ${t('error')}: ${error.response?.data?.message || error.message}`
+      });
+    } finally {
+      setJackettTesting(false);
+    }
+  };
+
+  const handleTestDownloadClient = async () => {
+    setClientTesting(true);
+    setClientTestResult(null);
+
+    try {
+      const response = await axios.post('/api/v3/downloadclient/test', {
+        implementation: clientForm.implementation,
+        host: clientForm.host,
+        port: clientForm.port,
+        username: clientForm.username,
+        password: clientForm.password,
+        urlBase: clientForm.urlBase,
+        apiKey: clientForm.apiKey
+      });
+
+      setClientTestResult({
+        success: response.data.connected,
+        message: response.data.message,
+        version: response.data.version
+      });
+    } catch (error: any) {
+      setClientTestResult({
+        success: false,
+        message: `${t('error')}: ${error.response?.data?.message || error.message}`
+      });
+    } finally {
+      setClientTesting(false);
+    }
+  };
+
+  const handleSaveDownloadClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      if (editingClient?.id) {
+        await axios.put(`/api/v3/downloadclient/${editingClient.id}`, clientForm);
+      } else {
+        await axios.post('/api/v3/downloadclient', clientForm);
+      }
+
+      await loadDownloadClients();
+      setShowClientModal(false);
+      resetClientForm();
+    } catch (error) {
+      alert(t('failedToSaveClient'));
+    }
+  };
+
+  const handleDeleteClient = async (id: number) => {
+    // Removed confirmation as per user request to avoid UI issues
+    // if (!confirm(t('confirmDeleteClient'))) {
+    //   return;
+    // }
+
+    try {
+      await axios.delete(`/api/v3/downloadclient/${id}`);
+      await loadDownloadClients();
+    } catch (error) {
+      console.error('Error deleting download client:', error);
+      alert(t('failedToDeleteClient'));
+    }
+  };
+
+  const resetClientForm = () => {
+    setClientForm({
+      name: '',
+      implementation: 'qBittorrent',
+      host: 'localhost',
+      port: 8080,
+      username: 'admin',
+      password: '',
+      category: 'playerr',
+      urlBase: '',
+      apiKey: '',
+      enable: true,
+      priority: 1
+    });
+    setEditingClient(null);
+    setClientTestResult(null);
+  };
+
+  const handleSavePostDownload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await axios.post('/api/v3/postdownload', postDownloadSettings);
+      alert(t('postDownloadSettingsSaved'));
+    } catch (error: any) {
+      console.error('Error saving post-download settings:', error);
+      alert(`${t('error')}: ${error.response?.data?.message || error.message}`);
+    }
+  };
+
+  const openAddClientModal = () => {
+    resetClientForm();
+    setShowClientModal(true);
+  };
+
+  const openEditClientModal = (client: DownloadClient) => {
+    setEditingClient(client);
+    setClientForm({ ...client });
+    setShowClientModal(true);
+  };
+
+  // Polling mechanism for folder selection
+  // This is a robust fallback in case the native message event is lost or delayed
+  const startFolderPolling = () => {
+    setScanning(true); // Re-use scanning state or simple UI indication if preferred
+    let attempts = 0;
+    const initialPath = folderPath;
+
+    const pollInterval = setInterval(async () => {
+      attempts++;
+      try {
+        // Add timestamp to prevent caching
+        const response = await axios.get(`/api/v3/media?t=${Date.now()}`);
+        const currentPath = response.data.folderPath;
+        const currentDownloadPath = response.data.downloadPath;
+        const currentDestinationPath = response.data.destinationPath;
+
+        if (currentPath !== initialPath || currentDownloadPath !== downloadPath || currentDestinationPath !== destinationPath) {
+          // Path changed! Update UI and stop polling
+          setFolderPath(currentPath);
+          setDownloadPath(currentDownloadPath || '');
+          setDestinationPath(currentDestinationPath || '');
+          setForceUpdateCounter(prev => prev + 1); // FORCE React to re-render
+          clearInterval(pollInterval);
+          setScanning(false);
+        }
+      } catch (e) {
+        console.error("Polling error", e);
+      }
+
+      // Stop after 30 seconds (approx 60 attempts)
+      if (attempts > 60) {
         clearInterval(pollInterval);
         setScanning(false);
       }
-    } catch (e) {
-      console.error("Polling error", e);
-    }
+    }, 500);
+  };
 
-    // Stop after 30 seconds (approx 60 attempts)
-    if (attempts > 60) {
-      clearInterval(pollInterval);
-      setScanning(false);
-    }
-  }, 500);
-};
-
-return (
-  <div className="settings">
-    <div className="settings-section">
-      <div className="section-header-with-logo">
-        <h3>{t('mediaFolderTitle')}</h3>
-      </div>
-      <p className="settings-description">
-        {t('mediaFolderDesc')}
-      </p>
-      <form onSubmit={handleSaveMediaSettings}>
-        <div className="form-group">
-          <label htmlFor="folder-path">{t('mediaFolderPath')}</label>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <input
-              id="folder-path"
-              type="text"
-              value={folderPath}
-              onChange={(e) => setFolderPath(e.target.value)}
-              placeholder="/home/user/games"
-              style={{ flex: 1 }}
-            />
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                // @ts-ignore
-                if (window.external && window.external.sendMessage) {
-                  // Start polling BEFORE we open the modal (or right as we do)
-                  // Note: ShowOpenFolder in backend blocks, so polling might be blocked if JS thread is blocked?
-                  // Photino usually runs native window on separate thread, but WebView interactions can be tricky.
-                  // If JS is blocked, this polling will resume immediately after dialog closes, which is perfect.
-                  startFolderPolling();
-
-                  // @ts-ignore
-                  window.external.sendMessage('SELECT_FOLDER');
-                } else {
-                  setActiveFolderField('media');
-                  setShowFolderExplorer(true);
-                }
-              }}
-              title={t('selectFolder')}
-            >
-              <FontAwesomeIcon icon={faFolderOpen} />
-            </button>
-          </div>
+  return (
+    <div className="settings">
+      <div className="settings-section">
+        <div className="section-header-with-logo">
+          <h3>{t('mediaFolderTitle')}</h3>
         </div>
-
-        <div className="form-group">
-          <label htmlFor="download-path">{t('downloadPath')}</label>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <input
-              id="download-path"
-              type="text"
-              value={downloadPath}
-              onChange={(e) => setDownloadPath(e.target.value)}
-              placeholder="/Volumes/Downloads"
-              style={{ flex: 1 }}
-            />
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                // @ts-ignore
-                if (window.external && window.external.sendMessage) {
-                  startFolderPolling();
-                  // @ts-ignore
-                  window.external.sendMessage('SELECT_FOLDER:DOWNLOAD');
-                } else {
-                  setActiveFolderField('download');
-                  setShowFolderExplorer(true);
-                }
-              }}
-            >
-              <FontAwesomeIcon icon={faFolderOpen} />
-            </button>
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="destination-path">{t('destinationPath')}</label>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <input
-              id="destination-path"
-              type="text"
-              value={destinationPath}
-              onChange={(e) => setDestinationPath(e.target.value)}
-              placeholder="/Volumes/Media/Games"
-              style={{ flex: 1 }}
-            />
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                // @ts-ignore
-                if (window.external && window.external.sendMessage) {
-                  startFolderPolling();
-                  // @ts-ignore
-                  window.external.sendMessage('SELECT_FOLDER:DESTINATION');
-                } else {
-                  setActiveFolderField('destination');
-                  setShowFolderExplorer(true);
-                }
-              }}
-            >
-              <FontAwesomeIcon icon={faFolderOpen} />
-            </button>
-          </div>
-        </div>
-
-        <div className="button-group">
-          <button type="submit" className="btn-primary">{t('save')}</button>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handleScanNow}
-            disabled={scanning || !folderPath}
-          >
-            {scanning ? t('scanning') : t('scanNow')}
-          </button>
-          <button
-            type="button"
-            className="btn-delete"
-            onClick={handleCleanLibrary}
-            disabled={scanning}
-            style={{ marginLeft: '10px' }}
-          >
-            {t('cleanLibrary')}
-          </button>
-        </div>
-      </form>
-    </div>
-
-    <div className="settings-section">
-      <div className="section-header-with-logo">
-        <img src={steamLogo} alt="Steam" className="steam-logo" style={{ height: '60px' }} />
-      </div>
-      <p className="settings-description">
-        {t('steamDesc')}
-      </p>
-      <form onSubmit={handleSaveSteam}>
-        <div className="form-group">
-          <label htmlFor="steam-api-key">{t('steamApiKey')}</label>
-          <input
-            type="password"
-            id="steam-api-key"
-            placeholder={t('steamApiKey')}
-            value={steamApiKey}
-            onChange={(e) => setSteamApiKey(e.target.value)}
-          />
-          <small>{t('steamApiKeyHelp')} <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener noreferrer">{t('steamDevPage')}</a></small>
-        </div>
-        <div className="form-group">
-          <label htmlFor="steam-id">{t('steamId')}</label>
-          <input
-            type="text"
-            id="steam-id"
-            placeholder={t('steamId')}
-            value={steamId}
-            onChange={(e) => setSteamId(e.target.value)}
-          />
-        </div>
-        <div className="button-group">
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handleTestSteam}
-            disabled={steamTesting || !steamApiKey || !steamId}
-          >
-            {steamTesting ? t('testing') : t('testConnection')}
-          </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handleSyncSteam}
-            disabled={steamSyncing || !steamApiKey || !steamId}
-          >
-            {steamSyncing ? t('syncing') : t('syncLibrary')}
-          </button>
-          <button type="submit" className="btn-primary">{t('saveSteam')}</button>
-          {steamApiKey && (
-            <button
-              type="button"
-              className="btn-delete"
-              onClick={handleDisconnectSteam}
-              style={{ marginLeft: '10px' }}
-            >
-              {t('disconnect')}
-            </button>
-          )}
-        </div>
-
-        {steamTestResult && (
-          <div className={`test-result ${steamTestResult.success ? 'success' : 'error'}`}>
-            {steamTestResult.message}
-          </div>
-        )}
-
-        {steamSyncResult && (
-          <div className={`test-result ${steamSyncResult.success ? 'success' : 'error'}`}>
-            {steamSyncResult.message}
-          </div>
-        )}
-      </form>
-    </div>
-
-    <div className="settings-section">
-      <div className="section-header-with-logo">
-        <img src={igdbLogo} alt="IGDB" className="igdb-logo" />
-      </div>
-      <p className="settings-description">
-        {t('metadataDesc')}
-      </p>
-      <form onSubmit={handleSaveMetadata}>
-        <div className="form-group">
-          <label htmlFor="igdb-client-id">{t('igdbClientId')}</label>
-          <input
-            type="text"
-            id="igdb-client-id"
-            placeholder={t('igdbClientId')}
-            value={igdbClientId}
-            onChange={(e) => setIgdbClientId(e.target.value)}
-          />
-          <small>{t('twitchCredentialsHelp')} <a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener noreferrer">{t('twitchConsole')}</a></small>
-        </div>
-        <div className="form-group">
-          <label htmlFor="igdb-client-secret">{t('igdbClientSecret')}</label>
-          <input
-            type="password"
-            id="igdb-client-secret"
-            placeholder={t('igdbClientSecret')}
-            value={igdbClientSecret}
-            onChange={(e) => setIgdbClientSecret(e.target.value)}
-          />
-        </div>
-        <div className="button-group">
-          <button type="submit" className="btn-primary">{t('saveMetadata')}</button>
-          {igdbClientId && (
-            <button
-              type="button"
-              className="btn-delete"
-              onClick={handleDisconnectIgdb}
-              style={{ marginLeft: '10px' }}
-            >
-              {t('disconnect')}
-            </button>
-          )}
-        </div>
-      </form>
-    </div>
-
-    <div className="settings-section">
-      <div className="section-header-with-logo">
-        <img src={languageIcon} alt="Language" className="language-icon" />
-      </div>
-      <p className="settings-description">
-        {t('languageDesc')}
-      </p>
-      <div className="form-group">
-        <label htmlFor="language-select">{t('languageTitle')}</label>
-        <select
-          id="language-select"
-          value={language}
-          onChange={(e) => setLanguage(e.target.value as Language)}
-        >
-          <option value="es">Español</option>
-          <option value="en">English</option>
-          <option value="fr">Français</option>
-          <option value="de">Deutsch</option>
-          <option value="ru">Русский</option>
-          <option value="zh">中文</option>
-          <option value="ja">日本語</option>
-        </select>
-      </div>
-      <button type="button" className="btn-primary" onClick={handleSaveLanguage}>{t('saveLanguage')}</button>
-    </div>
-
-    <div className="settings-section">
-      <div className="section-header-with-logo">
-        <h3>{t('postDownloadTitle')}</h3>
-      </div>
-      <p className="settings-description">
-        {t('postDownloadDesc')}
-      </p>
-      <form onSubmit={handleSavePostDownload}>
-        <div className="form-group checkbox-group">
-          <label htmlFor="enable-auto-move">
-            <input
-              type="checkbox"
-              id="enable-auto-move"
-              checked={postDownloadSettings.enableAutoMove}
-              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableAutoMove: e.target.checked })}
-            />
-            {t('enableAutoMove')}
-          </label>
-        </div>
-        <div className="form-group checkbox-group">
-          <label htmlFor="enable-auto-extract">
-            <input
-              type="checkbox"
-              id="enable-auto-extract"
-              checked={postDownloadSettings.enableAutoExtract}
-              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableAutoExtract: e.target.checked })}
-            />
-            {t('enableAutoExtract')}
-          </label>
-        </div>
-        <div className="form-group checkbox-group">
-          <label htmlFor="enable-deep-clean">
-            <input
-              type="checkbox"
-              id="enable-deep-clean"
-              checked={postDownloadSettings.enableDeepClean}
-              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableDeepClean: e.target.checked })}
-            />
-            {t('enableDeepClean')}
-          </label>
-        </div>
-        <div className="form-group">
-          <label htmlFor="monitor-interval">{t('monitorInterval')}</label>
-          <input
-            type="number"
-            id="monitor-interval"
-            value={postDownloadSettings.monitorIntervalSeconds}
-            onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, monitorIntervalSeconds: parseInt(e.target.value) || 60 })}
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="unwanted-extensions">{t('unwantedExtensions')}</label>
-          <input
-            type="text"
-            id="unwanted-extensions"
-            value={postDownloadSettings.unwantedExtensions?.join(', ') || ''}
-            onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, unwantedExtensions: e.target.value.split(',').map(s => s.trim()) })}
-            placeholder=".txt, .nfo, .url"
-          />
-        </div>
-        <div className="button-group">
-          <button type="submit" className="btn-primary">{t('savePostDownload')}</button>
-        </div>
-      </form>
-    </div>
-
-    <div className="settings-section">
-      <div className="section-header-with-logo">
-        <img src={prowlarrLogo} alt="Prowlarr" className="prowlarr-logo" />
-      </div>
-      <p className="settings-description">
-        {t('prowlarrDesc')}
-      </p>
-      <form onSubmit={handleSaveProwlarr}>
-        <div className="form-group">
-          <label htmlFor="prowlarr-url">{t('prowlarrUrl')}</label>
-          <input
-            type="text"
-            id="prowlarr-url"
-            placeholder={t('prowlarrUrlPlaceholder')}
-            value={prowlarrUrl}
-            onChange={(e) => setProwlarrUrl(e.target.value)}
-            required
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="prowlarr-api">{t('prowlarrApiKey')}</label>
-          <input
-            type="password"
-            id="prowlarr-api"
-            placeholder={t('prowlarrApiKeyPlaceholder')}
-            value={prowlarrApiKey}
-            onChange={(e) => setProwlarrApiKey(e.target.value)}
-            required
-          />
-        </div>
-
-        {prowlarrTestResult && (
-          <div className={`test-result ${prowlarrTestResult.success ? 'success' : 'error'}`}>
-            {prowlarrTestResult.message}
-          </div>
-        )}
-
-        <div className="button-group">
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handleTestProwlarr}
-            disabled={prowlarrTesting || !prowlarrUrl || !prowlarrApiKey}
-          >
-            {prowlarrTesting ? t('testing') : t('testConnection')}
-          </button>
-          <button type="submit" className="btn-primary">{t('saveProwlarr')}</button>
-        </div>
-      </form>
-    </div>
-
-    <div className="settings-section">
-      <div className="section-header-with-logo">
-        <img src={jackettLogo} alt="Jackett" className="jackett-logo" />
-      </div>
-      <p className="settings-description">
-        {t('jackettDesc')}
-      </p>
-      <form onSubmit={handleSaveJackett}>
-        <div className="form-group">
-          <label htmlFor="jackett-url">{t('jackettUrl')}</label>
-          <input
-            type="text"
-            id="jackett-url"
-            placeholder={t('jackettUrlPlaceholder')}
-            value={jackettUrl}
-            onChange={(e) => setJackettUrl(e.target.value)}
-            required
-          />
-        </div>
-        <div className="form-group">
-          <label htmlFor="jackett-api">{t('jackettApiKey')}</label>
-          <input
-            type="password"
-            id="jackett-api"
-            placeholder={t('jackettApiKeyPlaceholder')}
-            value={jackettApiKey}
-            onChange={(e) => setJackettApiKey(e.target.value)}
-            required
-          />
-        </div>
-
-        {jackettTestResult && (
-          <div className={`test-result ${jackettTestResult.success ? 'success' : 'error'}`}>
-            {jackettTestResult.message}
-          </div>
-        )}
-
-        <div className="button-group">
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handleTestJackett}
-            disabled={jackettTesting || !jackettUrl || !jackettApiKey}
-          >
-            {jackettTesting ? t('testing') : t('testConnection')}
-          </button>
-          <button type="submit" className="btn-primary">{t('saveJackett')}</button>
-        </div>
-      </form>
-    </div>
-
-    <div className="settings-section">
-      <div className="section-header-with-logo">
-        <img src={torrentNzbIcon} alt="Download Clients" style={{ height: '60px' }} />
-      </div>
-      <p className="settings-description">
-        {t('downloadClientsDesc')}
-      </p>
-
-      {downloadClients.length > 0 && (
-        <div className="clients-list">
-          {downloadClients.map(client => (
-            <div key={client.id} className={`client-card ${!client.enable ? 'disabled' : ''}`}>
-              <div className="client-info">
-                <h4>{client.name}</h4>
-                <p>{client.implementation} - {client.host}:{client.port}</p>
-                {client.category && <span className="category-badge">{client.category}</span>}
-              </div>
-              <div className="client-actions">
-                <button
-                  className="btn-edit"
-                  onClick={() => openEditClientModal(client)}
-                >
-                  {t('edit')}
-                </button>
-                <button
-                  className="btn-delete"
-                  onClick={() => handleDeleteClient(client.id!)}
-                >
-                  {t('delete')}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <button className="btn-secondary" onClick={openAddClientModal}>
-        {t('addClientButton')}
-      </button>
-    </div>
-
-    {showClientModal && (
-      <div className="modal-overlay" onClick={() => setShowClientModal(false)}>
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
-          <div className="modal-header">
-            <h3>{editingClient ? t('editDownloadClient') : t('addDownloadClient')}</h3>
-            <button className="modal-close" onClick={() => setShowClientModal(false)}>×</button>
-          </div>
-
-          <form onSubmit={handleSaveDownloadClient}>
-            <div className="form-group">
-              <label>{t('name')}</label>
+        <p className="settings-description">
+          {t('mediaFolderDesc')}
+        </p>
+        <form onSubmit={handleSaveMediaSettings}>
+          <div className="form-group">
+            <label htmlFor="folder-path">{t('mediaFolderPath')}</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
               <input
+                id="folder-path"
                 type="text"
-                value={clientForm.name}
-                onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
-                placeholder={t('clientNamePlaceholder')}
-                required
+                value={folderPath}
+                onChange={(e) => setFolderPath(e.target.value)}
+                placeholder="/home/user/games"
+                style={{ flex: 1 }}
               />
-            </div>
-
-            <div className="form-group">
-              <label>{t('implementation')}</label>
-              <select
-                value={clientForm.implementation}
-                onChange={(e) => setClientForm({ ...clientForm, implementation: e.target.value })}
-                required
-              >
-                <option value="qBittorrent">qBittorrent</option>
-                <option value="Transmission">Transmission</option>
-                <option value="SABnzbd">SABnzbd (Usenet)</option>
-                <option value="NZBGet">NZBGet (Usenet)</option>
-                <option value="Deluge">Deluge ({t('comingSoon')})</option>
-              </select>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>{t('host')}</label>
-                <input
-                  type="text"
-                  value={clientForm.host}
-                  onChange={(e) => setClientForm({ ...clientForm, host: e.target.value })}
-                  placeholder={t('hostPlaceholder')}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label>{t('port')}</label>
-                <input
-                  type="number"
-                  value={clientForm.port}
-                  onChange={(e) => setClientForm({ ...clientForm, port: parseInt(e.target.value) })}
-                  placeholder={t('portPlaceholder')}
-                  required
-                />
-              </div>
-            </div>
-
-            {clientForm.implementation !== 'SABnzbd' && (
-              <>
-                <div className="form-group">
-                  <label>{t('username')}</label>
-                  <input
-                    type="text"
-                    value={clientForm.username || ''}
-                    onChange={(e) => setClientForm({ ...clientForm, username: e.target.value })}
-                    placeholder={t('usernamePlaceholder')}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>{t('password')}</label>
-                  <input
-                    type="password"
-                    value={clientForm.password || ''}
-                    onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
-                    placeholder={t('passwordPlaceholder')}
-                  />
-                </div>
-              </>
-            )}
-
-            {clientForm.implementation === 'SABnzbd' && (
-              <div className="form-group">
-                <label>API Key</label>
-                <input
-                  type="password"
-                  value={clientForm.apiKey || ''}
-                  onChange={(e) => setClientForm({ ...clientForm, apiKey: e.target.value })}
-                  placeholder="SABnzbd API Key"
-                />
-              </div>
-            )}
-
-            <div className="form-group">
-              <label>{t('urlBase')} <small>(optional, e.g. /qbittorrent)</small></label>
-              <input
-                type="text"
-                value={clientForm.urlBase || ''}
-                onChange={(e) => setClientForm({ ...clientForm, urlBase: e.target.value })}
-                placeholder="/qbittorrent"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>{t('category')}</label>
-              <input
-                type="text"
-                value={clientForm.category || ''}
-                onChange={(e) => setClientForm({ ...clientForm, category: e.target.value })}
-                placeholder={t('categoryPlaceholder')}
-              />
-              <small>{t('torrentsCategoryHint')}</small>
-            </div>
-
-            <div className="form-subsection">
-              <h3>{t('remotePathMappingTitle')}</h3>
-              <p className="description">
-                {t('remotePathMappingDesc')}
-              </p>
-            </div>
-
-            <div className="form-group">
-              <label>{t('remotePath')}</label>
-              <input
-                type="text"
-                value={clientForm.remotePathMapping || ''}
-                onChange={(e) => setClientForm({ ...clientForm, remotePathMapping: e.target.value })}
-                placeholder="/downloads/"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>{t('localPath')}</label>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <input
-                  type="text"
-                  value={clientForm.localPathMapping || ''}
-                  onChange={(e) => setClientForm({ ...clientForm, localPathMapping: e.target.value })}
-                  placeholder="/Volumes/downloads/"
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    // @ts-ignore
-                    if (window.external && window.external.sendMessage) {
-                      // We need a new handler for this specific field in Program.cs if we want native picker to work nicely
-                      // For now we reuse SELECT_FOLDER:DOWNLOAD technically it sets downloadPath but here we want localPathMapping
-                      // Actually, let's keep it simple for web mode first. Native mode would need Program.cs update.
-                      // Wait, if I trigger polling, I need to know where to put the result.
-                      // Let's implement web-mode explorer support first.
-                      setActiveFolderField('clientLocalPath');
-                      startFolderPolling();
-                      // @ts-ignore
-                      window.external.sendMessage('SELECT_FOLDER:CLIENT_LOCAL');
-                    } else {
-                      setActiveFolderField('clientLocalPath');
-                      setShowFolderExplorer(true);
-                    }
-                  }}
-                >
-                  📂
-                </button>
-              </div>
-            </div>
-
-            <div className="form-group checkbox-group">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={clientForm.enable}
-                  onChange={(e) => setClientForm({ ...clientForm, enable: e.target.checked })}
-                />
-                {t('enableThisClient')}
-              </label>
-            </div>
-
-            {clientTestResult && (
-              <div className={`test-result ${clientTestResult.success ? 'success' : 'error'}`}>
-                {clientTestResult.message}
-                {clientTestResult.version && <div>{t('versionHeader')}: {clientTestResult.version}</div>}
-              </div>
-            )}
-            <div className="modal-actions">
               <button
                 type="button"
                 className="btn-secondary"
-                onClick={handleTestDownloadClient}
-                disabled={clientTesting}
+                onClick={() => {
+                  // @ts-ignore
+                  if (window.external && window.external.sendMessage) {
+                    // Start polling BEFORE we open the modal (or right as we do)
+                    // Note: ShowOpenFolder in backend blocks, so polling might be blocked if JS thread is blocked?
+                    // Photino usually runs native window on separate thread, but WebView interactions can be tricky.
+                    // If JS is blocked, this polling will resume immediately after dialog closes, which is perfect.
+                    startFolderPolling();
+
+                    // @ts-ignore
+                    window.external.sendMessage('SELECT_FOLDER');
+                  } else {
+                    setActiveFolderField('media');
+                    setShowFolderExplorer(true);
+                  }
+                }}
+                title={t('selectFolder')}
               >
-                {clientTesting ? t('testing') : t('testConnection')}
-              </button>
-              <button type="submit" className="btn-primary">
-                {editingClient ? t('updateClient') : t('addClientButton')}
+                <FontAwesomeIcon icon={faFolderOpen} />
               </button>
             </div>
-          </form>
-        </div>
-      </div>
-    )}
-    {showFolderExplorer && (
-      <FolderExplorerModal
-        initialPath={
-          activeFolderField === 'media' ? folderPath :
-            activeFolderField === 'download' ? downloadPath :
-              activeFolderField === 'destination' ? destinationPath :
-                (clientForm.localPathMapping || '')
-        }
-        onSelect={(path) => {
-          if (activeFolderField === 'media') setFolderPath(path);
-          else if (activeFolderField === 'download') setDownloadPath(path);
-          else if (activeFolderField === 'destination') setDestinationPath(path);
-          else if (activeFolderField === 'clientLocalPath') setClientForm({ ...clientForm, localPathMapping: path });
+          </div>
 
-          setShowFolderExplorer(false);
-        }}
-        onClose={() => setShowFolderExplorer(false)}
-        language={language}
-      />
-    )}
-  </div>
-);
+          <div className="form-group">
+            <label htmlFor="download-path">{t('downloadPath')}</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input
+                id="download-path"
+                type="text"
+                value={downloadPath}
+                onChange={(e) => setDownloadPath(e.target.value)}
+                placeholder="/Volumes/Downloads"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  // @ts-ignore
+                  if (window.external && window.external.sendMessage) {
+                    startFolderPolling();
+                    // @ts-ignore
+                    window.external.sendMessage('SELECT_FOLDER:DOWNLOAD');
+                  } else {
+                    setActiveFolderField('download');
+                    setShowFolderExplorer(true);
+                  }
+                }}
+              >
+                <FontAwesomeIcon icon={faFolderOpen} />
+              </button>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="destination-path">{t('destinationPath')}</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input
+                id="destination-path"
+                type="text"
+                value={destinationPath}
+                onChange={(e) => setDestinationPath(e.target.value)}
+                placeholder="/Volumes/Media/Games"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  // @ts-ignore
+                  if (window.external && window.external.sendMessage) {
+                    startFolderPolling();
+                    // @ts-ignore
+                    window.external.sendMessage('SELECT_FOLDER:DESTINATION');
+                  } else {
+                    setActiveFolderField('destination');
+                    setShowFolderExplorer(true);
+                  }
+                }}
+              >
+                <FontAwesomeIcon icon={faFolderOpen} />
+              </button>
+            </div>
+          </div>
+
+          <div className="button-group">
+            <button type="submit" className="btn-primary">{t('save')}</button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleScanNow}
+              disabled={scanning || !folderPath}
+            >
+              {scanning ? t('scanning') : t('scanNow')}
+            </button>
+            <button
+              type="button"
+              className="btn-delete"
+              onClick={handleCleanLibrary}
+              disabled={scanning}
+              style={{ marginLeft: '10px' }}
+            >
+              {t('cleanLibrary')}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div className="settings-section">
+        <div className="section-header-with-logo">
+          <img src={steamLogo} alt="Steam" className="steam-logo" style={{ height: '60px' }} />
+        </div>
+        <p className="settings-description">
+          {t('steamDesc')}
+        </p>
+        <form onSubmit={handleSaveSteam}>
+          <div className="form-group">
+            <label htmlFor="steam-api-key">{t('steamApiKey')}</label>
+            <input
+              type="password"
+              id="steam-api-key"
+              placeholder={t('steamApiKey')}
+              value={steamApiKey}
+              onChange={(e) => setSteamApiKey(e.target.value)}
+            />
+            <small>{t('steamApiKeyHelp')} <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener noreferrer">{t('steamDevPage')}</a></small>
+          </div>
+          <div className="form-group">
+            <label htmlFor="steam-id">{t('steamId')}</label>
+            <input
+              type="text"
+              id="steam-id"
+              placeholder={t('steamId')}
+              value={steamId}
+              onChange={(e) => setSteamId(e.target.value)}
+            />
+          </div>
+          <div className="button-group">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleTestSteam}
+              disabled={steamTesting || !steamApiKey || !steamId}
+            >
+              {steamTesting ? t('testing') : t('testConnection')}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleSyncSteam}
+              disabled={steamSyncing || !steamApiKey || !steamId}
+            >
+              {steamSyncing ? t('syncing') : t('syncLibrary')}
+            </button>
+            <button type="submit" className="btn-primary">{t('saveSteam')}</button>
+            {steamApiKey && (
+              <button
+                type="button"
+                className="btn-delete"
+                onClick={handleDisconnectSteam}
+                style={{ marginLeft: '10px' }}
+              >
+                {t('disconnect')}
+              </button>
+            )}
+          </div>
+
+          {steamTestResult && (
+            <div className={`test-result ${steamTestResult.success ? 'success' : 'error'}`}>
+              {steamTestResult.message}
+            </div>
+          )}
+
+          {steamSyncResult && (
+            <div className={`test-result ${steamSyncResult.success ? 'success' : 'error'}`}>
+              {steamSyncResult.message}
+            </div>
+          )}
+        </form>
+      </div>
+
+      <div className="settings-section">
+        <div className="section-header-with-logo">
+          <img src={igdbLogo} alt="IGDB" className="igdb-logo" />
+        </div>
+        <p className="settings-description">
+          {t('metadataDesc')}
+        </p>
+        <form onSubmit={handleSaveMetadata}>
+          <div className="form-group">
+            <label htmlFor="igdb-client-id">{t('igdbClientId')}</label>
+            <input
+              type="text"
+              id="igdb-client-id"
+              placeholder={t('igdbClientId')}
+              value={igdbClientId}
+              onChange={(e) => setIgdbClientId(e.target.value)}
+            />
+            <small>{t('twitchCredentialsHelp')} <a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener noreferrer">{t('twitchConsole')}</a></small>
+          </div>
+          <div className="form-group">
+            <label htmlFor="igdb-client-secret">{t('igdbClientSecret')}</label>
+            <input
+              type="password"
+              id="igdb-client-secret"
+              placeholder={t('igdbClientSecret')}
+              value={igdbClientSecret}
+              onChange={(e) => setIgdbClientSecret(e.target.value)}
+            />
+          </div>
+          <div className="button-group">
+            <button type="submit" className="btn-primary">{t('saveMetadata')}</button>
+            {igdbClientId && (
+              <button
+                type="button"
+                className="btn-delete"
+                onClick={handleDisconnectIgdb}
+                style={{ marginLeft: '10px' }}
+              >
+                {t('disconnect')}
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
+
+      <div className="settings-section">
+        <div className="section-header-with-logo">
+          <img src={languageIcon} alt="Language" className="language-icon" />
+        </div>
+        <p className="settings-description">
+          {t('languageDesc')}
+        </p>
+        <div className="form-group">
+          <label htmlFor="language-select">{t('languageTitle')}</label>
+          <select
+            id="language-select"
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as Language)}
+          >
+            <option value="es">Español</option>
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="ru">Русский</option>
+            <option value="zh">中文</option>
+            <option value="ja">日本語</option>
+          </select>
+        </div>
+        <button type="button" className="btn-primary" onClick={handleSaveLanguage}>{t('saveLanguage')}</button>
+      </div>
+
+      <div className="settings-section">
+        <div className="section-header-with-logo">
+          <h3>{t('postDownloadTitle')}</h3>
+        </div>
+        <p className="settings-description">
+          {t('postDownloadDesc')}
+        </p>
+        <form onSubmit={handleSavePostDownload}>
+          <div className="form-group checkbox-group">
+            <label htmlFor="enable-auto-move">
+              <input
+                type="checkbox"
+                id="enable-auto-move"
+                checked={postDownloadSettings.enableAutoMove}
+                onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableAutoMove: e.target.checked })}
+              />
+              {t('enableAutoMove')}
+            </label>
+          </div>
+          <div className="form-group checkbox-group">
+            <label htmlFor="enable-auto-extract">
+              <input
+                type="checkbox"
+                id="enable-auto-extract"
+                checked={postDownloadSettings.enableAutoExtract}
+                onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableAutoExtract: e.target.checked })}
+              />
+              {t('enableAutoExtract')}
+            </label>
+          </div>
+          <div className="form-group checkbox-group">
+            <label htmlFor="enable-deep-clean">
+              <input
+                type="checkbox"
+                id="enable-deep-clean"
+                checked={postDownloadSettings.enableDeepClean}
+                onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, enableDeepClean: e.target.checked })}
+              />
+              {t('enableDeepClean')}
+            </label>
+          </div>
+          <div className="form-group">
+            <label htmlFor="monitor-interval">{t('monitorInterval')}</label>
+            <input
+              type="number"
+              id="monitor-interval"
+              value={postDownloadSettings.monitorIntervalSeconds}
+              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, monitorIntervalSeconds: parseInt(e.target.value) || 60 })}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="unwanted-extensions">{t('unwantedExtensions')}</label>
+            <input
+              type="text"
+              id="unwanted-extensions"
+              value={postDownloadSettings.unwantedExtensions?.join(', ') || ''}
+              onChange={(e) => setPostDownloadSettings({ ...postDownloadSettings, unwantedExtensions: e.target.value.split(',').map(s => s.trim()) })}
+              placeholder=".txt, .nfo, .url"
+            />
+          </div>
+          <div className="button-group">
+            <button type="submit" className="btn-primary">{t('savePostDownload')}</button>
+          </div>
+        </form>
+      </div>
+
+      <div className="settings-section">
+        <div className="section-header-with-logo">
+          <img src={prowlarrLogo} alt="Prowlarr" className="prowlarr-logo" />
+        </div>
+        <p className="settings-description">
+          {t('prowlarrDesc')}
+        </p>
+        <form onSubmit={handleSaveProwlarr}>
+          <div className="form-group">
+            <label htmlFor="prowlarr-url">{t('prowlarrUrl')}</label>
+            <input
+              type="text"
+              id="prowlarr-url"
+              placeholder={t('prowlarrUrlPlaceholder')}
+              value={prowlarrUrl}
+              onChange={(e) => setProwlarrUrl(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="prowlarr-api">{t('prowlarrApiKey')}</label>
+            <input
+              type="password"
+              id="prowlarr-api"
+              placeholder={t('prowlarrApiKeyPlaceholder')}
+              value={prowlarrApiKey}
+              onChange={(e) => setProwlarrApiKey(e.target.value)}
+              required
+            />
+          </div>
+
+          {prowlarrTestResult && (
+            <div className={`test-result ${prowlarrTestResult.success ? 'success' : 'error'}`}>
+              {prowlarrTestResult.message}
+            </div>
+          )}
+
+          <div className="button-group">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleTestProwlarr}
+              disabled={prowlarrTesting || !prowlarrUrl || !prowlarrApiKey}
+            >
+              {prowlarrTesting ? t('testing') : t('testConnection')}
+            </button>
+            <button type="submit" className="btn-primary">{t('saveProwlarr')}</button>
+          </div>
+        </form>
+      </div>
+
+      <div className="settings-section">
+        <div className="section-header-with-logo">
+          <img src={jackettLogo} alt="Jackett" className="jackett-logo" />
+        </div>
+        <p className="settings-description">
+          {t('jackettDesc')}
+        </p>
+        <form onSubmit={handleSaveJackett}>
+          <div className="form-group">
+            <label htmlFor="jackett-url">{t('jackettUrl')}</label>
+            <input
+              type="text"
+              id="jackett-url"
+              placeholder={t('jackettUrlPlaceholder')}
+              value={jackettUrl}
+              onChange={(e) => setJackettUrl(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="jackett-api">{t('jackettApiKey')}</label>
+            <input
+              type="password"
+              id="jackett-api"
+              placeholder={t('jackettApiKeyPlaceholder')}
+              value={jackettApiKey}
+              onChange={(e) => setJackettApiKey(e.target.value)}
+              required
+            />
+          </div>
+
+          {jackettTestResult && (
+            <div className={`test-result ${jackettTestResult.success ? 'success' : 'error'}`}>
+              {jackettTestResult.message}
+            </div>
+          )}
+
+          <div className="button-group">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleTestJackett}
+              disabled={jackettTesting || !jackettUrl || !jackettApiKey}
+            >
+              {jackettTesting ? t('testing') : t('testConnection')}
+            </button>
+            <button type="submit" className="btn-primary">{t('saveJackett')}</button>
+          </div>
+        </form>
+      </div>
+
+      <div className="settings-section">
+        <div className="section-header-with-logo">
+          <img src={torrentNzbIcon} alt="Download Clients" style={{ height: '60px' }} />
+        </div>
+        <p className="settings-description">
+          {t('downloadClientsDesc')}
+        </p>
+
+        {downloadClients.length > 0 && (
+          <div className="clients-list">
+            {downloadClients.map(client => (
+              <div key={client.id} className={`client-card ${!client.enable ? 'disabled' : ''}`}>
+                <div className="client-info">
+                  <h4>{client.name}</h4>
+                  <p>{client.implementation} - {client.host}:{client.port}</p>
+                  {client.category && <span className="category-badge">{client.category}</span>}
+                </div>
+                <div className="client-actions">
+                  <button
+                    className="btn-edit"
+                    onClick={() => openEditClientModal(client)}
+                  >
+                    {t('edit')}
+                  </button>
+                  <button
+                    className="btn-delete"
+                    onClick={() => handleDeleteClient(client.id!)}
+                  >
+                    {t('delete')}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button className="btn-secondary" onClick={openAddClientModal}>
+          {t('addClientButton')}
+        </button>
+      </div>
+
+      {showClientModal && (
+        <div className="modal-overlay" onClick={() => setShowClientModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editingClient ? t('editDownloadClient') : t('addDownloadClient')}</h3>
+              <button className="modal-close" onClick={() => setShowClientModal(false)}>×</button>
+            </div>
+
+            <form onSubmit={handleSaveDownloadClient}>
+              <div className="form-group">
+                <label>{t('name')}</label>
+                <input
+                  type="text"
+                  value={clientForm.name}
+                  onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+                  placeholder={t('clientNamePlaceholder')}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>{t('implementation')}</label>
+                <select
+                  value={clientForm.implementation}
+                  onChange={(e) => setClientForm({ ...clientForm, implementation: e.target.value })}
+                  required
+                >
+                  <option value="qBittorrent">qBittorrent</option>
+                  <option value="Transmission">Transmission</option>
+                  <option value="SABnzbd">SABnzbd (Usenet)</option>
+                  <option value="NZBGet">NZBGet (Usenet)</option>
+                  <option value="Deluge">Deluge ({t('comingSoon')})</option>
+                </select>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>{t('host')}</label>
+                  <input
+                    type="text"
+                    value={clientForm.host}
+                    onChange={(e) => setClientForm({ ...clientForm, host: e.target.value })}
+                    placeholder={t('hostPlaceholder')}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>{t('port')}</label>
+                  <input
+                    type="number"
+                    value={clientForm.port}
+                    onChange={(e) => setClientForm({ ...clientForm, port: parseInt(e.target.value) })}
+                    placeholder={t('portPlaceholder')}
+                    required
+                  />
+                </div>
+              </div>
+
+              {clientForm.implementation !== 'SABnzbd' && (
+                <>
+                  <div className="form-group">
+                    <label>{t('username')}</label>
+                    <input
+                      type="text"
+                      value={clientForm.username || ''}
+                      onChange={(e) => setClientForm({ ...clientForm, username: e.target.value })}
+                      placeholder={t('usernamePlaceholder')}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>{t('password')}</label>
+                    <input
+                      type="password"
+                      value={clientForm.password || ''}
+                      onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
+                      placeholder={t('passwordPlaceholder')}
+                    />
+                  </div>
+                </>
+              )}
+
+              {clientForm.implementation === 'SABnzbd' && (
+                <div className="form-group">
+                  <label>API Key</label>
+                  <input
+                    type="password"
+                    value={clientForm.apiKey || ''}
+                    onChange={(e) => setClientForm({ ...clientForm, apiKey: e.target.value })}
+                    placeholder="SABnzbd API Key"
+                  />
+                </div>
+              )}
+
+              <div className="form-group">
+                <label>{t('urlBase')} <small>(optional, e.g. /qbittorrent)</small></label>
+                <input
+                  type="text"
+                  value={clientForm.urlBase || ''}
+                  onChange={(e) => setClientForm({ ...clientForm, urlBase: e.target.value })}
+                  placeholder="/qbittorrent"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>{t('category')}</label>
+                <input
+                  type="text"
+                  value={clientForm.category || ''}
+                  onChange={(e) => setClientForm({ ...clientForm, category: e.target.value })}
+                  placeholder={t('categoryPlaceholder')}
+                />
+                <small>{t('torrentsCategoryHint')}</small>
+              </div>
+
+              <div className="form-subsection">
+                <h3>{t('remotePathMappingTitle')}</h3>
+                <p className="description">
+                  {t('remotePathMappingDesc')}
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label>{t('remotePath')}</label>
+                <input
+                  type="text"
+                  value={clientForm.remotePathMapping || ''}
+                  onChange={(e) => setClientForm({ ...clientForm, remotePathMapping: e.target.value })}
+                  placeholder="/downloads/"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>{t('localPath')}</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <input
+                    type="text"
+                    value={clientForm.localPathMapping || ''}
+                    onChange={(e) => setClientForm({ ...clientForm, localPathMapping: e.target.value })}
+                    placeholder="/Volumes/downloads/"
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => {
+                      // @ts-ignore
+                      if (window.external && window.external.sendMessage) {
+                        // We need a new handler for this specific field in Program.cs if we want native picker to work nicely
+                        // For now we reuse SELECT_FOLDER:DOWNLOAD technically it sets downloadPath but here we want localPathMapping
+                        // Actually, let's keep it simple for web mode first. Native mode would need Program.cs update.
+                        // Wait, if I trigger polling, I need to know where to put the result.
+                        // Let's implement web-mode explorer support first.
+                        setActiveFolderField('clientLocalPath');
+                        startFolderPolling();
+                        // @ts-ignore
+                        window.external.sendMessage('SELECT_FOLDER:CLIENT_LOCAL');
+                      } else {
+                        setActiveFolderField('clientLocalPath');
+                        setShowFolderExplorer(true);
+                      }
+                    }}
+                  >
+                    📂
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-group checkbox-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={clientForm.enable}
+                    onChange={(e) => setClientForm({ ...clientForm, enable: e.target.checked })}
+                  />
+                  {t('enableThisClient')}
+                </label>
+              </div>
+
+              {clientTestResult && (
+                <div className={`test-result ${clientTestResult.success ? 'success' : 'error'}`}>
+                  {clientTestResult.message}
+                  {clientTestResult.version && <div>{t('versionHeader')}: {clientTestResult.version}</div>}
+                </div>
+              )}
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={handleTestDownloadClient}
+                  disabled={clientTesting}
+                >
+                  {clientTesting ? t('testing') : t('testConnection')}
+                </button>
+                <button type="submit" className="btn-primary">
+                  {editingClient ? t('updateClient') : t('addClientButton')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {showFolderExplorer && (
+        <FolderExplorerModal
+          initialPath={
+            activeFolderField === 'media' ? folderPath :
+              activeFolderField === 'download' ? downloadPath :
+                activeFolderField === 'destination' ? destinationPath :
+                  (clientForm.localPathMapping || '')
+          }
+          onSelect={(path) => {
+            if (activeFolderField === 'media') setFolderPath(path);
+            else if (activeFolderField === 'download') setDownloadPath(path);
+            else if (activeFolderField === 'destination') setDestinationPath(path);
+            else if (activeFolderField === 'clientLocalPath') setClientForm({ ...clientForm, localPathMapping: path });
+
+            setShowFolderExplorer(false);
+          }}
+          onClose={() => setShowFolderExplorer(false)}
+          language={language}
+        />
+      )}
+    </div>
+  );
 };
 
 export default Settings;

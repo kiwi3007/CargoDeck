@@ -187,25 +187,39 @@ namespace Playerr.Host
                     context.Database.EnsureCreated();
                     Console.WriteLine($"[Database] SQLite initialized at: {dbPath}");
 
-                    // Seed Platforms if empty
-                    if (!context.Platforms.Any())
+                    // Ensure required platforms exist (Seed missing ones for existing databases)
+                    Console.WriteLine("[Database] Verifying default platforms...");
+                    
+                    var defaultPlatforms = new[]
                     {
-                        Console.WriteLine("[Database] Seeding default platforms...");
-                        context.Platforms.AddRange(
-                            new Playerr.Core.Games.Platform { Id = 6, Name = "PC (Microsoft Windows)", Slug = "pc", Type = Playerr.Core.Games.PlatformType.PC },
-                            new Playerr.Core.Games.Platform { Id = 3, Name = "Linux", Slug = "linux", Type = Playerr.Core.Games.PlatformType.PC }, // Linux uses PC type internally for now
-                            new Playerr.Core.Games.Platform { Id = 14, Name = "Mac", Slug = "mac", Type = Playerr.Core.Games.PlatformType.MacOS },
-                            new Playerr.Core.Games.Platform { Id = 7, Name = "PlayStation", Slug = "ps1", Type = Playerr.Core.Games.PlatformType.PlayStation },
-                            new Playerr.Core.Games.Platform { Id = 8, Name = "PlayStation 2", Slug = "ps2", Type = Playerr.Core.Games.PlatformType.PlayStation2 },
-                            new Playerr.Core.Games.Platform { Id = 9, Name = "PlayStation 3", Slug = "ps3", Type = Playerr.Core.Games.PlatformType.PlayStation3 },
-                            new Playerr.Core.Games.Platform { Id = 48, Name = "PlayStation 4", Slug = "ps4", Type = Playerr.Core.Games.PlatformType.PlayStation4 },
-                            new Playerr.Core.Games.Platform { Id = 130, Name = "Nintendo Switch", Slug = "switch", Type = Playerr.Core.Games.PlatformType.Switch },
-                            new Playerr.Core.Games.Platform { Id = 167, Name = "PlayStation 5", Slug = "ps5", Type = Playerr.Core.Games.PlatformType.PlayStation5 },
-                            new Playerr.Core.Games.Platform { Id = 169, Name = "Xbox Series X|S", Slug = "xbox-series-x", Type = Playerr.Core.Games.PlatformType.XboxSeriesX },
-                            new Playerr.Core.Games.Platform { Id = 38, Name = "PlayStation Portable", Slug = "psp", Type = Playerr.Core.Games.PlatformType.PSP }
-                        );
+                        new Playerr.Core.Games.Platform { Id = 6, Name = "PC (Microsoft Windows)", Slug = "pc", Type = Playerr.Core.Games.PlatformType.PC },
+                        new Playerr.Core.Games.Platform { Id = 3, Name = "Linux", Slug = "linux", Type = Playerr.Core.Games.PlatformType.PC },
+                        new Playerr.Core.Games.Platform { Id = 14, Name = "Mac", Slug = "mac", Type = Playerr.Core.Games.PlatformType.MacOS },
+                        new Playerr.Core.Games.Platform { Id = 7, Name = "PlayStation", Slug = "ps1", Type = Playerr.Core.Games.PlatformType.PlayStation },
+                        new Playerr.Core.Games.Platform { Id = 8, Name = "PlayStation 2", Slug = "ps2", Type = Playerr.Core.Games.PlatformType.PlayStation2 },
+                        new Playerr.Core.Games.Platform { Id = 9, Name = "PlayStation 3", Slug = "ps3", Type = Playerr.Core.Games.PlatformType.PlayStation3 },
+                        new Playerr.Core.Games.Platform { Id = 48, Name = "PlayStation 4", Slug = "ps4", Type = Playerr.Core.Games.PlatformType.PlayStation4 },
+                        new Playerr.Core.Games.Platform { Id = 130, Name = "Nintendo Switch", Slug = "switch", Type = Playerr.Core.Games.PlatformType.Switch },
+                        new Playerr.Core.Games.Platform { Id = 167, Name = "PlayStation 5", Slug = "ps5", Type = Playerr.Core.Games.PlatformType.PlayStation5 },
+                        new Playerr.Core.Games.Platform { Id = 169, Name = "Xbox Series X|S", Slug = "xbox-series-x", Type = Playerr.Core.Games.PlatformType.XboxSeriesX },
+                        new Playerr.Core.Games.Platform { Id = 38, Name = "PlayStation Portable", Slug = "psp", Type = Playerr.Core.Games.PlatformType.PSP }
+                    };
+
+                    bool changesMade = false;
+                    foreach (var platform in defaultPlatforms)
+                    {
+                        if (!context.Platforms.Any(p => p.Id == platform.Id))
+                        {
+                            Console.WriteLine($"[Database] Seeding missing platform: {platform.Name} (ID: {platform.Id})");
+                            context.Platforms.Add(platform);
+                            changesMade = true;
+                        }
+                    }
+
+                    if (changesMade)
+                    {
                         context.SaveChanges();
-                        Console.WriteLine("[Database] Platforms seeded.");
+                        Console.WriteLine("[Database] Platforms updated.");
                     }
                 }
                 catch (Exception ex)
