@@ -201,7 +201,8 @@ namespace Playerr.Host
                             new Playerr.Core.Games.Platform { Id = 48, Name = "PlayStation 4", Slug = "ps4", Type = Playerr.Core.Games.PlatformType.PlayStation4 },
                             new Playerr.Core.Games.Platform { Id = 130, Name = "Nintendo Switch", Slug = "switch", Type = Playerr.Core.Games.PlatformType.Switch },
                             new Playerr.Core.Games.Platform { Id = 167, Name = "PlayStation 5", Slug = "ps5", Type = Playerr.Core.Games.PlatformType.PlayStation5 },
-                            new Playerr.Core.Games.Platform { Id = 169, Name = "Xbox Series X|S", Slug = "xbox-series-x", Type = Playerr.Core.Games.PlatformType.XboxSeriesX }
+                            new Playerr.Core.Games.Platform { Id = 169, Name = "Xbox Series X|S", Slug = "xbox-series-x", Type = Playerr.Core.Games.PlatformType.XboxSeriesX },
+                            new Playerr.Core.Games.Platform { Id = 38, Name = "PlayStation Portable", Slug = "psp", Type = Playerr.Core.Games.PlatformType.PSP }
                         );
                         context.SaveChanges();
                         Console.WriteLine("[Database] Platforms seeded.");

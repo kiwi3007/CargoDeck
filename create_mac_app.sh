@@ -58,7 +58,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <key>CFBundleIdentifier</key>
     <string>app.playerr.desktop</string>
     <key>CFBundleVersion</key>
-    <string>0.3.6</string>
+    <string>0.3.7</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>

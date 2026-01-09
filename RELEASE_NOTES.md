@@ -1,3 +1,11 @@
+# Playerr v0.3.7: Hotfix - Media Scanner 🔍
+
+### 🐛 Bug Fixes
+*   **Media Scanner:** Fixed extensive platform ID mismatches that caused the scanner to fail when adding found games (PC IDs were updated to match the v0.3.5 database schema).
+*   **PSP Support:** Added official support and database seeding for PlayStation Portable (PSP) games (ID 38).
+
+---
+
 # Playerr v0.3.6: Hotfix - Add Game UI 🩹
 
 ### 🐛 Bug Fixes

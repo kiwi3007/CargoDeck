@@ -642,12 +642,14 @@ namespace Playerr.Core.Games
         {
             if (string.IsNullOrEmpty(platformKey) || platformKey.Equals("default", StringComparison.OrdinalIgnoreCase))
             {
-                return 1; // Default to PC (Windows)
+                return 6; // Default to PC (Windows) - ID 6
             }
 
             return platformKey.ToLower() switch
             {
-                "pc_windows" => 1,
+                "pc_windows" => 6,
+                "linux" => 3,
+                "macos" => 14,
                 "ps4" => 48,
                 "nintendo_switch" => 130,
                 "ps5" => 167,
@@ -655,8 +657,9 @@ namespace Playerr.Core.Games
                 "ps3" => 9,
                 "ps2" => 8,
                 "ps1" => 7,
-                // If it's something valid but not seeded, fallback to PC (1) to prevent crash
-                _ => 1 
+                "psp" => 38,
+                // If it's something valid but not seeded, fallback to PC (6) to prevent crash
+                _ => 6 
             };
         }
     }
