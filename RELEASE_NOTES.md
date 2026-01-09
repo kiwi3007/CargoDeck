@@ -1,4 +1,4 @@
-# Playerr v0.3.1: The "Install Anywhere" Update 🚀
+# Playerr v0.3.3: The "Install Anywhere" Update 🚀
 
 We've improved the core engine to be smarter, faster, and more compatible with your messy game libraries.
 
@@ -8,6 +8,7 @@ We've improved the core engine to be smarter, faster, and more compatible with y
 *   **Universal macOS Support:** Official builds now available for both **Apple Silicon (M1/M2/M3)** and **Intel** Macs.
 *   **Internationalization:** Full documentation available in **Spanish** (`README.es.md`).
 *   **Security Hardening:** Credential management moved to secure external configuration files.
+*   **Platform Metadata:** Search results now display platform badges (Switch, PS4, etc.) and search limit increased to 100.
 
 ### 🐛 Bug Fixes
 *   **Critical Installation Fix:** Resolved an issue where valid installers in subfolders (common with GOG) were detected but failed to launch.
@@ -20,7 +21,7 @@ We've improved the core engine to be smarter, faster, and more compatible with y
 
 ---
 
-# Playerr v0.3.1: La Actualización "Instala Donde Sea" 🚀
+# Playerr v0.3.3: La Actualización "Instala Donde Sea" 🚀
 
 Hemos mejorado el motor principal para que sea más inteligente, rápido y compatible con tus caóticas bibliotecas de juegos.
 
