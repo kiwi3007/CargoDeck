@@ -12,5 +12,6 @@ namespace Playerr.Core.Games
         Task<bool> DeleteAsync(int id);
         Task<int> DeleteSteamGamesAsync();
         Task DeleteAllAsync();
+        Task<int?> GetPlatformIdBySlugAsync(string slug);
     }
 }

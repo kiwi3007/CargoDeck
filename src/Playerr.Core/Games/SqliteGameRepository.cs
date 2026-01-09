@@ -78,8 +78,15 @@ namespace Playerr.Core.Games
         public async Task DeleteAllAsync()
         {
             using var context = await _contextFactory.CreateDbContextAsync();
-            context.Games.RemoveRange(context.Games);
             await context.SaveChangesAsync();
+        }
+
+        public async Task<int?> GetPlatformIdBySlugAsync(string slug)
+        {
+            using var context = await _contextFactory.CreateDbContextAsync();
+            var platform = await context.Platforms
+                .FirstOrDefaultAsync(p => p.Slug == slug);
+            return platform?.Id;
         }
     }
 }

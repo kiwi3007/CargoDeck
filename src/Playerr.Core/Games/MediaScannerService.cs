@@ -493,8 +493,8 @@ namespace Playerr.Core.Games
                             fullMetadata.Path = localPath;
                             
                             // CRITICAL FIX: Set PlatformId to avoid Foreign Key constraint violation
-                            // If platformKey is null or "default", assume PC (Id 1)
-                            fullMetadata.PlatformId = ResolvePlatformId(platformKey);
+                            // If platformKey is null or "default", assume PC (Id 1/6) via dynamic lookup
+                            fullMetadata.PlatformId = await ResolvePlatformIdAsync(platformKey);
 
                             var newGame = await _gameRepository.AddAsync(fullMetadata);
                             existingGames.Add(newGame);
@@ -638,29 +638,54 @@ namespace Playerr.Core.Games
             return "default";
         }
 
-        private int ResolvePlatformId(string? platformKey)
+        private async Task<int> ResolvePlatformIdAsync(string? platformKey)
         {
-            if (string.IsNullOrEmpty(platformKey) || platformKey.Equals("default", StringComparison.OrdinalIgnoreCase))
+            // 1. Map internal scanner key to DB Slug
+            string dbSlug = "pc"; // Default
+            int defaultId = 6;    // Default ID (New Schema)
+
+            if (!string.IsNullOrEmpty(platformKey) && !platformKey.Equals("default", StringComparison.OrdinalIgnoreCase))
             {
-                return 6; // Default to PC (Windows) - ID 6
+                switch (platformKey.ToLower())
+                {
+                    case "pc_windows": dbSlug = "pc"; defaultId = 6; break;
+                    case "linux": dbSlug = "linux"; defaultId = 3; break;
+                    case "macos": dbSlug = "mac"; defaultId = 14; break; // Note: Scanner uses "macos", DB uses "mac"
+                    case "ps4": dbSlug = "ps4"; defaultId = 48; break;
+                    case "nintendo_switch": dbSlug = "switch"; defaultId = 130; break;
+                    case "ps5": dbSlug = "ps5"; defaultId = 167; break;
+                    case "xbox_series": dbSlug = "xbox-series-x"; defaultId = 169; break;
+                    case "ps3": dbSlug = "ps3"; defaultId = 9; break;
+                    case "ps2": dbSlug = "ps2"; defaultId = 8; break;
+                    case "ps1": dbSlug = "ps1"; defaultId = 7; break;
+                    case "psp": dbSlug = "psp"; defaultId = 38; break;
+                    default: dbSlug = "pc"; defaultId = 6; break;
+                }
             }
 
-            return platformKey.ToLower() switch
+            // 2. Try Dynamic Lookup from DB
+            try 
             {
-                "pc_windows" => 6,
-                "linux" => 3,
-                "macos" => 14,
-                "ps4" => 48,
-                "nintendo_switch" => 130,
-                "ps5" => 167,
-                "xbox_series" => 169,
-                "ps3" => 9,
-                "ps2" => 8,
-                "ps1" => 7,
-                "psp" => 38,
-                // If it's something valid but not seeded, fallback to PC (6) to prevent crash
-                _ => 6 
-            };
+                var dbId = await _gameRepository.GetPlatformIdBySlugAsync(dbSlug);
+                if (dbId.HasValue) 
+                {
+                    // Log($"[Platform] Resolved '{platformKey}' -> Slug '{dbSlug}' -> ID {dbId.Value}");
+                    return dbId.Value;
+                }
+                
+                // Special Fallback for PC: If "pc" slug not found (unlikely), try legacy hardcoded ID 1 check?
+                // Actually, if DB lookup fails, it means the seed didn't run or the slug is wrong.
+                // But for "PC", old DBs might have slug="pc" and ID=1. New have slug="pc" and ID=6.
+                // So GetPlatformIdBySlugAsync("pc") should return 1 on old DBs and 6 on new DBs. Perfect.
+            }
+            catch (Exception ex)
+            {
+                Log($"[Platform] Error looking up slug '{dbSlug}': {ex.Message}");
+            }
+
+            // 3. Fallback if DB lookup failed entirely (e.g. platform missing from DB)
+            Log($"[Platform] Warning: Could not find slug '{dbSlug}' in DB. Using fallback ID {defaultId}.");
+            return defaultId;
         }
     }
 }
