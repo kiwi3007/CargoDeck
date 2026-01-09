@@ -3,6 +3,7 @@
 ### 🐛 Bug Fixes
 *   **Media Scanner (Hotfix):** Implemented **dynamic platform ID lookup** to solve the crash when adding games. This ensures the scanner works correctly on both new installations (PC ID 6) and legacy databases (PC ID 1).
 *   **PSP Support:** Added official support and database seeding for PlayStation Portable (PSP) games (ID 38).
+*   **Library:** Fixed the "Clear Library" trash button which was previously inactive. Added a new "Clean Library" option in Settings for easier management.
 
 ---
 

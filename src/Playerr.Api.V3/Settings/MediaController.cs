@@ -81,6 +81,13 @@ namespace Playerr.Api.V3.Settings
             return Ok(new { message = "Scan stopping. Check status bar." });
         }
 
+        [HttpDelete("clean")]
+        public async Task<IActionResult> CleanLibrary()
+        {
+            await _scannerService.CleanLibraryAsync();
+            return Ok(new { message = "Library cleaned successfully." });
+        }
+
         [HttpGet("scan/status")]
         public IActionResult GetScanStatus()
         {

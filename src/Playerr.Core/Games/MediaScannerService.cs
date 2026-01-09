@@ -111,6 +111,15 @@ namespace Playerr.Core.Games
             }
         }
 
+        public async Task CleanLibraryAsync()
+        {
+            Log("Cleaning library...");
+            await _gameRepository.DeleteAllAsync();
+            GamesAddedCount = 0;
+            LastGameFound = null;
+            Log("Library cleaned.");
+        }
+
         public async Task<int> ScanAsync(string? overridePath = null, string? overridePlatform = null)
         {
             if (IsScanning)
@@ -672,19 +681,27 @@ namespace Playerr.Core.Games
                     // Log($"[Platform] Resolved '{platformKey}' -> Slug '{dbSlug}' -> ID {dbId.Value}");
                     return dbId.Value;
                 }
-                
-                // Special Fallback for PC: If "pc" slug not found (unlikely), try legacy hardcoded ID 1 check?
-                // Actually, if DB lookup fails, it means the seed didn't run or the slug is wrong.
-                // But for "PC", old DBs might have slug="pc" and ID=1. New have slug="pc" and ID=6.
-                // So GetPlatformIdBySlugAsync("pc") should return 1 on old DBs and 6 on new DBs. Perfect.
+                else
+                {
+                     Log($"[Platform] Slug '{dbSlug}' not found in DB. Attempting fallback to 'pc'.");
+                     // Fallback: Try to find "pc" (safe haven)
+                     var pcId = await _gameRepository.GetPlatformIdBySlugAsync("pc");
+                     if (pcId.HasValue)
+                     {
+                         return pcId.Value;
+                     }
+                }
             }
             catch (Exception ex)
             {
                 Log($"[Platform] Error looking up slug '{dbSlug}': {ex.Message}");
             }
 
-            // 3. Fallback if DB lookup failed entirely (e.g. platform missing from DB)
-            Log($"[Platform] Warning: Could not find slug '{dbSlug}' in DB. Using fallback ID {defaultId}.");
+            // 3. Ultimate Fallback (Desperation)
+            // If even "pc" is missing from DB, we are in trouble. 
+            // Only strictly safe ID is 1 (Legacy PC) or 6 (New PC). 
+            // If we are here, DB is likely empty or broken.
+            Log($"[Platform] CRITICAL: Could not find '{dbSlug}' OR 'pc' in DB. Using hardcoded fallback ID {defaultId} (Risk of FK error).");
             return defaultId;
         }
     }

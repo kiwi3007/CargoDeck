@@ -78,6 +78,10 @@ namespace Playerr.Core.Games
         public async Task DeleteAllAsync()
         {
             using var context = await _contextFactory.CreateDbContextAsync();
+            // Using ExecuteDeleteAsync for efficiency if available (EF Core 7+), otherwise standard RemoveRange
+            // For safety and compatibility with older EF Core versions in this project stack:
+            var allGames = await context.Games.ToListAsync();
+            context.Games.RemoveRange(allGames);
             await context.SaveChangesAsync();
         }
 
