@@ -1,3 +1,10 @@
+# Playerr v0.3.5: Hotfix - Fresh Install Fix 🚑
+
+### 🐛 Critical Bug Fixes
+*   **Database Seeding:** Fixed a critical issue where fresh installations would fail to add games due to incorrect default platform IDs (Foreign Key Error 19). New databases now initialize correctly with standard IDs for PC, Mac, and Linux.
+
+---
+
 # Playerr v0.3.4: The "Sponsor & Sync" Update 🔧
 
 We've improved the core engine to be smarter, faster, and more compatible with your messy game libraries.
@@ -18,24 +25,3 @@ We've improved the core engine to be smarter, faster, and more compatible with y
 ### 📦 Updating
 *   **Docker:** `docker-compose pull && docker-compose up -d`
 *   **Desktop:** Download the latest installer for your OS below.
-
----
-
-# Playerr v0.3.3: La Actualización "Instala Donde Sea" 🚀
-
-Hemos mejorado el motor principal para que sea más inteligente, rápido y compatible con tus caóticas bibliotecas de juegos.
-
-### 🌟 Nuevas Características
-*   **Detección Inteligente de Instaladores:** ¡El escáner ahora busca más profundo! Añadido soporte para instaladores anidados (Profundidad-1) y patrones de nombres difusos (`setup_*.exe`, `install*.exe`). Si está ahí, Playerr lo encontrará.
-*   **Visual Status Indicators:** Nuevo **Botón Verde "Listo para Instalar"** en la interfaz que te dice al instante qué juegos tienen instaladores válidos detectados.
-*   **Soporte Universal macOS:** Binarios oficiales ahora disponibles tanto para Macs con **Apple Silicon (M1/M2/M3)** como **Intel**.
-*   **Internacionalización:** Documentación completa disponible en **Español** (`README.es.md`).
-
-### 🐛 Correcciones de Errores
-*   **Arreglo Crítico de Instalación:** Resuelto un problema donde instaladores válidos en subcarpetas eran detectados pero fallaban al lanzarse.
-*   **Estabilidad de Base de Datos:** Arreglados problemas de esquema SQLite asegurando una persistencia de metadatos robusta.
-*   **Rutas Multiplataforma:** Lógica de resolución de rutas mejorada para entornos con sistemas operativos mixtos.
-
-### 📦 Actualización
-*   **Docker:** `docker-compose pull && docker-compose up -d`
-*   **Escritorio:** Descarga el instalador más reciente para tu SO abajo.

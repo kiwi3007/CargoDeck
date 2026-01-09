@@ -192,7 +192,9 @@ namespace Playerr.Host
                     {
                         Console.WriteLine("[Database] Seeding default platforms...");
                         context.Platforms.AddRange(
-                            new Playerr.Core.Games.Platform { Id = 1, Name = "PC (Microsoft Windows)", Slug = "pc", Type = Playerr.Core.Games.PlatformType.PC },
+                            new Playerr.Core.Games.Platform { Id = 6, Name = "PC (Microsoft Windows)", Slug = "pc", Type = Playerr.Core.Games.PlatformType.PC },
+                            new Playerr.Core.Games.Platform { Id = 3, Name = "Linux", Slug = "linux", Type = Playerr.Core.Games.PlatformType.PC }, // Linux uses PC type internally for now
+                            new Playerr.Core.Games.Platform { Id = 14, Name = "Mac", Slug = "mac", Type = Playerr.Core.Games.PlatformType.MacOS },
                             new Playerr.Core.Games.Platform { Id = 7, Name = "PlayStation", Slug = "ps1", Type = Playerr.Core.Games.PlatformType.PlayStation },
                             new Playerr.Core.Games.Platform { Id = 8, Name = "PlayStation 2", Slug = "ps2", Type = Playerr.Core.Games.PlatformType.PlayStation2 },
                             new Playerr.Core.Games.Platform { Id = 9, Name = "PlayStation 3", Slug = "ps3", Type = Playerr.Core.Games.PlatformType.PlayStation3 },
