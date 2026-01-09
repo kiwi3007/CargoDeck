@@ -216,7 +216,7 @@ const Library: React.FC = () => {
 
   const handleAddGame = async (result: SearchResult) => {
     try {
-      const platformId = selectedPlatform ? parseInt(selectedPlatform, 10) : 1;
+      const platformId = selectedPlatform ? parseInt(selectedPlatform, 10) : 6;
       // Usar directamente el resultado de búsqueda como base para crear el juego
       const newGame: any = {
         title: result.title,
