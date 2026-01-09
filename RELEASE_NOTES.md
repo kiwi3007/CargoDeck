@@ -1,4 +1,4 @@
-# Playerr v0.3.3: The "Install Anywhere" Update 🚀
+# Playerr v0.3.4: The "Sponsor & Sync" Update 🔧
 
 We've improved the core engine to be smarter, faster, and more compatible with your messy game libraries.
 
@@ -8,10 +8,10 @@ We've improved the core engine to be smarter, faster, and more compatible with y
 *   **Universal macOS Support:** Official builds now available for both **Apple Silicon (M1/M2/M3)** and **Intel** Macs.
 *   **Internationalization:** Full documentation available in **Spanish** (`README.es.md`).
 *   **Security Hardening:** Credential management moved to secure external configuration files.
-*   **Platform Metadata:** Search results now display platform badges (Switch, PS4, etc.) and search limit increased to 100.
+*   **Platform Metadata:** Search results now display platform badges and search limit increased to 100.
 
 ### 🐛 Bug Fixes
-*   **Critical Installation Fix:** Resolved an issue where valid installers in subfolders (common with GOG) were detected but failed to launch.
+*   **Critical Installation Fix:** Resolved an issue where valid installers in subfolders were detected but failed to launch.
 *   **Database Stability:** Fixed SQLite schema issues ensuring robust metadata persistence.
 *   **Cross-Platform Paths:** Improved path resolution logic for mixed-OS environments.
 
@@ -30,10 +30,9 @@ Hemos mejorado el motor principal para que sea más inteligente, rápido y compa
 *   **Visual Status Indicators:** Nuevo **Botón Verde "Listo para Instalar"** en la interfaz que te dice al instante qué juegos tienen instaladores válidos detectados.
 *   **Soporte Universal macOS:** Binarios oficiales ahora disponibles tanto para Macs con **Apple Silicon (M1/M2/M3)** como **Intel**.
 *   **Internacionalización:** Documentación completa disponible en **Español** (`README.es.md`).
-*   **Seguridad Reforzada:** Gestión de credenciales movida a archivos de configuración externos seguros.
 
 ### 🐛 Correcciones de Errores
-*   **Arreglo Crítico de Instalación:** Resuelto un problema donde instaladores válidos en subcarpetas (común en GOG) eran detectados pero fallaban al lanzarse.
+*   **Arreglo Crítico de Instalación:** Resuelto un problema donde instaladores válidos en subcarpetas eran detectados pero fallaban al lanzarse.
 *   **Estabilidad de Base de Datos:** Arreglados problemas de esquema SQLite asegurando una persistencia de metadatos robusta.
 *   **Rutas Multiplataforma:** Lógica de resolución de rutas mejorada para entornos con sistemas operativos mixtos.
 
