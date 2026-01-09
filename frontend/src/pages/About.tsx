@@ -101,6 +101,9 @@ const About: React.FC = () => {
                             <a href="https://github.com/Maikboarder" target="_blank" rel="noopener noreferrer" style={{ opacity: 0.8, transition: 'opacity 0.2s' }}>
                                 <img src="https://img.shields.io/github/followers/Maikboarder?label=Follow&style=social" alt="GitHub Follow" />
                             </a>
+                            <a href="https://github.com/sponsors/Maikboarder" target="_blank" rel="noopener noreferrer" style={{ opacity: 0.8, transition: 'opacity 0.2s' }}>
+                                <img src="https://img.shields.io/github/sponsors/Maikboarder?label=Sponsor&style=social&logo=github" alt="GitHub Sponsor" />
+                            </a>
                         </div>
                         <p className="settings-description" style={{ fontSize: '0.8rem', opacity: 0.5, marginBottom: 0 }}>
                             {t('license')}
