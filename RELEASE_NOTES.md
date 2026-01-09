@@ -1,3 +1,11 @@
+# Playerr v0.3.8: Stable Release  🚀
+
+### 📦 Changes
+*   **Docker:** Consolidated fix for database initialization on persistent volumes.
+*   **Maintenance:** Version bump and stability improvements.
+
+---
+
 # Playerr v0.3.7: Hotfix - Media Scanner 🔍
 
 ### 🐛 Bug Fixes
