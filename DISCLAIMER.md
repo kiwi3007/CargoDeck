@@ -4,13 +4,8 @@
 Playerr is an open-source project developed for educational and personal library management purposes only. The software is provided "as is", without warranty of any kind, express or implied. The developers and contributors of Playerr are not responsible for any damage, data loss, or legal consequences resulting from the use of this software.
 
 ## 2. Third-Party Services & Trademarks
-*   **Trademarks:** All product names, logos, and brands are property of their respective owners. All company, product, and service names used in this website/software are for identification purposes only. Use of these names, logos, and brands does not imply endorsement.
-    *   **Steam** is a trademark of Valve Corporation.
-    *   **Nintendo Switch** is a trademark of Nintendo of America Inc.
-    *   **PlayStation** is a trademark of Sony Interactive Entertainment Inc.
-    *   **Xbox** is a trademark of Microsoft Corporation.
-    *   **IGDB** is a trademark of Twitch Interactive, Inc.
-*   **Affiliation:** Playerr is **not** affiliated with, endorsed by, or in any way officially connected with Valve Corporation, Nintendo, Sony, Microsoft, IGDB, or any of their subsidiaries or affiliates.
+*   **Intellectual Property:** All trademarks, service marks, trade names, logos, product and service names appearing in this software or documentation are the property of their respective owners. Their use is solely for identification and compatibility purposes.
+*   **No Affiliation:** This project is an independent tool and is **not** affiliated, associated, authorized, endorsed by, or in any way officially connected with any of the holders of the platforms, digital stores, or video game consoles whose metadata or files may be managed by this software.
 
 ## 3. Content & Piracy
 Playerr is designed to manage metadata for a user's **legally owned** video game library.
