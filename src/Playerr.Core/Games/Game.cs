@@ -22,6 +22,9 @@ namespace Playerr.Core.Games
         [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
         [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
         public List<string> Genres { get; set; } = new();
+        [SuppressMessage("Microsoft.Usage", "CA2227:CollectionPropertiesShouldBeReadOnly")]
+        [SuppressMessage("Microsoft.Design", "CA1002:DoNotExposeGenericLists")]
+        public List<string> AvailablePlatforms { get; set; } = new();
         public string? Developer { get; set; }
         public string? Publisher { get; set; }
         public DateTime? ReleaseDate { get; set; }

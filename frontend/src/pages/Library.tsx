@@ -36,6 +36,7 @@ interface SearchResult {
   };
   year?: number;
   igdbId?: number;
+  availablePlatforms?: string[];
 }
 
 interface Platform {
@@ -411,11 +412,24 @@ const Library: React.FC = () => {
                     )}
                     <div className="result-info">
                       <h4>{result.title}</h4>
-                      {typeof result.year === 'number' && result.year > 0 && (
-                        <span className="result-year">
-                          {result.year}
-                        </span>
-                      )}
+                      <div className="result-meta-row" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        {typeof result.year === 'number' && result.year > 0 && (
+                          <span className="result-year">
+                            {result.year}
+                          </span>
+                        )}
+                        {result.availablePlatforms && result.availablePlatforms.map(p => (
+                          <span key={p} className="platform-badge" style={{
+                            fontSize: '0.7rem',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: '#45475a',
+                            color: '#cdd6f4'
+                          }}>
+                            {p}
+                          </span>
+                        ))}
+                      </div>
                       {result.overview && (
                         <p className="result-summary">{result.overview.substring(0, 150)}...</p>
                       )}

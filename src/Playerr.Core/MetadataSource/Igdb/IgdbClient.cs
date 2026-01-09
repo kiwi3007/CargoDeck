@@ -69,7 +69,7 @@ namespace Playerr.Core.MetadataSource.Igdb
             request.Headers.Add("Authorization", $"Bearer {_accessToken}");
 
             // Basic fields to fetch
-            var fields = "name, summary, storyline, cover.image_id, screenshots.image_id, artworks.image_id, first_release_date, total_rating, total_rating_count, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, external_games.category, external_games.uid";
+            var fields = "name, summary, storyline, cover.image_id, screenshots.image_id, artworks.image_id, first_release_date, total_rating, total_rating_count, genres.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, external_games.category, external_games.uid, platforms.name, platforms.abbreviation";
 
             // If lang provided, request localized names (not fully supported by IGDB API in search directly, post-filtering needed)
             // Note: IGDB doesn't have a simple "lang" parameter for search. We fetch data and filter logic in Service.
@@ -85,11 +85,11 @@ namespace Playerr.Core.MetadataSource.Igdb
             
             if (platformId.HasValue)
             {
-                body = $"fields {fields}; search \"{query}\"; where platforms = ({platformId.Value}) & version_parent = null; limit 10;";
+                body = $"fields {fields}; search \"{query}\"; where platforms = ({platformId.Value}) & version_parent = null; limit 100;";
             }
             else
             {
-                body = $"fields {fields}; search \"{query}\"; where version_parent = null; limit 10;";
+                body = $"fields {fields}; search \"{query}\"; where version_parent = null; limit 100;";
             }
 
             request.Content = new StringContent(body);
@@ -207,6 +207,15 @@ namespace Playerr.Core.MetadataSource.Igdb
         
         [JsonPropertyName("localizations")]
         public List<IgdbLocalization> Localizations { get; set; } = new();
+
+        [JsonPropertyName("platforms")]
+        public List<IgdbPlatform> Platforms { get; set; } = new();
+    }
+
+    public class IgdbPlatform
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Abbreviation { get; set; } = string.Empty;
     }
 
     public class IgdbImage

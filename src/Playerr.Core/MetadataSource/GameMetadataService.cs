@@ -118,6 +118,7 @@ namespace Playerr.Core.MetadataSource
                 Rating = igdbGame.Rating,
                 RatingCount = igdbGame.RatingCount,
                 Genres = igdbGame.Genres.Select(g => LocalizeGenre(g.Name, lang)).ToList(),
+                AvailablePlatforms = igdbGame.Platforms.Select(p => !string.IsNullOrEmpty(p.Abbreviation) ? p.Abbreviation : p.Name).ToList(),
                 Images = new GameImages()
             };
 

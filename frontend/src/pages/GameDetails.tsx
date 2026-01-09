@@ -25,6 +25,7 @@ interface Game {
   };
   status: string | number;
   isInstallable?: boolean;
+  availablePlatforms?: string[];
 }
 
 interface TorrentResult {
@@ -487,6 +488,24 @@ const GameDetails: React.FC = () => {
             {game.platform && <span>{game.platform.name}</span>}
             {game.rating && <span>{Math.round(game.rating)}%</span>}
           </div>
+
+          {game.availablePlatforms && game.availablePlatforms.length > 0 && (
+            <div className="platforms-list" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px', marginBottom: '8px' }}>
+              {game.availablePlatforms.map(p => (
+                <span key={p} style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.8rem',
+                  color: '#cdd6f4',
+                  border: '1px solid rgba(255, 255, 255, 0.05)'
+                }}>
+                  {p}
+                </span>
+              ))}
+            </div>
+          )}
+
           {game.genres && game.genres.length > 0 && (
             <div className="genres">
               {game.genres.join(' / ')}
