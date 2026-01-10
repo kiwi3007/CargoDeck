@@ -62,6 +62,10 @@ Para publicar una nueva versión, seguir estrictamente estos pasos:
 
 3.  **Ubicación:** Los binarios finales están SIEMPRE en `build_artifacts/`.
 
+4.  **Docker (Si aplica):**
+    *   Si usas `docker-compose` local: Ejecutar `docker-compose build --no-cache` para regenerar la imagen con la nueva versión.
+    *   Si usas CasaOS/DockerHub: Push de la nueva imagen `maikboarder/playerr:latest`.
+
 ---
 
 ## 4. 🎮 Soporte de Plataformas
