@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using System;
+using System.Threading.Tasks;
 using System.IO;
 using Playerr.Core.Games;
 using Playerr.Core.MetadataSource;
@@ -33,7 +34,7 @@ namespace Playerr.Host
     public class Program
     {
         [STAThread]
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             var exePath = AppContext.BaseDirectory;
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -220,6 +221,49 @@ namespace Playerr.Host
                     {
                         context.SaveChanges();
                         Console.WriteLine("[Database] Platforms updated.");
+                    }
+
+                    // MANUAL MIGRATION for v0.3.9+ (Images Support)
+                    // Since EF Core Migrations are complex to set up in this environment, 
+                    // we manually ensure the new columns exist for users upgrading from < v0.3.9.
+                    try 
+                    {
+                        Console.WriteLine("[Database] Checking for schema updates (v0.3.10)...");
+                        var connection = context.Database.GetDbConnection();
+                        await connection.OpenAsync();
+                        using var cmd = connection.CreateCommand();
+                        
+                        // We use a helper to try adding columns. SQLite ignores repeated ADD COLUMN? No, it throws.
+                        // So we catch exceptions per column.
+                        var columns = new[] 
+                        {
+                            "Images_CoverUrl TEXT",
+                            "Images_CoverLargeUrl TEXT",
+                            "Images_BackgroundUrl TEXT",
+                            "Images_BannerUrl TEXT",
+                            "Images_Screenshots TEXT", // JSON
+                            "Images_Artworks TEXT"     // JSON
+                        };
+
+                        foreach (var colDef in columns)
+                        {
+                            try 
+                            {
+                                cmd.CommandText = $"ALTER TABLE Games ADD COLUMN {colDef};";
+                                await cmd.ExecuteNonQueryAsync();
+                                Console.WriteLine($"[Database] Configured legacy column: {colDef.Split(' ')[0]}");
+                            }
+                            catch (Exception)
+                            {
+                                // Column likely exists. Ignore.
+                            }
+                        }
+                        
+                        await connection.CloseAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Database] Schema check warning: {ex.Message}");
                     }
                 }
                 catch (Exception ex)

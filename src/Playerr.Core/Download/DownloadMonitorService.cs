@@ -83,6 +83,10 @@ namespace Playerr.Core.Download
             {
                 client = new NzbgetClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
             }
+            else if (config.Implementation.Equals("Deluge", StringComparison.OrdinalIgnoreCase))
+            {
+                client = new DelugeClient(config.Host, config.Port, config.Password ?? "", config.UseSsl);
+            }
 
             if (client == null) return;
 

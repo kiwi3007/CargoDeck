@@ -26,6 +26,7 @@ interface DownloadClient {
   urlBase?: string;
   apiKey?: string;
   enable: boolean;
+  useSsl?: boolean;
   priority: number;
   // Remote Path Mapping
   remotePathMapping?: string;
@@ -82,6 +83,7 @@ const Settings: React.FC = () => {
     urlBase: '',
     apiKey: '',
     enable: true,
+    useSsl: false,
     priority: 1
   });
   const [clientTesting, setClientTesting] = useState(false);
@@ -432,21 +434,33 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleSaveDownloadClient = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveDownloadClient = async (e: any) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    // alert('DEBUG: Attempting to save client...'); // Removed to reduce noise, but good for testing
 
     try {
+      const payload = { ...clientForm };
+
+      // Ensure numbers are numbers
+      payload.port = parseInt(String(payload.port));
+      payload.priority = parseInt(String(payload.priority));
+
+      // alert(`DEBUG: Sending payload: ${JSON.stringify(payload)}`);
+
       if (editingClient?.id) {
-        await axios.put(`/api/v3/downloadclient/${editingClient.id}`, clientForm);
+        await axios.put(`/api/v3/downloadclient/${editingClient.id}`, payload);
       } else {
-        await axios.post('/api/v3/downloadclient', clientForm);
+        await axios.post('/api/v3/downloadclient', payload);
       }
 
       await loadDownloadClients();
       setShowClientModal(false);
       resetClientForm();
-    } catch (error) {
-      alert(t('failedToSaveClient'));
+      // alert('Client saved successfully!');
+    } catch (error: any) {
+      console.error('Error saving client:', error);
+      alert(`${t('failedToSaveClient')}: ${error.response?.data?.message || error.message || 'Unknown error'}`);
     }
   };
 
@@ -477,6 +491,7 @@ const Settings: React.FC = () => {
       urlBase: '',
       apiKey: '',
       enable: true,
+      useSsl: false,
       priority: 1
     });
     setEditingClient(null);
@@ -1037,117 +1052,147 @@ const Settings: React.FC = () => {
 
             <form onSubmit={handleSaveDownloadClient}>
               <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={clientForm.enable}
+                    onChange={(e) => setClientForm({ ...clientForm, enable: e.target.checked })}
+                  />
+                  {t('enable')}
+                </label>
+              </div>
+
+              <div className="form-group">
                 <label>{t('name')}</label>
                 <input
                   type="text"
+                  className="form-control"
                   value={clientForm.name}
                   onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
-                  placeholder={t('clientNamePlaceholder')}
-                  required
+                  placeholder="e.g. Deluge"
                 />
               </div>
 
               <div className="form-group">
                 <label>{t('implementation')}</label>
                 <select
+                  className="form-control"
                   value={clientForm.implementation}
                   onChange={(e) => setClientForm({ ...clientForm, implementation: e.target.value })}
-                  required
                 >
                   <option value="qBittorrent">qBittorrent</option>
                   <option value="Transmission">Transmission</option>
-                  <option value="SABnzbd">SABnzbd (Usenet)</option>
-                  <option value="NZBGet">NZBGet (Usenet)</option>
-                  <option value="Deluge">Deluge ({t('comingSoon')})</option>
+                  <option value="Deluge">Deluge (WebUI)</option>
+                  <option value="SABnzbd">SABnzbd</option>
+                  <option value="NZBGet">NZBGet</option>
                 </select>
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label>{t('host')}</label>
-                  <input
-                    type="text"
-                    value={clientForm.host}
-                    onChange={(e) => setClientForm({ ...clientForm, host: e.target.value })}
-                    placeholder={t('hostPlaceholder')}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>{t('port')}</label>
-                  <input
-                    type="number"
-                    value={clientForm.port}
-                    onChange={(e) => setClientForm({ ...clientForm, port: parseInt(e.target.value) })}
-                    placeholder={t('portPlaceholder')}
-                    required
-                  />
-                </div>
+              <div className="form-group">
+                <label>{t('host')}</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={clientForm.host}
+                  onChange={(e) => setClientForm({ ...clientForm, host: e.target.value })}
+                  placeholder="localhost"
+                />
               </div>
 
-              {clientForm.implementation !== 'SABnzbd' && (
+              <div className="form-group">
+                <label>{t('port')}</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={clientForm.port}
+                  onChange={(e) => setClientForm({ ...clientForm, port: parseInt(e.target.value) })}
+                />
+              </div>
+
+              {clientForm.implementation === 'Deluge' && (
+                <div className="form-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={clientForm.useSsl || false}
+                      onChange={(e) => setClientForm({ ...clientForm, useSsl: e.target.checked })}
+                    />
+                    Use SSL
+                  </label>
+                </div>
+              )}
+
+              {(clientForm.implementation === 'qBittorrent' || clientForm.implementation === 'Deluge' || clientForm.implementation === 'Transmission' || clientForm.implementation === 'NZBGet') && (
                 <>
                   <div className="form-group">
                     <label>{t('username')}</label>
                     <input
                       type="text"
+                      className="form-control"
                       value={clientForm.username || ''}
                       onChange={(e) => setClientForm({ ...clientForm, username: e.target.value })}
-                      placeholder={t('usernamePlaceholder')}
+                      placeholder={clientForm.implementation === 'Deluge' ? 'Optional (WebUI usually only needs pass)' : ''}
                     />
                   </div>
-
                   <div className="form-group">
                     <label>{t('password')}</label>
                     <input
                       type="password"
+                      className="form-control"
                       value={clientForm.password || ''}
                       onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
-                      placeholder={t('passwordPlaceholder')}
                     />
                   </div>
                 </>
               )}
 
-              {clientForm.implementation === 'SABnzbd' && (
+              {(clientForm.implementation === 'SABnzbd') && (
                 <div className="form-group">
-                  <label>API Key</label>
+                  <label>{t('apiKey')}</label>
                   <input
-                    type="password"
+                    type="text"
+                    className="form-control"
                     value={clientForm.apiKey || ''}
                     onChange={(e) => setClientForm({ ...clientForm, apiKey: e.target.value })}
-                    placeholder="SABnzbd API Key"
                   />
                 </div>
               )}
 
               <div className="form-group">
-                <label>{t('urlBase')} <small>(optional, e.g. /qbittorrent)</small></label>
-                <input
-                  type="text"
-                  value={clientForm.urlBase || ''}
-                  onChange={(e) => setClientForm({ ...clientForm, urlBase: e.target.value })}
-                  placeholder="/qbittorrent"
-                />
-              </div>
-
-              <div className="form-group">
                 <label>{t('category')}</label>
                 <input
                   type="text"
+                  className="form-control"
                   value={clientForm.category || ''}
                   onChange={(e) => setClientForm({ ...clientForm, category: e.target.value })}
-                  placeholder={t('categoryPlaceholder')}
+                  placeholder="playerr"
                 />
-                <small>{t('torrentsCategoryHint')}</small>
+                <small className="form-text text-muted">Optional, but recommended.</small>
               </div>
 
-              <div className="form-subsection">
-                <h3>{t('remotePathMappingTitle')}</h3>
-                <p className="description">
-                  {t('remotePathMappingDesc')}
-                </p>
+              {clientForm.implementation !== 'Deluge' && (
+                <div className="form-group">
+                  <label>URL Base</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={clientForm.urlBase || ''}
+                    onChange={(e) => setClientForm({ ...clientForm, urlBase: e.target.value })}
+                    placeholder="e.g. /qbittorrent"
+                  />
+                </div>
+              )}
+
+              <div className="form-group">
+                <label>Priority</label>
+                <select
+                  className="form-control"
+                  value={clientForm.priority}
+                  onChange={(e) => setClientForm({ ...clientForm, priority: parseInt(e.target.value) })}
+                >
+                  <option value={1}>High (Primary)</option>
+                  <option value={50}>Last (Fallback)</option>
+                </select>
               </div>
 
               <div className="form-group">
@@ -1222,7 +1267,11 @@ const Settings: React.FC = () => {
                 >
                   {clientTesting ? t('testing') : t('testConnection')}
                 </button>
-                <button type="submit" className="btn-primary">
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={(e) => handleSaveDownloadClient(e as any)}
+                >
                   {editingClient ? t('updateClient') : t('addClientButton')}
                 </button>
               </div>

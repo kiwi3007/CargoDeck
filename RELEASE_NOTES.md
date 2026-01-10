@@ -1,3 +1,14 @@
+# Playerr v0.3.10: Deluge "Terminator" & Magnet Logic
+
+### Improvements
+*   **Deluge:** Implementation of Deluge as download manager.
+*   **Docker/Legacy DB Fix:** Implemented an **Automatic Schema Auto-Fixer**.
+    *   Startups now detect if a legacy database (from v0.3.5) is missing modern columns (`Images`, etc.) and automatically applies the necessary schema updates via `ALTER TABLE`.
+    *   This resolves the "Unable to add game" error for long-term Docker users without requiring any data loss or manual resets.
+*   **Agent Persistence:** Enhanced AI context retention to ensure credentials (Orb) are not lost between debugging sessions.
+
+---
+
 # Playerr v0.3.9: Maintenance Release
 
 ### Changes

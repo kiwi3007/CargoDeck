@@ -61,3 +61,4 @@ Estas reglas son inmutables a menos que el usuario lo autorice explícitamente. 
     *   **El Trigger:** El usuario dirá explícitamente comandos como **"Carga Orb"** o **"Carga Raspberry"**.
     *   **Tu Respuesta:** NUNCA pidas claves o APIs. Tu acción es verificar/asegurar que el backend esté usando los archivos correctos de `config/`.
     *   **Recuperación:** Si pierdes el contexto y el usuario dice "Carga Orb", no preguntes "¿Qué es Orb?". Ve a `config/`, busca los archivos y confirma la carga.
+    *   **Persistencia (Regla de Oro):** Si el usuario dice "Lanza la app" tras haber pedido "Orb" (o si te quejas de que está vacío), **SIEMPRE asegúrate de que los archivos `jackett.orb.json` y `prowlarr.orb.json` están copiados en `jackett.json` y `prowlarr.json` ANTES de lanzar.** No lances la app "de fábrica" si el usuario ya te ha dado contexto de su entorno.

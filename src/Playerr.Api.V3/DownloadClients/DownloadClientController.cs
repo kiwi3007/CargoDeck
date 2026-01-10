@@ -121,6 +121,17 @@ namespace Playerr.Api.V3.DownloadClients
                     {
                         client = new NzbgetClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
                     }
+                    else if (config.Implementation.Equals("Deluge", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Pass UseSsl if available, or infer from somewhere. 
+                        // Since DelugeClient constructor was: (host, port, password, urlBase)
+                        // We need to update DelugeClient constructor to accept UseSSL or update UrlBase logic.
+                        // For now, let's assume we update DelugeClient constructor.
+                        // But first, let's check DelugeClient.cs signature again.
+                        // Actually, existing code passed UrlBase. We can pass UseSSL there or assume UrlBase handles it?
+                        // Let's UPDATE DelugeClient constructor to take bool useSsl.
+                        client = new DelugeClient(config.Host, config.Port, config.Password ?? "", config.UseSsl);
+                    }
 
                     if (client != null)
                     {
@@ -168,6 +179,8 @@ namespace Playerr.Api.V3.DownloadClients
             {
                 client = new NzbgetClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
             }
+            else if (config.Implementation.Equals("Deluge", StringComparison.OrdinalIgnoreCase))
+                client = new DelugeClient(config.Host, config.Port, config.Password ?? "", config.UseSsl);
 
             if (client == null) return BadRequest("Unsupported client implementation");
 
@@ -215,6 +228,8 @@ namespace Playerr.Api.V3.DownloadClients
                 client = new SabnzbdClient(config.Host, config.Port, config.ApiKey ?? "", config.UrlBase);
             else if (config.Implementation.Equals("NZBGet", StringComparison.OrdinalIgnoreCase))
                 client = new NzbgetClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+            else if (config.Implementation.Equals("Deluge", StringComparison.OrdinalIgnoreCase))
+                client = new DelugeClient(config.Host, config.Port, config.Password ?? "", config.UseSsl);
 
             if (client == null) return false;
 
@@ -292,10 +307,24 @@ namespace Playerr.Api.V3.DownloadClients
                         request.UrlBase
                     );
 
-                    isConnected = await nzbClient.TestConnectionAsync();
                     if (isConnected)
                     {
                         version = await nzbClient.GetVersionAsync();
+                    }
+                }
+                else if (request.Implementation.Equals("Deluge", StringComparison.OrdinalIgnoreCase))
+                {
+                    var delugeClient = new DelugeClient(
+                        request.Host,
+                        request.Port,
+                        request.Password ?? string.Empty,
+                        request.UseSsl
+                    );
+
+                    isConnected = await delugeClient.TestConnectionAsync();
+                    if (isConnected)
+                    {
+                        version = await delugeClient.GetVersionAsync();
                     }
                 }
                 else
@@ -477,6 +506,27 @@ namespace Playerr.Api.V3.DownloadClients
                          return StatusCode(500, new { message = "Failed to add NZB to NZBGet" });
                     }
                 }
+                else if (client.Implementation.Equals("Deluge", StringComparison.OrdinalIgnoreCase))
+                {
+                    var delugeClient = new DelugeClient(
+                        client.Host,
+                        client.Port,
+                        client.Password ?? string.Empty,
+                        client.UseSsl
+                    );
+                    
+                    bool success = await delugeClient.AddTorrentAsync(request.Url, client.Category ?? string.Empty);
+                    if (success)
+                    {
+                        Console.WriteLine("[DownloadClient] Successfully added torrent to Deluge");
+                        return Ok(new { message = "Torrent added successfully to Deluge" });
+                    }
+                    else
+                    {
+                        Console.WriteLine("[DownloadClient] Failed to add torrent to Deluge");
+                        return StatusCode(500, new { message = "Failed to add torrent to Deluge" });
+                    }
+                }
                 
                 return BadRequest(new { message = $"Unsupported download client: {client.Implementation}" });
             }
@@ -505,5 +555,6 @@ namespace Playerr.Api.V3.DownloadClients
         public string? Password { get; set; }
         public string? UrlBase { get; set; }
         public string? ApiKey { get; set; }
+        public bool UseSsl { get; set; }
     }
 }

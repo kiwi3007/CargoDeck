@@ -56,6 +56,7 @@ namespace Playerr.Core.Configuration
             try 
             {
                 Directory.CreateDirectory(_configDirectory);
+                Console.WriteLine($"[Configuration] Service initialized. Using Config Directory: {_configDirectory}");
             }
             catch (Exception ex)
             {

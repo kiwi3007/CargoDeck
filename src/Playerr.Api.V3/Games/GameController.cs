@@ -77,8 +77,19 @@ namespace Playerr.Api.V3.Games
         [HttpPost]
         public async Task<ActionResult<Game>> Create([FromBody] Game game)
         {
-            var created = await _repository.AddAsync(game);
-            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+            System.Console.WriteLine($"[GameController] [Create] Attempting to add game: '{game.Title}' (IGDB: {game.IgdbId})");
+            try 
+            {
+                var created = await _repository.AddAsync(game);
+                System.Console.WriteLine($"[GameController] [Create] Success. Game ID: {created.Id}");
+                return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"[GameController] [Create] FAILURE: {ex}");
+                // Return 500 so frontend sees the error
+                return StatusCode(500, $"Internal Server Error: {ex.Message}");
+            }
         }
 
         [HttpPut("{id}")]

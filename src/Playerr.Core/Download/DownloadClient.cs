@@ -18,6 +18,7 @@ namespace Playerr.Core.Download
         
         public string? ApiKey { get; set; }
         public bool Enable { get; set; } = true;
+        public bool UseSsl { get; set; }
         public int Priority { get; set; }
         
         // Remote Path Mapping
