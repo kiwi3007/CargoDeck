@@ -50,9 +50,10 @@ Para publicar una nueva versión, seguir estrictamente estos pasos:
 
 2.  **Documentación:**
     *   Actualizar `RELEASE_NOTES.md` con los cambios.
+    *   **IMPORTANTE:** No usar emojis en la documentación.
     *   (Opcional) Hacer commit: `git commit -am "vX.X.X Release"`
 
-2.  **Compilar (Build Artifacts):**
+3.  **Compilar (Build Artifacts):**
     *   Ejecutar: `./build_all.sh`
     *   Esto genera cruzadamente para:
         *   Windows x64 (`.zip`)
@@ -60,9 +61,9 @@ Para publicar una nueva versión, seguir estrictamente estos pasos:
         *   macOS Intel (`.dmg`)
         *   macOS Silicon (`.dmg`)
 
-3.  **Ubicación:** Los binarios finales están SIEMPRE en `build_artifacts/`.
+4.  **Ubicación:** Los binarios finales están SIEMPRE en `build_artifacts/`.
 
-4.  **Docker (Si aplica):**
+5.  **Docker (Si aplica):**
     *   Si usas `docker-compose` local: Ejecutar `docker-compose build --no-cache` para regenerar la imagen con la nueva versión.
     *   Si usas CasaOS/DockerHub: Push de la nueva imagen `maikboarder/playerr:latest`.
 
@@ -99,4 +100,12 @@ Para publicar una nueva versión, seguir estrictamente estos pasos:
 *   **Puerto Backend:** 5002 (para evitar conflictos en macOS).
 
 ---
-**Última Actualización:** v0.3.7 Hotfix 2
+
+## 6. 📝 Estilo de Documentación (Strict Rules)
+
+1.  **NO EMOJIS:** Está terminantemente prohibido usar emojis en `README.md`, `RELEASE_NOTES.md` o cualquier otro documento oficial. El estilo debe ser limpio y profesional (solo texto).
+2.  **Idioma:** Documentación oficial en Inglés (README.md) y Español (README.es.md).
+3.  **Formato:** Usar Markdown estándar. Headers claros, listas y tablas. Sin adornos gráficos innecesarios.
+
+---
+**Última Actualización:** v0.3.8 (Docker Rebuild + No Emojis)
