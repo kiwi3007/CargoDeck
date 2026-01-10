@@ -54,7 +54,7 @@ Playerr está diseñado para un alcance máximo, ofreciendo binarios multiplataf
 *   **macOS:** Optimizado para Apple Silicon ([Descargar .dmg](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr.dmg)) y sistemas Intel ([Descargar .dmg](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Intel.dmg)).
 *   **Linux:** Distribuciones genéricas 64-bit. [Descargar .tar.gz](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Linux-x64.tar.gz)
 
-### 🎮 Compatibilidad y Ejecución
+### Compatibilidad y Ejecución
 Playerr gestiona tu biblioteca, pero para ejecutar títulos nativos de Windows en macOS o Linux, recomendamos las siguientes capas de compatibilidad:
 
 * **macOS:** [Whisky](https://getwhisky.app/) (Gratis/Open Source) o [CrossOver](https://www.codeweavers.com/crossover) (Pago/Soporte Oficial).
@@ -140,7 +140,7 @@ Si quieres modificar el código o construir la imagen localmente en lugar de des
 
 ---
 
-## 🗺️ Roadmap (Hoja de Ruta)
+## Roadmap (Hoja de Ruta)
 
 ### Fase 1: Cimientos (v0.1.0 - v0.1.2)
 - [x] **Funcionalidad PVR Core:** Motor de búsqueda y categorización automática.

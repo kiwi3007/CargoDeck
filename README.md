@@ -54,7 +54,7 @@ Playerr is architected for maximum reach, offering multi-platform binaries and c
 *   **macOS:** Optimized for Apple Silicon ([Download .dmg](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr.dmg)) and Intel ([Download .dmg](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Intel.dmg)).
 *   **Linux:** Generic 64-bit binary distributions. [Download .tar.gz](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Linux-x64.tar.gz)
 
-### 🎮 Compatibility & Runners
+### Compatibility & Runners
 Playerr manages your library, but to execute Windows-native titles on macOS or Linux, we recommend the following compatibility layers:
 
 * **macOS:** [Whisky](https://getwhisky.app/) (Free/Open Source) or [CrossOver](https://www.codeweavers.com/crossover) (Paid/Official Support).
