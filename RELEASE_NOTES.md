@@ -1,3 +1,11 @@
+# Playerr v0.3.9: Maintenance Release
+
+### Changes
+*   **Documentation:** Cleaned up documentation, removing non-text elements to improve professionalism.
+*   **Internal:** Updated build workflows and memory persistence for release management.
+
+---
+
 # Playerr v0.3.8: Stable Release
 
 ### Changes
