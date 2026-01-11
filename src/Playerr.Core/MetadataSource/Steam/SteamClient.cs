@@ -117,15 +117,10 @@ namespace Playerr.Core.MetadataSource.Steam
                 {
                     var content = await response.Content.ReadAsStringAsync();
                     
-                    // DEBUG LOGGING
-                    Console.WriteLine($"[SteamClient] GetOwnedGames Success. Length: {content.Length}");
-                    // Console.WriteLine(content); // Uncomment to dump full JSON if needed
-
                     var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
                     var result = JsonSerializer.Deserialize<SteamOwnedGamesResponse>(content, options);
                     
                     var games = result?.Response?.Games ?? new List<SteamUserGame>();
-                    Console.WriteLine($"[SteamClient] Parsed {games.Count} games.");
                     return games;
                 }
                 else 

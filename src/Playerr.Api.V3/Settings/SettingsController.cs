@@ -216,9 +216,9 @@ namespace Playerr.Api.V3.Settings
                                 newGame.Rating = match.Rating;
                             }
                         }
-                        catch (Exception ex)
+                        catch (Exception)
                         {
-                            Console.WriteLine($"Failed to enrich metadata for {steamGame.Name}: {ex.Message}");
+                            // Ignore enrichment failures
                         }
 
                         await _gameRepository.AddAsync(newGame);
