@@ -242,7 +242,8 @@ namespace Playerr.Host
                             "Images_BackgroundUrl TEXT",
                             "Images_BannerUrl TEXT",
                             "Images_Screenshots TEXT", // JSON
-                            "Images_Artworks TEXT"     // JSON
+                            "Images_Artworks TEXT",    // JSON
+                            "IsInstallable INTEGER NOT NULL DEFAULT 0"
                         };
 
                         foreach (var colDef in columns)
