@@ -193,7 +193,8 @@ namespace Playerr.Api.V3.Settings
                             SteamId = steamGame.AppId,
                             Added = DateTime.UtcNow,
                             Status = GameStatus.Announced, 
-                            Monitored = true
+                            Monitored = true,
+                            PlatformId = 6 // PC
                         };
 
                         // Enrich with IGDB Metadata
