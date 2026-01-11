@@ -243,7 +243,11 @@ namespace Playerr.Host
                             "Images_BannerUrl TEXT",
                             "Images_Screenshots TEXT", // JSON
                             "Images_Artworks TEXT",    // JSON
-                            "IsInstallable INTEGER NOT NULL DEFAULT 0"
+                            "IsInstallable INTEGER NOT NULL DEFAULT 0",
+                            "InstallPath TEXT",
+                            "IgdbId INTEGER",
+                            "SteamId INTEGER",
+                            "GogId TEXT"
                         };
 
                         foreach (var colDef in columns)
