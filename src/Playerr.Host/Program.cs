@@ -228,7 +228,7 @@ namespace Playerr.Host
                     // we manually ensure the new columns exist for users upgrading from < v0.3.9.
                     try 
                     {
-                        Console.WriteLine("[Database] Checking for schema updates (v0.3.10)...");
+                        Console.WriteLine("[Database] Checking for schema updates (v0.3.12)...");
                         var connection = context.Database.GetDbConnection();
                         await connection.OpenAsync();
                         using var cmd = connection.CreateCommand();
