@@ -189,9 +189,21 @@ namespace Playerr.Api.V3.Settings
 
                 foreach (var steamGame in steamGames)
                 {
-                    // Check if exists by SteamId or Title
-                    if (!existingGames.Any(g => g.SteamId == steamGame.AppId || 
-                                                (g.Title.Equals(steamGame.Name, StringComparison.OrdinalIgnoreCase))))
+                    var existingGame = existingGames.FirstOrDefault(g => g.SteamId == steamGame.AppId || 
+                                                (g.Title.Equals(steamGame.Name, StringComparison.OrdinalIgnoreCase)));
+
+                    if (existingGame != null)
+                    {
+                        // Update existing game if it doesn't have the SteamId
+                        if (!existingGame.SteamId.HasValue || existingGame.SteamId != steamGame.AppId)
+                        {
+                            existingGame.SteamId = steamGame.AppId;
+                            // Optionally update other fields if needed, but for now just link it
+                            await _gameRepository.UpdateAsync(existingGame.Id, existingGame);
+                            Console.WriteLine($"[SteamSync] Linked '{existingGame.Title}' to Steam AppID: {steamGame.AppId}");
+                        }
+                    }
+                    else
                     {
                         var newGame = new Game
                         {

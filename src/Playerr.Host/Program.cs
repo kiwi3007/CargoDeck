@@ -131,6 +131,10 @@ namespace Playerr.Host
             builder.Services.AddHostedService(sp => sp.GetRequiredService<Playerr.Core.Download.DownloadMonitorService>());
             builder.Services.AddSingleton<Playerr.Core.Download.ImportStatusService>();
 
+            // Launch Services
+            builder.Services.AddSingleton<Playerr.Core.Launcher.ILaunchStrategy, Playerr.Core.Launcher.SteamLaunchStrategy>();
+            builder.Services.AddSingleton<Playerr.Core.Launcher.ILauncherService, Playerr.Core.Launcher.LauncherService>();
+            
             // Register SteamClient for direct usage (e.g. Settings Test/Sync)
             builder.Services.AddTransient<SteamClient>();
             
@@ -174,6 +178,7 @@ namespace Playerr.Host
             var app = builder.Build();
 
             // Configure middleware
+            app.UseDeveloperExceptionPage(); // FORCE DEBUG
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();

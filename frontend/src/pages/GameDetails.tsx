@@ -26,6 +26,7 @@ interface Game {
   status: string | number;
   isInstallable?: boolean;
   availablePlatforms?: string[];
+  steamId?: number;
 }
 
 interface TorrentResult {
@@ -423,6 +424,20 @@ const GameDetails: React.FC = () => {
     }
   };
 
+  const handlePlay = async () => {
+    // alert(`Debug: Launching game ${id} (Steam ID: ${game?.steamId})`); 
+    console.log('[handlePlay] Clicked. Game:', game);
+    console.log('[handlePlay] SteamId:', game?.steamId);
+    try {
+      setNotification({ message: t('launchingGame'), type: 'info' });
+      await axios.post(`/api/v3/game/${id}/play`);
+      setNotification({ message: t('gameLaunched'), type: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      setNotification({ message: err.response?.data?.error || t('errorLaunchingGame'), type: 'error' });
+    }
+  };
+
   if (loading) {
     return <div className="game-details"><p>{t('loadingGame')}</p></div>;
   }
@@ -482,7 +497,7 @@ const GameDetails: React.FC = () => {
             </button>
             <button
               className="action-btn"
-              onClick={() => console.log('Play clicked')}
+              onClick={handlePlay}
               title={t('play')}
             >
               <FontAwesomeIcon icon={faGamepad} />

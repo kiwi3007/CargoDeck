@@ -2,6 +2,7 @@ using System;
 using Microsoft.AspNetCore.Mvc;
 using Playerr.Core.Games;
 using Playerr.Core.MetadataSource;
+using Playerr.Core.Launcher;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
@@ -18,19 +19,31 @@ namespace Playerr.Api.V3.Games
         private readonly IGameRepository _repository;
         private readonly IGameMetadataServiceFactory _metadataServiceFactory;
         private readonly Playerr.Core.IO.IArchiveService _archiveService;
+        private readonly ILauncherService _launcherService;
 
-        public GameController(IGameRepository repository, IGameMetadataServiceFactory metadataServiceFactory, Playerr.Core.IO.IArchiveService archiveService)
+        public GameController(IGameRepository repository, IGameMetadataServiceFactory metadataServiceFactory, Playerr.Core.IO.IArchiveService archiveService, ILauncherService launcherService)
         {
             _repository = repository;
             _metadataServiceFactory = metadataServiceFactory;
             _archiveService = archiveService;
+            _launcherService = launcherService;
         }
 
         [HttpGet]
-        public async Task<ActionResult<List<Game>>> GetAll()
+        public async Task<IEnumerable<Game>> GetAll([FromQuery] string lang = "es")
         {
-            var games = await _repository.GetAllAsync();
-            return Ok(games);
+            System.Console.WriteLine("[API] GetAll Games Request Received");
+            try 
+            {
+                var games = await _repository.GetAllAsync();
+                System.Console.WriteLine($"[API] Retrieved {games.Count()} games from DB");
+                return games;
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"[API] Error in GetAll: {ex.Message} - {ex.StackTrace}");
+                throw;
+            }
         }
 
         [HttpGet("{id}")]
@@ -231,6 +244,31 @@ namespace Playerr.Api.V3.Games
             }
 
             return BadRequest($"No valid installer found in: {targetPath}");
+        }
+
+        [HttpPost("{id}/play")]
+        public async Task<ActionResult> Play(int id)
+        {
+            System.Console.WriteLine($"[API] Play Request Received for Game ID: {id}");
+            var game = await _repository.GetByIdAsync(id);
+            if (game == null) 
+            {
+                System.Console.WriteLine($"[API] Game ID {id} not found.");
+                return NotFound("Game not found");
+            }
+
+            System.Console.WriteLine($"[API] Launching Game: {game.Title} (SteamID: {game.SteamId})");
+
+            try
+            {
+                await _launcherService.LaunchGameAsync(game);
+                return Ok(new { message = $"Launching {game.Title}..." });
+            }
+            catch (System.Exception ex)
+            {
+                System.Console.WriteLine($"[Play] Error: {ex.Message}");
+                return BadRequest(new { error = ex.Message });
+            }
         }
 
         private string? FindInstaller(string rootPath, string? gameTitleHint = null)
