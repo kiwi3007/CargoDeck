@@ -77,6 +77,7 @@ const GameDetails: React.FC = () => {
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [showInstallWarning, setShowInstallWarning] = useState(false);
   const [activeTab, setActiveTab] = useState<'search' | 'files' | 'none'>('search'); // 'search' by default to keep existing behavior? Or none? User said "Search Game" is one function. Let's make it toggleable.
   // Actually, standard behavior was "Search Torrents" always visible at bottom. 
   // User wants a MENU. 
@@ -406,7 +407,12 @@ const GameDetails: React.FC = () => {
       setNotification({ message: t('errorUpdating'), type: 'error' });
     }
   };
-  const handleInstall = async () => {
+  const handleInstallClick = () => {
+    setShowInstallWarning(true);
+  };
+
+  const confirmInstall = async () => {
+    setShowInstallWarning(false);
     try {
       setNotification({ message: t('searchingInstaller'), type: 'info' });
       const res = await axios.post(`/api/v3/game/${id}/install`);
@@ -468,7 +474,7 @@ const GameDetails: React.FC = () => {
 
             <button
               className={`action-btn ${game.isInstallable ? 'install-ready' : ''}`}
-              onClick={handleInstall}
+              onClick={handleInstallClick}
               title={t('install')}
             >
               <FontAwesomeIcon icon={faDownload} />
@@ -712,6 +718,34 @@ const GameDetails: React.FC = () => {
           onClose={() => setShowCorrectionModal(false)}
           onSave={handleCorrectionSave}
         />
+      )}
+
+      {showInstallWarning && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>{t('installWarningTitle')}</h3>
+              <button className="modal-close" onClick={() => setShowInstallWarning(false)}>×</button>
+            </div>
+            <div className="modal-content">
+              <p style={{ color: '#cdd6f4', lineHeight: '1.6', marginBottom: '1.5rem' }}>{t('installWarningBody')}</p>
+              <div className="modal-actions">
+                <button
+                  className="btn-secondary"
+                  onClick={() => setShowInstallWarning(false)}
+                >
+                  {t('cancel')}
+                </button>
+                <button
+                  className="btn-danger"
+                  onClick={confirmInstall}
+                >
+                  {t('confirmInstall')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

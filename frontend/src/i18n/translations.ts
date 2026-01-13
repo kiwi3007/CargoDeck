@@ -110,6 +110,9 @@ export const translations = {
         failedToSaveClient: 'Error al guardar el cliente de descarga',
         confirmDeleteClient: '¿Estás seguro de que quieres eliminar este cliente de descarga?',
         confirmDeleteSource: '¿Estás seguro de que quieres eliminar esta fuente?',
+        installWarningTitle: 'Confirmar Instalación',
+        installWarningBody: 'Al proceder, confirmas que posees los derechos necesarios para utilizar este software. Recuerda verificar que la fuente sea segura y esté libre de malware. Playerr no se hace responsable del contenido descargado ni de su origen.',
+        confirmInstall: 'Instalar',
         deleteDownload: 'Eliminar Descarga',
         failedToDeleteClient: 'Error al eliminar el cliente de descarga',
         igdbRequired: 'Ingresa ID y Secreto IGDB para comenzar a escanear',
@@ -349,6 +352,9 @@ export const translations = {
         failedToSaveClient: 'Failed to save download client',
         confirmDeleteClient: 'Are you sure you want to delete this download client?',
         confirmDeleteSource: 'Are you sure you want to delete this source?',
+        installWarningTitle: 'Confirm Installation',
+        installWarningBody: 'By proceeding, you confirm that you own the necessary rights to use this software. Remember to verify that the source is safe and free of malware. Playerr is not responsible for downloaded content or its origin.',
+        confirmInstall: 'Install',
         deleteDownload: 'Delete Download',
         failedToDeleteClient: 'Failed to delete download client',
         igdbRequired: 'Enter IGDB ID and Secret to start scanning',
@@ -593,6 +599,11 @@ export const translations = {
         failedToSaveClient: 'Échec de l\'enregistrement du client de téléchargement',
         confirmDeleteClient: 'Êtes-vous sûr de vouloir supprimer ce client de téléchargement ?',
         failedToDeleteClient: 'Échec de la suppression du client de téléchargement',
+
+        installWarningTitle: 'Confirmer l\'installation',
+        installWarningBody: 'En continuant, vous confirmez posséder les droits nécessaires pour utiliser ce logiciel. Assurez-vous que la source est sûre. Playerr n\'est pas responsable du contenu téléchargé.',
+        confirmInstall: 'Installer',
+
         languageSaved: 'Langue enregistrée !',
 
         // User (Auto-translated)
