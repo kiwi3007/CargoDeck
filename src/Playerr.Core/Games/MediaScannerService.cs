@@ -90,6 +90,9 @@ namespace Playerr.Core.Games
             public string Path { get; set; } = string.Empty;
             public string? PlatformKey { get; set; }
             public string? Serial { get; set; }
+            public string? ExecutablePath { get; set; }
+            public bool IsInstaller { get; set; }
+            public bool IsExternal { get; set; }
         }
 
         public MediaScannerService(
@@ -181,6 +184,16 @@ namespace Playerr.Core.Games
                 {
                     gamesAdded = await ScanFileModeAsync(folderPath, rule, existingGames, platformKey, metadataService, _scanCts.Token);
                 }
+
+                // NEW: Wine/Whisky Integration (External Library)
+                // We scan this separately if configured.
+                var winePath = settings.WinePrefixPath;
+                if (!string.IsNullOrEmpty(winePath) && Directory.Exists(winePath))
+                {
+                    Log($"Scanning Wine/Whisky External Path: {winePath}");
+                    var externalGames = await ScanExternalLibraryAsync(winePath, existingGames, metadataService, _scanCts.Token);
+                    gamesAdded += externalGames;
+                }
             }
             catch (OperationCanceledException)
             {
@@ -237,7 +250,9 @@ namespace Playerr.Core.Games
                             Title = cleanName, 
                             Path = dir, // Main Path is still the folder
                             PlatformKey = platformKey, 
-                            Serial = serial
+                            Serial = serial,
+                            ExecutablePath = bestExePath,
+                            IsInstaller = isInstaller
                         };
                         
                         // New in V2: Store extra metadata
@@ -463,6 +478,65 @@ namespace Playerr.Core.Games
             }
 
             return await ProcessCandidatesBatchAsync(candidates, existingGames, metadataService, ct);
+
+        }
+
+        private async Task<int> ScanExternalLibraryAsync(string rootPath, List<Game> existingGames, GameMetadataService metadataService, System.Threading.CancellationToken ct)
+        {
+            var candidates = new List<GameCandidate>();
+            string[] allDirs;
+            try 
+            {
+                allDirs = Directory.GetDirectories(rootPath, "*", SearchOption.AllDirectories);
+            }
+            catch (Exception ex)
+            {
+                Log($"Error scanning external path {rootPath}: {ex.Message}");
+                return 0;
+            }
+            
+            foreach (var dir in allDirs)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (IsBlacklistedFolder(new DirectoryInfo(dir))) continue;
+
+                var (bestExe, isInstaller) = FindBestExecutable(dir, new[] { ".exe" });
+                
+                if (!string.IsNullOrEmpty(bestExe))
+                {
+                     var folderName = Path.GetFileName(dir);
+                     var (cleanName, serial) = CleanGameTitle(folderName);
+                     if (IsBlacklistedTitle(cleanName)) continue;
+
+                     if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)) &&
+                         !candidates.Any(c => c.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
+                     {
+                         candidates.Add(new GameCandidate
+                         {
+                             Title = cleanName,
+                             Path = dir,
+                             ExecutablePath = bestExe, 
+                             IsInstaller = isInstaller,
+                             IsExternal = true, 
+                             PlatformKey = "pc_windows",
+                             Serial = serial
+                         });
+                     }
+                }
+            }
+            return await ProcessCandidatesBatchAsync(candidates, existingGames, metadataService, ct);
+        }
+        
+        private bool IsBlacklistedTitle(string title)
+        {
+             var badNames = new[] { "Binaries", "Win64", "Win32", "Redist", "Support", "Common", "DirectX", "Launcher", "Prerequisites", "Engine", "Content" };
+             return badNames.Any(b => title.Equals(b, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool IsBlacklistedFolder(DirectoryInfo dir)
+        {
+             var badNames = new[] { "Windows", "Program Files", "Program Files (x86)", "Common Files", "Users", "drive_c", "dosdevices" };
+             return badNames.Contains(dir.Name, StringComparer.OrdinalIgnoreCase) || dir.Name.StartsWith(".");
         }
 
         private async Task<int> ProcessCandidatesBatchAsync(List<GameCandidate> candidates, List<Game> existingGames, GameMetadataService metadataService, System.Threading.CancellationToken ct)
@@ -483,21 +557,18 @@ namespace Playerr.Core.Games
                     ct.ThrowIfCancellationRequested();
                     
                     // Re-evaluate executable for Folder candidates (Lazy evaluation)
-                    string? exePath = null;
-                    bool isInstaller = false;
+                    string? exePath = candidate.ExecutablePath;
+                    bool isInstaller = candidate.IsInstaller;
 
-                    // If it's a folder (no extension), try to find the executable again
-                    // This is slightly redundant but safer than extending GameCandidate class which I cannot do easily here.
-                    // Actually, let's check if it's a directory
-                    if (Directory.Exists(candidate.Path) && !File.Exists(candidate.Path))
+                    // If it's a folder (no extension) AND no explicit exe path set, try to find it
+                    if (string.IsNullOrEmpty(exePath) && Directory.Exists(candidate.Path) && !File.Exists(candidate.Path))
                     {
                          // Folder Mode: Find best exe
-                         // We assume we are in the same context
                          var result = FindBestExecutable(candidate.Path, null); // Pass null for exts or assume defaults
                          exePath = result.Path;
                          isInstaller = result.IsInstaller;
                     }
-                    else
+                    else if (string.IsNullOrEmpty(exePath))
                     {
                         // File Mode: Path isExe
                         exePath = candidate.Path;
@@ -505,7 +576,7 @@ namespace Playerr.Core.Games
                         isInstaller = name.StartsWith("setup", StringComparison.OrdinalIgnoreCase) || name.StartsWith("install", StringComparison.OrdinalIgnoreCase);
                     }
 
-                    if (await ProcessPotentialGame(candidate.Title, existingGames, metadataService, candidate.Path, candidate.PlatformKey, candidate.Serial, exePath, isInstaller))
+                    if (await ProcessPotentialGame(candidate.Title, existingGames, metadataService, candidate.Path, candidate.PlatformKey, candidate.Serial, exePath, isInstaller, candidate.IsExternal))
                     {
                         added++;
                     }
@@ -518,8 +589,8 @@ namespace Playerr.Core.Games
             return added;
         }
 
-        // Updated signature to accept exePath and isInstaller
-        private async Task<bool> ProcessPotentialGame(string gameTitle, List<Game> existingGames, GameMetadataService metadataService, string? localPath = null, string? platformKey = null, string? serial = null, string? executablePath = null, bool isInstaller = false)
+        // Updated signature to accept exePath and isInstaller and isExternal
+        private async Task<bool> ProcessPotentialGame(string gameTitle, List<Game> existingGames, GameMetadataService metadataService, string? localPath = null, string? platformKey = null, string? serial = null, string? executablePath = null, bool isInstaller = false, bool isExternal = false)
         {
             var existingByPath = existingGames.FirstOrDefault(g => g.Path == localPath);
             if (existingByPath != null) return false;
@@ -527,9 +598,12 @@ namespace Playerr.Core.Games
             var existingByTitle = existingGames.FirstOrDefault(g => g.Title.Equals(gameTitle, StringComparison.OrdinalIgnoreCase));
             if (existingByTitle != null)
             {
+                // If it's the SAME path, update metadata. If it's different path, maybe we want to keep the existing one or update?
+                // For now, update logic:
                 Log($"Updating existing game '{gameTitle}' path to: {localPath}");
                 existingByTitle.Path = localPath;
-                existingByTitle.ExecutablePath = executablePath; // Update exe path
+                existingByTitle.ExecutablePath = executablePath; 
+                existingByTitle.IsExternal = isExternal; // Update Flag
                 if (isInstaller) existingByTitle.Status = GameStatus.InstallerDetected;
                 
                 await _gameRepository.UpdateAsync(existingByTitle.Id, existingByTitle);
@@ -552,6 +626,7 @@ namespace Playerr.Core.Games
                         {
                             match.Path = localPath;
                             match.ExecutablePath = executablePath;
+                            match.IsExternal = isExternal;
                             await _gameRepository.UpdateAsync(match.Id, match);
                             return true;
                         }
@@ -561,6 +636,7 @@ namespace Playerr.Core.Games
                         {
                             fullMetadata.Path = localPath;
                             fullMetadata.ExecutablePath = executablePath; // Set Exe Path
+                            fullMetadata.IsExternal = isExternal; // Set Flag
                             fullMetadata.PlatformId = await ResolvePlatformIdAsync(platformKey);
                             
                             if (isInstaller) fullMetadata.Status = GameStatus.InstallerDetected;
@@ -568,7 +644,7 @@ namespace Playerr.Core.Games
                             var newGame = await _gameRepository.AddAsync(fullMetadata);
                             existingGames.Add(newGame);
                             
-                            Log($"Added new game: {newGame.Title} (Exe: {executablePath})");
+                            Log($"Added new game: {newGame.Title} (Exe: {executablePath}, Ext: {isExternal})");
                             LastGameFound = newGame.Title;
                             GamesAddedCount++;
                             OnGameAdded?.Invoke(newGame);

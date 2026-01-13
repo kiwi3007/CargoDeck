@@ -195,6 +195,20 @@ namespace Playerr.Host
                     context.Database.EnsureCreated();
                     Console.WriteLine($"[Database] SQLite initialized at: {dbPath}");
 
+                    // [Schema Update] v0.4.0
+                    Console.WriteLine("[Database] Checking for schema updates (v0.4.0)...");
+                    try {
+                        // Check if ExecutablePath column exists
+                        context.Database.ExecuteSqlRaw("ALTER TABLE Games ADD COLUMN ExecutablePath TEXT;");
+                        Console.WriteLine("[Schema] Added ExecutablePath column.");
+                    } catch {} 
+
+                    try {
+                        // Check if IsExternal column exists
+                        context.Database.ExecuteSqlRaw("ALTER TABLE Games ADD COLUMN IsExternal INTEGER DEFAULT 0;");
+                         Console.WriteLine("[Schema] Added IsExternal column.");
+                    } catch {}
+
                     // Ensure required platforms exist (Seed missing ones for existing databases)
                     Console.WriteLine("[Database] Verifying default platforms...");
                     
@@ -316,6 +330,18 @@ namespace Playerr.Host
                      if (Directory.Exists(potentialDevPath))
                      {
                          uiPath = potentialDevPath;
+                     }
+                     else
+                     {
+                         // Fallback using CurrentDirectory (useful for dotnet run)
+                         // PWD = src/Playerr.Host
+                         // Target = _output/UI (in project root)
+                         // Path = ../../_output/UI
+                         var pwdPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "_output", "UI"));
+                         if (Directory.Exists(pwdPath))
+                         {
+                             uiPath = pwdPath;
+                         }
                      }
                  }
             }

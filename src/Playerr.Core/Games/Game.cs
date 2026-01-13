@@ -50,6 +50,7 @@ namespace Playerr.Core.Games
         
         // Launcher V2
         public string? ExecutablePath { get; set; }
+        public bool IsExternal { get; set; }
     }
     
     public class GameImages

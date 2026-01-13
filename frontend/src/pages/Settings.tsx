@@ -67,8 +67,9 @@ const Settings: React.FC = () => {
   const [folderPath, setFolderPath] = useState('');
   const [downloadPath, setDownloadPath] = useState('');
   const [destinationPath, setDestinationPath] = useState('');
+  const [winePrefixPath, setWinePrefixPath] = useState('');
   const [scanning, setScanning] = useState(false);
-  const [activeFolderField, setActiveFolderField] = useState<'media' | 'download' | 'destination' | 'clientLocalPath'>('media');
+  const [activeFolderField, setActiveFolderField] = useState<'media' | 'download' | 'destination' | 'wine' | 'clientLocalPath'>('media');
   const [language, setLanguage] = useState<Language>(getSavedLanguage());
   const [forceUpdateCounter, setForceUpdateCounter] = useState(0); // Force re-render trigger
   const [showFolderExplorer, setShowFolderExplorer] = useState(false);
@@ -212,7 +213,10 @@ const Settings: React.FC = () => {
       const mediaResponse = await axios.get('/api/v3/media');
       setFolderPath(mediaResponse.data.folderPath);
       setDownloadPath(mediaResponse.data.downloadPath || '');
+      setFolderPath(mediaResponse.data.folderPath);
+      setDownloadPath(mediaResponse.data.downloadPath || '');
       setDestinationPath(mediaResponse.data.destinationPath || '');
+      setWinePrefixPath(mediaResponse.data.winePrefixPath || '');
 
       const jackettResponse = await axios.get('/api/v3/settings/jackett');
       setJackettUrl(jackettResponse.data.url);
@@ -343,13 +347,14 @@ const Settings: React.FC = () => {
     }
   };
 
-  const saveMediaConfig = async (overrides?: { folderPath?: string, downloadPath?: string, destinationPath?: string }) => {
+  const saveMediaConfig = async (overrides?: { folderPath?: string, downloadPath?: string, destinationPath?: string, winePrefixPath?: string }) => {
     try {
       // Use PascalCase to ensure backend binding works (if case-sensitive)
       await axios.post('/api/v3/media', {
         FolderPath: overrides?.folderPath ?? folderPath,
         DownloadPath: overrides?.downloadPath ?? downloadPath,
         DestinationPath: overrides?.destinationPath ?? destinationPath,
+        WinePrefixPath: overrides?.winePrefixPath ?? winePrefixPath,
         Platform: 'default'
       });
       console.log('Media settings saved successfully');
@@ -811,11 +816,43 @@ const Settings: React.FC = () => {
             </div>
           </div>
 
-          <div className="button-group">
 
-          </div>
-        </form>
+      <div className="form-group" style={{ marginTop: '20px', borderTop: '1px solid #444', paddingTop: '15px' }}>
+        <div className="section-header-with-logo">
+          <h4>{t('wineIntegration') || 'Wine/Whisky Integration'}</h4>
+        </div>
+        <p className="settings-description-sm" style={{ fontSize: '0.85em', color: '#aaa' }}>{t('winePrefixPathDesc') || 'Path to scan for existing Windows executables. They will NOT be moved or renamed.'}</p>
+
+        <label htmlFor="wine-path">{t('winePrefixPath') || 'Bottle/Prefix Path'}</label>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <input
+            id="wine-path"
+            type="text"
+            value={winePrefixPath}
+            onChange={(e) => setWinePrefixPath(e.target.value)}
+            onBlur={() => saveMediaConfig({ winePrefixPath: winePrefixPath })}
+            placeholder="/Users/name/Library/Containers/com.isaacmarovitz.Whisky/Bottles/..."
+            style={{ flex: 1 }}
+          />
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => {
+              setActiveFolderField('wine');
+              setShowFolderExplorer(true);
+            }}
+            title={t('selectFolder')}
+          >
+            <FontAwesomeIcon icon={faFolderOpen} />
+          </button>
+        </div>
       </div>
+
+      <div className="button-group">
+
+      </div>
+    </form>
+      </div >
 
 
 
@@ -1172,428 +1209,433 @@ const Settings: React.FC = () => {
         </form>
       </div>
 
-      {
-        showClientModal && (
-          <div className="modal-overlay" onClick={() => setShowClientModal(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>{editingClient ? t('editDownloadClient') : t('addDownloadClient')}</h3>
-                <button className="modal-close" onClick={() => setShowClientModal(false)}>×</button>
+{
+  showClientModal && (
+    <div className="modal-overlay" onClick={() => setShowClientModal(false)}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{editingClient ? t('editDownloadClient') : t('addDownloadClient')}</h3>
+          <button className="modal-close" onClick={() => setShowClientModal(false)}>×</button>
+        </div>
+
+        <form onSubmit={handleSaveDownloadClient}>
+          <div className="form-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={clientForm.enable}
+                onChange={(e) => setClientForm({ ...clientForm, enable: e.target.checked })}
+              />
+              {t('enable')}
+            </label>
+          </div>
+
+          <div className="form-group">
+            <label>{t('name')}</label>
+            <input
+              type="text"
+              className="form-control"
+              value={clientForm.name}
+              onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
+              placeholder="e.g. Deluge"
+            />
+          </div>
+
+          <div className="form-group">
+            <label>{t('implementation')}</label>
+            <select
+              className="form-control"
+              value={clientForm.implementation}
+              onChange={(e) => setClientForm({ ...clientForm, implementation: e.target.value })}
+            >
+              <option value="qBittorrent">qBittorrent</option>
+              <option value="Transmission">Transmission</option>
+              <option value="Deluge">Deluge (WebUI)</option>
+              <option value="SABnzbd">SABnzbd</option>
+              <option value="NZBGet">NZBGet</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>{t('host')}</label>
+            <input
+              type="text"
+              className="form-control"
+              value={clientForm.host}
+              onChange={(e) => setClientForm({ ...clientForm, host: e.target.value })}
+              placeholder="localhost"
+            />
+          </div>
+
+          <div className="form-group">
+            <label>{t('port')}</label>
+            <input
+              type="number"
+              className="form-control"
+              value={clientForm.port}
+              onChange={(e) => setClientForm({ ...clientForm, port: parseInt(e.target.value) })}
+            />
+          </div>
+
+          {clientForm.implementation === 'Deluge' && (
+            <div className="form-group">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={clientForm.useSsl || false}
+                  onChange={(e) => setClientForm({ ...clientForm, useSsl: e.target.checked })}
+                />
+                Use SSL
+              </label>
+            </div>
+          )}
+
+          {(clientForm.implementation === 'qBittorrent' || clientForm.implementation === 'Deluge' || clientForm.implementation === 'Transmission' || clientForm.implementation === 'NZBGet') && (
+            <>
+              <div className="form-group">
+                <label>{t('username')}</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={clientForm.username || ''}
+                  onChange={(e) => setClientForm({ ...clientForm, username: e.target.value })}
+                  placeholder={clientForm.implementation === 'Deluge' ? 'Optional (WebUI usually only needs pass)' : ''}
+                />
               </div>
+              <div className="form-group">
+                <label>{t('password')}</label>
+                <input
+                  type="password"
+                  className="form-control"
+                  value={clientForm.password || ''}
+                  onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
+                />
+              </div>
+            </>
+          )}
 
-              <form onSubmit={handleSaveDownloadClient}>
-                <div className="form-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={clientForm.enable}
-                      onChange={(e) => setClientForm({ ...clientForm, enable: e.target.checked })}
-                    />
-                    {t('enable')}
-                  </label>
-                </div>
+          {(clientForm.implementation === 'SABnzbd') && (
+            <div className="form-group">
+              <label>{t('apiKey')}</label>
+              <input
+                type="text"
+                className="form-control"
+                value={clientForm.apiKey || ''}
+                onChange={(e) => setClientForm({ ...clientForm, apiKey: e.target.value })}
+              />
+            </div>
+          )}
 
-                <div className="form-group">
-                  <label>{t('name')}</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={clientForm.name}
-                    onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
-                    placeholder="e.g. Deluge"
-                  />
-                </div>
+          <div className="form-group">
+            <label>{t('category')}</label>
+            <input
+              type="text"
+              className="form-control"
+              value={clientForm.category || ''}
+              onChange={(e) => setClientForm({ ...clientForm, category: e.target.value })}
+              placeholder="playerr"
+            />
+            <small className="form-text text-muted">Optional, but recommended.</small>
+          </div>
 
-                <div className="form-group">
-                  <label>{t('implementation')}</label>
-                  <select
-                    className="form-control"
-                    value={clientForm.implementation}
-                    onChange={(e) => setClientForm({ ...clientForm, implementation: e.target.value })}
-                  >
-                    <option value="qBittorrent">qBittorrent</option>
-                    <option value="Transmission">Transmission</option>
-                    <option value="Deluge">Deluge (WebUI)</option>
-                    <option value="SABnzbd">SABnzbd</option>
-                    <option value="NZBGet">NZBGet</option>
-                  </select>
-                </div>
+          {clientForm.implementation !== 'Deluge' && (
+            <div className="form-group">
+              <label>URL Base</label>
+              <input
+                type="text"
+                className="form-control"
+                value={clientForm.urlBase || ''}
+                onChange={(e) => setClientForm({ ...clientForm, urlBase: e.target.value })}
+                placeholder="e.g. /qbittorrent"
+              />
+            </div>
+          )}
 
-                <div className="form-group">
-                  <label>{t('host')}</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={clientForm.host}
-                    onChange={(e) => setClientForm({ ...clientForm, host: e.target.value })}
-                    placeholder="localhost"
-                  />
-                </div>
+          <div className="form-group">
+            <label>Priority</label>
+            <select
+              className="form-control"
+              value={clientForm.priority}
+              onChange={(e) => setClientForm({ ...clientForm, priority: parseInt(e.target.value) })}
+            >
+              <option value={1}>High (Primary)</option>
+              <option value={50}>Last (Fallback)</option>
+            </select>
+          </div>
 
-                <div className="form-group">
-                  <label>{t('port')}</label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    value={clientForm.port}
-                    onChange={(e) => setClientForm({ ...clientForm, port: parseInt(e.target.value) })}
-                  />
-                </div>
+          <div className="form-group">
+            <label>{t('remotePath')}</label>
+            <input
+              type="text"
+              value={clientForm.remotePathMapping || ''}
+              onChange={(e) => setClientForm({ ...clientForm, remotePathMapping: e.target.value })}
+              placeholder="/downloads/"
+            />
+          </div>
 
-                {clientForm.implementation === 'Deluge' && (
-                  <div className="form-group">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={clientForm.useSsl || false}
-                        onChange={(e) => setClientForm({ ...clientForm, useSsl: e.target.checked })}
-                      />
-                      Use SSL
-                    </label>
-                  </div>
-                )}
-
-                {(clientForm.implementation === 'qBittorrent' || clientForm.implementation === 'Deluge' || clientForm.implementation === 'Transmission' || clientForm.implementation === 'NZBGet') && (
-                  <>
-                    <div className="form-group">
-                      <label>{t('username')}</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={clientForm.username || ''}
-                        onChange={(e) => setClientForm({ ...clientForm, username: e.target.value })}
-                        placeholder={clientForm.implementation === 'Deluge' ? 'Optional (WebUI usually only needs pass)' : ''}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>{t('password')}</label>
-                      <input
-                        type="password"
-                        className="form-control"
-                        value={clientForm.password || ''}
-                        onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
-                      />
-                    </div>
-                  </>
-                )}
-
-                {(clientForm.implementation === 'SABnzbd') && (
-                  <div className="form-group">
-                    <label>{t('apiKey')}</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={clientForm.apiKey || ''}
-                      onChange={(e) => setClientForm({ ...clientForm, apiKey: e.target.value })}
-                    />
-                  </div>
-                )}
-
-                <div className="form-group">
-                  <label>{t('category')}</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={clientForm.category || ''}
-                    onChange={(e) => setClientForm({ ...clientForm, category: e.target.value })}
-                    placeholder="playerr"
-                  />
-                  <small className="form-text text-muted">Optional, but recommended.</small>
-                </div>
-
-                {clientForm.implementation !== 'Deluge' && (
-                  <div className="form-group">
-                    <label>URL Base</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={clientForm.urlBase || ''}
-                      onChange={(e) => setClientForm({ ...clientForm, urlBase: e.target.value })}
-                      placeholder="e.g. /qbittorrent"
-                    />
-                  </div>
-                )}
-
-                <div className="form-group">
-                  <label>Priority</label>
-                  <select
-                    className="form-control"
-                    value={clientForm.priority}
-                    onChange={(e) => setClientForm({ ...clientForm, priority: parseInt(e.target.value) })}
-                  >
-                    <option value={1}>High (Primary)</option>
-                    <option value={50}>Last (Fallback)</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>{t('remotePath')}</label>
-                  <input
-                    type="text"
-                    value={clientForm.remotePathMapping || ''}
-                    onChange={(e) => setClientForm({ ...clientForm, remotePathMapping: e.target.value })}
-                    placeholder="/downloads/"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>{t('localPath')}</label>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <input
-                      type="text"
-                      value={clientForm.localPathMapping || ''}
-                      onChange={(e) => setClientForm({ ...clientForm, localPathMapping: e.target.value })}
-                      placeholder="/Volumes/downloads/"
-                      style={{ flex: 1 }}
-                    />
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => {
-                        // @ts-ignore
-                        if (window.external && window.external.sendMessage) {
-                          // We need a new handler for this specific field in Program.cs if we want native picker to work nicely
-                          // For now we reuse SELECT_FOLDER:DOWNLOAD technically it sets downloadPath but here we want localPathMapping
-                          // Actually, let's keep it simple for web mode first. Native mode would need Program.cs update.
-                          // Wait, if I trigger polling, I need to know where to put the result.
-                          // Let's implement web-mode explorer support first.
-                          setActiveFolderField('clientLocalPath');
-                          startFolderPolling();
-                          // @ts-ignore
-                          window.external.sendMessage('SELECT_FOLDER:CLIENT_LOCAL');
-                        } else {
-                          setActiveFolderField('clientLocalPath');
-                          setShowFolderExplorer(true);
-                        }
-                      }}
-                    >
-                      📂
-                    </button>
-                  </div>
-                </div>
-
-
-
-                {clientTestResult && (
-                  <div className={`test-result ${clientTestResult?.success === true ? 'success' : 'error'}`}>
-                    {clientTestResult?.message}
-                    {clientTestResult?.version && <div>{t('versionHeader')}: {clientTestResult.version}</div>}
-                  </div>
-                )}
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={handleTestDownloadClient}
-                    disabled={clientTesting}
-                  >
-                    {clientTesting ? t('testing') : t('testConnection')}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={(e) => handleSaveDownloadClient(e as any)}
-                  >
-                    {editingClient ? t('updateClient') : t('addClientButton')}
-                  </button>
-                </div>
-              </form>
+          <div className="form-group">
+            <label>{t('localPath')}</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input
+                type="text"
+                value={clientForm.localPathMapping || ''}
+                onChange={(e) => setClientForm({ ...clientForm, localPathMapping: e.target.value })}
+                placeholder="/Volumes/downloads/"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  // @ts-ignore
+                  if (window.external && window.external.sendMessage) {
+                    // We need a new handler for this specific field in Program.cs if we want native picker to work nicely
+                    // For now we reuse SELECT_FOLDER:DOWNLOAD technically it sets downloadPath but here we want localPathMapping
+                    // Actually, let's keep it simple for web mode first. Native mode would need Program.cs update.
+                    // Wait, if I trigger polling, I need to know where to put the result.
+                    // Let's implement web-mode explorer support first.
+                    setActiveFolderField('clientLocalPath');
+                    startFolderPolling();
+                    // @ts-ignore
+                    window.external.sendMessage('SELECT_FOLDER:CLIENT_LOCAL');
+                  } else {
+                    setActiveFolderField('clientLocalPath');
+                    setShowFolderExplorer(true);
+                  }
+                }}
+              >
+                📂
+              </button>
             </div>
           </div>
-        )
-      }
-      {/* Modals */}
-      <HydraSourceModal
-        isOpen={showHydraModal}
-        onClose={() => setShowHydraModal(false)}
-        onSave={loadHydraSources}
-        source={editingHydraSource}
-      />
 
-      {
-        showProwlarrModal && (
-          <div className="modal-overlay" onClick={() => setShowProwlarrModal(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>Configure Prowlarr</h3>
-                <button className="modal-close" onClick={() => setShowProwlarrModal(false)}>×</button>
-              </div>
-              <form onSubmit={handleSaveProwlarr}>
-                <div className="form-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={prowlarrEnabled}
-                      onChange={(e) => setProwlarrEnabled(e.target.checked)}
-                    />
-                    Enable Prowlarr
-                  </label>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="prowlarr-url">{t('prowlarrUrl')}</label>
-                  <input
-                    type="text"
-                    id="prowlarr-url"
-                    value={prowlarrUrl}
-                    onChange={(e) => setProwlarrUrl(e.target.value)}
-                    placeholder={t('prowlarrUrlPlaceholder')}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="prowlarr-api">{t('prowlarrApiKey')}</label>
-                  <input
-                    type="password"
-                    id="prowlarr-api"
-                    value={prowlarrApiKey}
-                    onChange={(e) => setProwlarrApiKey(e.target.value)}
-                    placeholder={t('prowlarrApiKeyPlaceholder')}
-                    required
-                  />
-                </div>
 
-                {prowlarrTestResult && (
-                  <div className={`test-result ${prowlarrTestResult?.success ? 'success' : 'error'}`}>
-                    {prowlarrTestResult?.message}
-                  </div>
-                )}
 
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={handleTestProwlarr}
-                    disabled={prowlarrTesting || !prowlarrUrl || !prowlarrApiKey}
-                  >
-                    {prowlarrTesting ? t('testing') : t('testConnection')}
-                  </button>
-                  <button type="submit" className="btn-primary">{t('save')}</button>
-                </div>
-              </form>
+          {clientTestResult && (
+            <div className={`test-result ${clientTestResult?.success === true ? 'success' : 'error'}`}>
+              {clientTestResult?.message}
+              {clientTestResult?.version && <div>{t('versionHeader')}: {clientTestResult.version}</div>}
             </div>
+          )}
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleTestDownloadClient}
+              disabled={clientTesting}
+            >
+              {clientTesting ? t('testing') : t('testConnection')}
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={(e) => handleSaveDownloadClient(e as any)}
+            >
+              {editingClient ? t('updateClient') : t('addClientButton')}
+            </button>
           </div>
-        )
-      }
+          <div className="button-group">
 
-      {
-        showJackettModal && (
-          <div className="modal-overlay" onClick={() => setShowJackettModal(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>Configure Jackett</h3>
-                <button className="modal-close" onClick={() => setShowJackettModal(false)}>×</button>
-              </div>
-              <form onSubmit={handleSaveJackett}>
-                <div className="form-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={jackettEnabled}
-                      onChange={(e) => setJackettEnabled(e.target.checked)}
-                    />
-                    Enable Jackett
-                  </label>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="jackett-url">{t('jackettUrl')}</label>
-                  <input
-                    type="text"
-                    id="jackett-url"
-                    value={jackettUrl}
-                    onChange={(e) => setJackettUrl(e.target.value)}
-                    placeholder={t('jackettUrlPlaceholder')}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="jackett-api">{t('jackettApiKey')}</label>
-                  <input
-                    type="password"
-                    id="jackett-api"
-                    value={jackettApiKey}
-                    onChange={(e) => setJackettApiKey(e.target.value)}
-                    placeholder={t('jackettApiKeyPlaceholder')}
-                    required
-                  />
-                </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
-                {jackettTestResult && (
-                  <div className={`test-result ${jackettTestResult?.success ? 'success' : 'error'}`}>
-                    {jackettTestResult?.message}
-                  </div>
-                )}
 
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={handleTestJackett}
-                    disabled={jackettTesting || !jackettUrl || !jackettApiKey}
-                  >
-                    {jackettTesting ? t('testing') : t('testConnection')}
-                  </button>
-                  <button type="submit" className="btn-primary">{t('save')}</button>
-                </div>
-              </form>
+{/* Modals */ }
+<HydraSourceModal
+  isOpen={showHydraModal}
+  onClose={() => setShowHydraModal(false)}
+  onSave={loadHydraSources}
+  source={editingHydraSource}
+/>
+
+{
+  showProwlarrModal && (
+    <div className="modal-overlay" onClick={() => setShowProwlarrModal(false)}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Configure Prowlarr</h3>
+          <button className="modal-close" onClick={() => setShowProwlarrModal(false)}>×</button>
+        </div>
+        <form onSubmit={handleSaveProwlarr}>
+          <div className="form-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={prowlarrEnabled}
+                onChange={(e) => setProwlarrEnabled(e.target.checked)}
+              />
+              Enable Prowlarr
+            </label>
+          </div>
+          <div className="form-group">
+            <label htmlFor="prowlarr-url">{t('prowlarrUrl')}</label>
+            <input
+              type="text"
+              id="prowlarr-url"
+              value={prowlarrUrl}
+              onChange={(e) => setProwlarrUrl(e.target.value)}
+              placeholder={t('prowlarrUrlPlaceholder')}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="prowlarr-api">{t('prowlarrApiKey')}</label>
+            <input
+              type="password"
+              id="prowlarr-api"
+              value={prowlarrApiKey}
+              onChange={(e) => setProwlarrApiKey(e.target.value)}
+              placeholder={t('prowlarrApiKeyPlaceholder')}
+              required
+            />
+          </div>
+
+          {prowlarrTestResult && (
+            <div className={`test-result ${prowlarrTestResult?.success ? 'success' : 'error'}`}>
+              {prowlarrTestResult?.message}
             </div>
+          )}
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleTestProwlarr}
+              disabled={prowlarrTesting || !prowlarrUrl || !prowlarrApiKey}
+            >
+              {prowlarrTesting ? t('testing') : t('testConnection')}
+            </button>
+            <button type="submit" className="btn-primary">{t('save')}</button>
           </div>
-        )
-      }
+        </form>
+      </div>
+    </div>
+  )
+}
 
-      {
-        showFolderExplorer && (
-          <FolderExplorerModal
-            initialPath={
-              activeFolderField === 'media' ? folderPath :
-                activeFolderField === 'download' ? downloadPath :
-                  activeFolderField === 'destination' ? destinationPath :
-                    (clientForm.localPathMapping || '')
-            }
-            onSelect={(path) => {
-              if (activeFolderField === 'media') {
-                setFolderPath(path);
-                saveMediaConfig({ folderPath: path });
-              }
-              else if (activeFolderField === 'download') {
-                setDownloadPath(path);
-                saveMediaConfig({ downloadPath: path });
-              }
-              else if (activeFolderField === 'destination') {
-                setDestinationPath(path);
-                saveMediaConfig({ destinationPath: path });
-              }
-              else if (activeFolderField === 'clientLocalPath') setClientForm({ ...clientForm, localPathMapping: path });
+{
+  showJackettModal && (
+    <div className="modal-overlay" onClick={() => setShowJackettModal(false)}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Configure Jackett</h3>
+          <button className="modal-close" onClick={() => setShowJackettModal(false)}>×</button>
+        </div>
+        <form onSubmit={handleSaveJackett}>
+          <div className="form-group">
+            <label>
+              <input
+                type="checkbox"
+                checked={jackettEnabled}
+                onChange={(e) => setJackettEnabled(e.target.checked)}
+              />
+              Enable Jackett
+            </label>
+          </div>
+          <div className="form-group">
+            <label htmlFor="jackett-url">{t('jackettUrl')}</label>
+            <input
+              type="text"
+              id="jackett-url"
+              value={jackettUrl}
+              onChange={(e) => setJackettUrl(e.target.value)}
+              placeholder={t('jackettUrlPlaceholder')}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="jackett-api">{t('jackettApiKey')}</label>
+            <input
+              type="password"
+              id="jackett-api"
+              value={jackettApiKey}
+              onChange={(e) => setJackettApiKey(e.target.value)}
+              placeholder={t('jackettApiKeyPlaceholder')}
+              required
+            />
+          </div>
 
-              setShowFolderExplorer(false);
-            }}
-            onClose={() => setShowFolderExplorer(false)}
-            language={language}
-          />
-        )
-      }
-
-      {
-        deleteConfirmation && (
-          <div className="modal-overlay" onClick={() => setDeleteConfirmation(null)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <h3>{t('deleteSource') || 'Delete Source'}</h3>
-                <button className="modal-close" onClick={() => setDeleteConfirmation(null)}>×</button>
-              </div>
-              <div className="modal-content">
-                <p>
-                  {t('confirmDeleteSource') || 'Are you sure you want to delete this source?'}: <br />
-                  <strong>{deleteConfirmation.name}</strong>
-                </p>
-              </div>
-              <div className="modal-actions">
-                <button className="btn-secondary" onClick={() => setDeleteConfirmation(null)}>{t('cancel')}</button>
-                <button className="btn-delete" onClick={confirmDeleteHydra}>{t('delete')}</button>
-              </div>
+          {jackettTestResult && (
+            <div className={`test-result ${jackettTestResult?.success ? 'success' : 'error'}`}>
+              {jackettTestResult?.message}
             </div>
+          )}
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleTestJackett}
+              disabled={jackettTesting || !jackettUrl || !jackettApiKey}
+            >
+              {jackettTesting ? t('testing') : t('testConnection')}
+            </button>
+            <button type="submit" className="btn-primary">{t('save')}</button>
           </div>
-        )
+        </form>
+      </div>
+    </div>
+  )
+}
+
+{
+  showFolderExplorer && (
+    <FolderExplorerModal
+      initialPath={
+        activeFolderField === 'media' ? folderPath :
+          activeFolderField === 'download' ? downloadPath :
+            activeFolderField === 'destination' ? destinationPath :
+              (clientForm.localPathMapping || '')
       }
+      onSelect={(path) => {
+        if (activeFolderField === 'media') {
+          setFolderPath(path);
+          saveMediaConfig({ folderPath: path });
+        }
+        else if (activeFolderField === 'download') {
+          setDownloadPath(path);
+          saveMediaConfig({ downloadPath: path });
+        }
+        else if (activeFolderField === 'destination') {
+          setDestinationPath(path);
+          saveMediaConfig({ destinationPath: path });
+        }
+        else if (activeFolderField === 'clientLocalPath') setClientForm({ ...clientForm, localPathMapping: path });
+
+        setShowFolderExplorer(false);
+      }}
+      onClose={() => setShowFolderExplorer(false)}
+      language={language}
+    />
+  )
+}
+
+{
+  deleteConfirmation && (
+    <div className="modal-overlay" onClick={() => setDeleteConfirmation(null)}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{t('deleteSource') || 'Delete Source'}</h3>
+          <button className="modal-close" onClick={() => setDeleteConfirmation(null)}>×</button>
+        </div>
+        <div className="modal-content">
+          <p>
+            {t('confirmDeleteSource') || 'Are you sure you want to delete this source?'}: <br />
+            <strong>{deleteConfirmation.name}</strong>
+          </p>
+        </div>
+        <div className="modal-actions">
+          <button className="btn-secondary" onClick={() => setDeleteConfirmation(null)}>{t('cancel')}</button>
+          <button className="btn-delete" onClick={confirmDeleteHydra}>{t('delete')}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
     </div >
   );
 };
