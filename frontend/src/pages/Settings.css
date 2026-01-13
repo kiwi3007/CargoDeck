@@ -227,13 +227,14 @@
 
 .client-info h4 {
   color: #cdd6f4;
-  margin: 0 0 0.25rem 0;
+  margin: 0;
   font-size: 1rem;
+  line-height: 1.2;
 }
 
 .client-info p {
   color: #a6adc8;
-  margin: 0;
+  margin: 0.25rem 0 0 0;
   font-size: 0.875rem;
 }
 
@@ -250,6 +251,7 @@
 .client-actions {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
 }
 
 .btn-edit,
@@ -377,12 +379,46 @@
   width: 100%;
 }
 
+/* Square action button strictly matching checkbox style */
+.btn-square-action {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  place-content: center;
+  border: 2px solid #313244;
+  border-radius: 4px;
+  background-color: #11111b;
+  color: #f38ba8;
+  /* Red for X */
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 18px;
+  /* Match checkmark size */
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.btn-square-action:hover {
+  border-color: #f38ba8;
+  background-color: rgba(243, 139, 168, 0.1);
+}
+
+.btn-square-action svg {
+  width: 18px;
+  height: 18px;
+}
+
 .checkbox-group input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
   /* Prevent shrinking */
   border: 2px solid #313244;
   border-radius: 4px;
@@ -403,8 +439,8 @@
 
 .checkbox-group input[type="checkbox"]::before {
   content: "";
-  width: 8px;
-  height: 8px;
+  width: 14px;
+  height: 14px;
   transform: scale(0);
   transition: 120ms transform ease-in-out;
   box-shadow: inset 1em 1em #11111b;
@@ -458,4 +494,32 @@
   font-size: 0.85rem !important;
   margin: 0 0 1.5rem 0 !important;
   line-height: 1.5 !important;
+}
+
+/* Alias btn-danger to btn-delete for consistency/standard names */
+.btn-danger {
+  background-color: rgba(243, 139, 168, 0.1);
+  color: #f38ba8;
+  border: 1px solid rgba(243, 139, 168, 0.2);
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-danger:hover {
+  background-color: rgba(243, 139, 168, 0.2);
+  border-color: rgba(243, 139, 168, 0.3);
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Make checkboxes in cards larger as requested */
+.client-card .checkbox-group {
+  margin-bottom: 0;
+  /* Ensure no extra margin affecting layout */
 }

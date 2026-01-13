@@ -51,7 +51,10 @@ namespace Playerr.Api.V3.Settings
             // Update the injected singleton so other services see the change immediately
             _prowlarrSettings.Url = request.Url;
             _prowlarrSettings.ApiKey = request.ApiKey;
+            _prowlarrSettings.Enabled = request.Enabled;
             
+            Console.WriteLine($"[Settings] Saving Prowlarr Settings. ENABLED = {request.Enabled}");
+
             // Save to persistent storage
             _configService.SaveProwlarrSettings(request);
 
@@ -71,7 +74,10 @@ namespace Playerr.Api.V3.Settings
             // Update the injected singleton so other services see the change immediately
             _jackettSettings.Url = request.Url;
             _jackettSettings.ApiKey = request.ApiKey;
+            _jackettSettings.Enabled = request.Enabled;
             
+            Console.WriteLine($"[Settings] Saving Jackett Settings. ENABLED = {request.Enabled}");
+
             // Save to persistent storage
             _configService.SaveJackettSettings(request);
 

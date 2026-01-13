@@ -139,6 +139,7 @@ namespace Playerr.Api.V3.DownloadClients
                         foreach (var d in downloads) 
                         {
                             d.ClientId = config.Id;
+                            d.ClientName = config.Name;
                             if (_importStatus.IsImporting(d.Id))
                             {
                                 d.State = DownloadState.Importing;

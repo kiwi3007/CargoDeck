@@ -23,6 +23,7 @@ namespace Playerr.Core.Configuration
         private readonly string _mediaConfigFile;
         private readonly string _steamConfigFile;
         private readonly string _postDownloadConfigFile;
+        private readonly string _hydraConfigFile;
 
         public ConfigurationService(string contentRoot)
         {
@@ -52,6 +53,7 @@ namespace Playerr.Core.Configuration
             _mediaConfigFile = Path.Combine(_configDirectory, "media.json");
             _steamConfigFile = Path.Combine(_configDirectory, "steam.json");
             _postDownloadConfigFile = Path.Combine(_configDirectory, "postdownload.json");
+            _hydraConfigFile = Path.Combine(_configDirectory, "hydra.json");
             
             try 
             {
@@ -232,6 +234,26 @@ namespace Playerr.Core.Configuration
         {
             try { File.WriteAllText(_postDownloadConfigFile, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true })); }
             catch { }
+        }
+
+        public List<Playerr.Core.Indexers.HydraConfiguration> LoadHydraIndexers()
+        {
+            if (File.Exists(_hydraConfigFile))
+            {
+                try
+                {
+                    var json = File.ReadAllText(_hydraConfigFile);
+                    return JsonSerializer.Deserialize<List<Playerr.Core.Indexers.HydraConfiguration>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<Playerr.Core.Indexers.HydraConfiguration>();
+                }
+                catch (Exception ex) { Console.WriteLine($"Error loading Hydra indexers: {ex.Message}"); }
+            }
+            return new List<Playerr.Core.Indexers.HydraConfiguration>();
+        }
+
+        public void SaveHydraIndexers(List<Playerr.Core.Indexers.HydraConfiguration> indexers)
+        {
+            try { File.WriteAllText(_hydraConfigFile, JsonSerializer.Serialize(indexers, new JsonSerializerOptions { WriteIndented = true })); }
+            catch (Exception ex) { Console.WriteLine($"Error saving Hydra indexers: {ex.Message}"); }
         }
     }
 

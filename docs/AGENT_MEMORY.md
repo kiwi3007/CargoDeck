@@ -12,53 +12,68 @@ Este documento sirve como "memoria persistente" para garantizar la continuidad e
 ---
 
 ## 2. 📜 Las "Reglas Sagradas" (The Sacred Texts)
-Estas reglas son inmutables a menos que el usuario lo autorice explícitamente. Consultar siempre los documentos en `docs/`.
+Estas reglas son inmutables a menos que el usuario lo autorice explícitamente.
 
-### 2.1 Lógica de Instalación (`docs/INSTALLER_LOGIC.md`)
-*   **Detección:** Fuzzy Matching (`setup*.exe`, `install*.exe`) + Profundidad 1 (Raíz + 1 Nivel de subcarpetas).
-*   **Priorización:** Si hay ambigüedad, gana el archivo que contiene el nombre del juego o el más pesado.
-*   **Implementación:** Usar siempre el helper `FindInstaller` en `GameController.cs` y `MediaScannerService.cs`. **Nunca volver a la lógica estricta de "solo setup.exe".**
+### 2.1 Reglas de Trabajo
+*   **User Testing Rule:** El usuario se encarga de todo el testeo frontend. **No usar la herramienta de navegador para verificación de UI**, consume mucho tiempo. Centrarnos en código y verificación backend (curl, logs).
+*   **Documentación:** PROHIBIDO usar emojis en documentos oficiales (`README.md`, `RELEASE_NOTES.md`, `MEMORIAS.md`). Solo texto profesional.
 
-### 2.2 Lógica de Lanzamiento (`docs/TECHNICAL_SPECS_LAUNCHER.md`) - v2.0 Stable
-*   **macOS:** Estrategia `MacNativeStrategy`. Usamos el comando `/usr/bin/open "{exePath}"`.
-    *   **Prohibido:** Intentar integrar Whisky/Crossover vía CLI. Es inestable.
-    *   **Delegación:** Confiamos en la asociación de archivos del usuario (Finder).
+### 2.2 Lógica de Instalación (`docs/INSTALLER_LOGIC.md`)
+*   **Detección:** Fuzzy Matching (`setup*.exe`, `install*.exe`) + Profundidad 1. Prioridad: Nombre del juego o archivo más pesado.
+*   **Implementación:** Usar siempre `FindInstaller` en `GameController.cs`. Nunca "solo setup.exe".
 
----
-
-## 3. ✅ Logros y Estado Actual (The Checkpoint)
-*   **Base de Datos:** SQLite (`playerr.db`). Recientemente arreglado un error de esquema (faltaba columna `IsInstallable`).
-*   **Feature: Botón Verde (Install Ready):**
-    *   El frontend muestra un botón verde brillante si `game.IsInstallable == true`.
-    *   Esto se calcula dinámicamente en `GameController.GetById` usando la lógica de detección.
-*   **Fix Crítico:** Armonización de detección vs. ejecución. Ahora ambos usan `FindInstaller`, permitiendo instalar juegos de GOG anidados en subcarpetas.
+### 2.3 Lógica de Lanzamiento (`docs/TECHNICAL_SPECS_LAUNCHER.md`)
+*   **macOS:** Estrategia `MacNativeStrategy` (`/usr/bin/open "{exePath}"`).
+*   **Prohibido:** Integrar Whisky/Crossover vía CLI. Delegar en Finder.
 
 ---
 
-## 4. 🗣️ Estilo de Comunicación
-*   **Idioma:** Responder en el idioma que use el usuario (principalmente Español).
-*   **Tono:** Profesional, técnico pero colaborador ("Pair Programmer").
-*   **Proactividad:** Proponer soluciones robustas (como `FindInstaller`) en lugar de parches rápidos. Documentar cambios importantes.
+## 3. 🛠️ Soluciones y Mecánicas Probadas (Proven Mechanics)
+
+### 3.1 Docker y Base de Datos (Upsert Seeding)
+Los volúmenes persistentes pueden saltarse la inicialización.
+*   **Solución:** En `Program.cs`, no usar `!Any()`. Iterar y añadir plataformas una por una si faltan (Upsert).
+
+### 3.2 Limpieza de Librería
+*   **Backend:** `DELETE /api/v3/media/clean` -> `SqliteGameRepository.DeleteAllAsync()` (borrado real).
+*   **Frontend:** Botones con confirmación (`window.confirm`).
+
+### 3.3 Soporte de Plataformas (IDs Estándar)
+*   **PC:** 6 | **Mac:** 14 | **Switch:** 130 | **PSP:** 38 | **PS1-5:** 7, 8, 9, 48, 167.
+*   **MediaScanner:** Si falla la detección, fallback a **ID 6 (PC)** para evitar crashes.
 
 ---
 
-## 5. 🛠️ Comandos Frecuentes
-*   **Build Backend:** `dotnet build src/Playerr.Host/Playerr.Host.csproj`
-*   **Run Backend:** `dotnet run --project src/Playerr.Host/Playerr.Host.csproj`
-*   **Frontend Dev:** `npx webpack serve --config ./frontend/build/webpack.config.js`
-*   **Debug Output:** `curl -v http://127.0.0.1:5002/api/v3/...`
+## 4. � Proceso de Release (The Ritual)
+1.  **Bump Versión:** `package.json`, `build_all.sh`, `csproj`, `About.tsx`.
+2.  **Docs:** Actualizar `RELEASE_NOTES.md` (Sin emojis).
+3.  **Compilar:** `./build_all.sh` (Genera artifactos en `build_artifacts/`).
+4.  **Docker:** `docker-compose build --no-cache` o push a Hub.
 
 ---
 
-## 6. 🔑 Gestión de Credenciales (The Vault)
-**Importante:** Todas las credenciales sensibles residen en el directorio `config/` y **NUNCA** deben ser hardcodeadas.
+## 5. 🔑 Gestión de Credenciales (The Vault)
+**Ubicación:** `config/*.json`. NUNCA hardcoded.
 
-*   **Fuentes de Verdad:**
-    *   **Orb (Casa):** Configuración para uso local/potente.
-    *   **Raspberry Pi:** Configuración para entorno ligero.
-*   **Ubicación:** Ambos perfiles ya están configurados en archivos JSON dentro de `config/` (ej: `jackett.json`, `prowlarr.json`).
-*   **Protocolo de Activación (User Command):**
-    *   **El Trigger:** El usuario dirá explícitamente comandos como **"Carga Orb"** o **"Carga Raspberry"**.
-    *   **Tu Respuesta:** NUNCA pidas claves o APIs. Tu acción es verificar/asegurar que el backend esté usando los archivos correctos de `config/`.
-    *   **Recuperación:** Si pierdes el contexto y el usuario dice "Carga Orb", no preguntes "¿Qué es Orb?". Ve a `config/`, busca los archivos y confirma la carga.
-    *   **Persistencia (Regla de Oro):** Si el usuario dice "Lanza la app" tras haber pedido "Orb" (o si te quejas de que está vacío), **SIEMPRE asegúrate de que los archivos `jackett.orb.json` y `prowlarr.orb.json` están copiados en `jackett.json` y `prowlarr.json` ANTES de lanzar.** No lances la app "de fábrica" si el usuario ya te ha dado contexto de su entorno.
+*   **Perfiles:** "Orb" (Casa/Potente) vs "Raspberry" (Ligero).
+*   **Protocolo:** Si el usuario dice "Carga Orb", verificar existencia en `config/`.
+*   **Regla de Oro:** Antes de lanzar, asegurar que se usan los JSON correctos si el usuario ha dado contexto.
+
+---
+
+## 6. 🗣️ Estilo de Comunicación y Comandos
+*   **Idioma:** Español.
+*   **Tono:** Pair Programmer profesional.
+*   **Comandos Frecuentes:**
+    *   Backend Build: `dotnet build src/Playerr.Host/Playerr.Host.csproj`
+    *   Backend Run: `dotnet run --project src/Playerr.Host/Playerr.Host.csproj` (Puerto 5002 o 5000)
+    *   Frontend: `npx webpack serve --config ./frontend/build/webpack.config.js`
+    *   Debug API: `curl -v http://127.0.0.1:5002/api/v3/...`
+
+---
+
+## 7. 🚧 Lecciones Aprendidas (Log)
+*   **Feature Hydra (Enero 2026):** Añadido soporte para índices JSON como feature aditiva en `hydra.json`. Se arregló persistencia registrando explícitamente el Controller.
+*   **Revert Unified Indexers:** No hacer refactors masivos. Cambios atómicos.
+*   **Edición de Código:** Reemplazar, no añadir al final.
+*   **Recuperación:** `git reset --hard HEAD` es tu amigo si se rompe la estabilidad.

@@ -59,6 +59,7 @@ const Library: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [forceUpdateCounter, setForceUpdateCounter] = useState(0); // Force re-render trigger
   const [isIgdbConfigured, setIsIgdbConfigured] = useState(true); // Assume true until check
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, visible: boolean, game: Game | null }>({
     x: 0,
@@ -180,15 +181,18 @@ const Library: React.FC = () => {
     }
   };
 
-  const handleClearLibrary = async () => {
-    if (window.confirm(t('clearLibraryConfirm'))) {
-      try {
-        await axios.delete('/api/v3/game/all');
-        await loadGames();
-        alert(t('libraryCleared'));
-      } catch (error) {
-        console.error('Error clearing library:', error);
-      }
+  const handleClearLibrary = () => {
+    setShowClearConfirm(true);
+  };
+
+  const confirmClearLibrary = async () => {
+    try {
+      await axios.delete('/api/v3/game/all');
+      await loadGames();
+    } catch (error) {
+      console.error('Error clearing library:', error);
+    } finally {
+      setShowClearConfirm(false);
     }
   };
 
@@ -548,6 +552,34 @@ const Library: React.FC = () => {
         ]}
         onClose={() => setContextMenu({ ...contextMenu, visible: false })}
       />
+
+      {showClearConfirm && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>{t('clearLibrary')}</h3>
+              <button className="modal-close" onClick={() => setShowClearConfirm(false)}>×</button>
+            </div>
+            <div className="modal-content">
+              <p>{t('clearLibraryConfirm')}</p>
+              <div className="modal-actions">
+                <button
+                  className="btn-secondary"
+                  onClick={() => setShowClearConfirm(false)}
+                >
+                  {t('cancel')}
+                </button>
+                <button
+                  className="btn-danger"
+                  onClick={confirmClearLibrary}
+                >
+                  {t('delete')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 };

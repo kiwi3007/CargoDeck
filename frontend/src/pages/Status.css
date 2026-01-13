@@ -156,3 +156,110 @@
     align-items: center;
     justify-content: flex-end;
 }
+
+
+/* Modal Styles copied from Settings.css for consistency */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal {
+    background-color: #181825;
+    border-radius: 8px;
+    border: 1px solid #313244;
+    width: 90%;
+    max-width: 500px;
+    /* Slightly smaller for delete confirmation */
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid #313244;
+}
+
+.modal-header h3 {
+    color: #cdd6f4;
+    margin: 0;
+    font-size: 1.25rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: #a6adc8;
+    font-size: 2rem;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.modal-close:hover {
+    color: #cdd6f4;
+}
+
+.modal-content {
+    padding: 1.5rem;
+    color: #cdd6f4;
+    line-height: 1.5;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    padding: 1.5rem;
+    /* Add padding to match header/content */
+    border-top: 1px solid #313244;
+    background-color: rgba(0, 0, 0, 0.2);
+    /* Slight darken for actions area */
+}
+
+/* Button styles for Modal */
+.btn-secondary {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    background-color: #313244;
+    color: #cdd6f4;
+}
+
+.btn-secondary:hover {
+    background-color: #45475a;
+    transform: translateY(-1px);
+}
+
+.btn-danger-modal {
+    /* Renamed to avoid overlap if any, but consistent style */
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    background-color: #f38ba8;
+    color: #11111b;
+}
+
+.btn-danger-modal:hover {
+    background-color: #f5c2e7;
+    /* Lighter pink/red on hover */
+    transform: translateY(-1px);
+}

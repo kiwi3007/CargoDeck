@@ -46,7 +46,8 @@ namespace Playerr.Host
             System.Console.WriteLine("DEBUG: Registering Services...");
             builder.Services.AddControllers()
                 .AddApplicationPart(typeof(Playerr.Api.V3.Games.GameController).Assembly)
-                .AddApplicationPart(typeof(Playerr.Api.V3.Settings.MediaController).Assembly);
+                .AddApplicationPart(typeof(Playerr.Api.V3.Settings.MediaController).Assembly)
+                .AddApplicationPart(typeof(Playerr.Api.V3.Settings.HydraController).Assembly);
             
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();

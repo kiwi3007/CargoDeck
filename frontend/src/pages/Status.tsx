@@ -11,12 +11,14 @@ interface DownloadStatus {
     state: number; // Enum: 0=Downloading, 1=Paused, 2=Completed, 3=Error, 4=Queued, 5=Checking, 6=Deleted, 7=Importing
     category: string;
     downloadPath: string;
+    clientName: string;
 }
 
 const Status: React.FC = () => {
     const { t } = useTranslation();
     const [downloads, setDownloads] = useState<DownloadStatus[]>([]);
     const [loading, setLoading] = useState(true);
+    const [deleteCandidate, setDeleteCandidate] = useState<{ clientId: number; id: string; name: string } | null>(null);
 
     const fetchQueue = async () => {
         try {
@@ -68,19 +70,22 @@ const Status: React.FC = () => {
         }
     };
 
-    const handleDelete = async (clientId: number, downloadId: string, e: React.MouseEvent) => {
+    const handleDeleteClick = (clientId: number, downloadId: string, name: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (!window.confirm(t('confirmDeleteDownload'))) {
-            return;
-        }
+        setDeleteCandidate({ clientId, id: downloadId, name });
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteCandidate) return;
 
         try {
-            const response = await fetch(`http://127.0.0.1:5002/api/v3/downloadclient/queue/${clientId}/${encodeURIComponent(downloadId)}`, {
+            const response = await fetch(`http://127.0.0.1:5002/api/v3/downloadclient/queue/${deleteCandidate.clientId}/${encodeURIComponent(deleteCandidate.id)}`, {
                 method: 'DELETE'
             });
 
             if (response.ok) {
-                setDownloads(prev => prev.filter(d => d.id !== downloadId));
+                setDownloads(prev => prev.filter(d => d.id !== deleteCandidate.id));
+                setDeleteCandidate(null);
             } else {
                 alert(t('failedToDeleteDownload'));
             }
@@ -122,6 +127,7 @@ const Status: React.FC = () => {
                 <table className="downloads-table">
                     <thead>
                         <tr>
+                            <th>Client</th>
                             <th>Name</th>
                             <th>Size</th>
                             <th>Progress</th>
@@ -132,13 +138,16 @@ const Status: React.FC = () => {
                     <tbody>
                         {downloads.length === 0 ? (
                             <tr>
-                                <td colSpan={5} className="empty-state">
+                                <td colSpan={6} className="empty-state">
                                     {loading ? t('loading') : t('noActiveDownloads')}
                                 </td>
                             </tr>
                         ) : (
                             downloads.map((download) => (
                                 <tr key={`${download.clientId}-${download.id}`}>
+                                    <td>
+                                        <span className="client-badge">{download.clientName}</span>
+                                    </td>
                                     <td style={{ maxWidth: '400px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         <div style={{ fontWeight: 500 }}>{download.name}</div>
                                         <div className="progress-bar-container">
@@ -175,7 +184,7 @@ const Status: React.FC = () => {
 
                                             <button
                                                 className="delete-btn"
-                                                onClick={(e) => handleDelete(download.clientId, download.id, e)}
+                                                onClick={(e) => handleDeleteClick(download.clientId, download.id, download.name, e)}
                                                 title={t('remove')}
                                             >
                                                 ✕
@@ -188,7 +197,32 @@ const Status: React.FC = () => {
                     </tbody>
                 </table>
             </div>
-        </div>
+
+
+            {
+                deleteCandidate && (
+                    <div className="modal-overlay" onClick={() => setDeleteCandidate(null)}>
+                        <div className="modal" onClick={(e) => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h3>{t('deleteDownload') || 'Delete Download'}</h3>
+                                <button className="modal-close" onClick={() => setDeleteCandidate(null)}>×</button>
+                            </div>
+                            <div className="modal-content">
+                                <p>
+                                    {t('confirmDeleteDownload') || 'Are you sure you want to delete this download?'}: <br />
+                                    <br />
+                                    <strong>{deleteCandidate.name}</strong>
+                                </p>
+                            </div>
+                            <div className="modal-actions">
+                                <button className="btn-secondary" onClick={() => setDeleteCandidate(null)}>{t('cancel')}</button>
+                                <button className="btn-danger-modal" onClick={confirmDelete}>{t('delete')}</button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 

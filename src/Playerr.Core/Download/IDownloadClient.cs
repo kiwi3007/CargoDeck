@@ -25,6 +25,7 @@ namespace Playerr.Core.Download
         public DownloadState State { get; set; }
         public string? Category { get; set; }
         public string? DownloadPath { get; set; }
+        public string ClientName { get; set; } = string.Empty;
     }
 
     public enum DownloadState

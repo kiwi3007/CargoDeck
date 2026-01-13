@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Playerr.Core.Prowlarr;
 using Playerr.Core.Jackett;
+using Playerr.Core.Configuration;
+using Playerr.Core.Indexers;
 using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Api.V3.Search
@@ -20,12 +22,14 @@ namespace Playerr.Api.V3.Search
     {
         private readonly ProwlarrSettings _prowlarrSettings;
         private readonly JackettSettings _jackettSettings;
+        private readonly ConfigurationService _configurationService;
         private readonly System.Net.Http.IHttpClientFactory _httpClientFactory;
 
-        public SearchController(ProwlarrSettings prowlarrSettings, JackettSettings jackettSettings, System.Net.Http.IHttpClientFactory httpClientFactory)
+        public SearchController(ProwlarrSettings prowlarrSettings, JackettSettings jackettSettings, ConfigurationService configurationService, System.Net.Http.IHttpClientFactory httpClientFactory)
         {
             _prowlarrSettings = prowlarrSettings;
             _jackettSettings = jackettSettings;
+            _configurationService = configurationService;
             _httpClientFactory = httpClientFactory;
         }
 
@@ -37,7 +41,14 @@ namespace Playerr.Api.V3.Search
                 return BadRequest("Query parameter is required");
             }
 
-            if (!_prowlarrSettings.IsConfigured && !_jackettSettings.IsConfigured)
+            var hydraConfigs = _configurationService.LoadHydraIndexers().Where(h => h.Enabled).ToList();
+
+            Console.WriteLine($"[Search] Query: {query}");
+            Console.WriteLine($"[Search] Prowlarr: Configured={_prowlarrSettings.IsConfigured}, Enabled={_prowlarrSettings.Enabled}");
+            Console.WriteLine($"[Search] Jackett: Configured={_jackettSettings.IsConfigured}, Enabled={_jackettSettings.Enabled}");
+            Console.WriteLine($"[Search] Hydra Sources: {hydraConfigs.Count} enabled");
+
+            if (!_prowlarrSettings.IsConfigured && !_jackettSettings.IsConfigured && !hydraConfigs.Any())
             {
                 // Return empty list if no providers configured
                 return new List<SearchResult>();
@@ -62,7 +73,8 @@ namespace Playerr.Api.V3.Search
             }
 
             // 1. Search Prowlarr Unified API (Better normalization than individual proxies)
-            if (_prowlarrSettings.IsConfigured)
+            // 1. Search Prowlarr Unified API (Better normalization than individual proxies)
+            if (_prowlarrSettings.IsConfigured && _prowlarrSettings.Enabled)
             {
                 var prowlarrClient = new ProwlarrClient(_prowlarrSettings.Url, _prowlarrSettings.ApiKey);
                 tasks.Add(prowlarrClient.SearchAsync(query, categoryIds).ContinueWith(t => 
@@ -77,7 +89,8 @@ namespace Playerr.Api.V3.Search
             }
 
             // 2. Search Jackett (Legacy/Direct)
-            if (_jackettSettings.IsConfigured)
+            // 2. Search Jackett (Legacy/Direct)
+            if (_jackettSettings.IsConfigured && _jackettSettings.Enabled)
             {
                 var jackettClient = new JackettClient(_jackettSettings.Url, _jackettSettings.ApiKey);
                 tasks.Add(jackettClient.SearchAsync(query, categoryIds)
@@ -106,6 +119,21 @@ namespace Playerr.Api.V3.Search
                             Provider = "Jackett"
                         }).ToList();
                     }));
+            }
+
+            // 3. Search HydraSources (JSON)
+            foreach (var hydraConfig in hydraConfigs)
+            {
+                var hydraClient = new HydraIndexer(sharedClient, hydraConfig.Name, hydraConfig.Url);
+                tasks.Add(hydraClient.SearchAsync(query).ContinueWith(t => 
+                {
+                    if (t.IsFaulted)
+                    {
+                        Console.WriteLine($"[SearchController] Hydra [{hydraConfig.Name}] Search Failed: {t.Exception?.InnerException?.Message}");
+                        return new List<SearchResult>();
+                    }
+                    return t.Result;
+                }));
             }
 
             try
