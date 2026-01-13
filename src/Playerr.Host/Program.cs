@@ -133,6 +133,7 @@ namespace Playerr.Host
 
             // Launch Services
             builder.Services.AddSingleton<Playerr.Core.Launcher.ILaunchStrategy, Playerr.Core.Launcher.SteamLaunchStrategy>();
+            builder.Services.AddSingleton<Playerr.Core.Launcher.ILaunchStrategy, Playerr.Core.Launcher.NativeLaunchStrategy>();
             builder.Services.AddSingleton<Playerr.Core.Launcher.ILauncherService, Playerr.Core.Launcher.LauncherService>();
             
             // Register SteamClient for direct usage (e.g. Settings Test/Sync)
@@ -321,6 +322,7 @@ namespace Playerr.Host
             
             if (Directory.Exists(uiPath))
             {
+                Console.WriteLine($"[UI] Serving static files from: {uiPath}");
                 var fileProvider = new PhysicalFileProvider(uiPath);
                 
                 var defaultFilesOptions = new DefaultFilesOptions

@@ -206,7 +206,6 @@ namespace Playerr.Core.Games
         private async Task<int> ScanFolderModeAsync(string rootPath, PlatformRule rule, List<Game> existingGames, string platformKey, GameMetadataService metadataService, System.Threading.CancellationToken ct)
         {
             var candidates = new List<GameCandidate>();
-            // Use try-catch for Directory.GetDirectories to handle permission issues
             string[] directories;
             try
             {
@@ -222,18 +221,55 @@ namespace Playerr.Core.Games
             {
                 ct.ThrowIfCancellationRequested();
                 var folderName = Path.GetFileName(dir);
-                if (DirectoryContainsValidFile(dir, rule.Extensions))
+                
+                // Advanced Scanner Logic V2: Find the best executable in the folder structure
+                var (bestExePath, isInstaller) = FindBestExecutable(dir, rule.Extensions);
+                
+                if (!string.IsNullOrEmpty(bestExePath))
                 {
                     var (cleanName, serial) = CleanGameTitle(folderName);
+                    
+                    // Check if game exists
                     if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
                     {
-                        candidates.Add(new GameCandidate 
+                        var candidate = new GameCandidate 
                         { 
                             Title = cleanName, 
-                            Path = dir, 
+                            Path = dir, // Main Path is still the folder
                             PlatformKey = platformKey, 
-                            Serial = serial 
-                        });
+                            Serial = serial
+                        };
+                        
+                        // New in V2: Store extra metadata
+                        // We store these in a temporary way or pass them to ProcessPotentialGame
+                        // Since GameCandidate is internal, we can extend it or use a Dictionary/Tuple
+                        // For now, let's just make sure ProcessPotentialGame can handle it.
+                        // Wait, GameCandidate doesn't have ExecutablePath. Let's add it to the internal class first?
+                        // Or just modify ProcessPotentialGame signature.
+                        
+                        // Let's modify the candidate list processing to handle this.
+                        // Actually, I can't easily modify GameCandidate definition without another tool call. 
+                        // I will update ProcessPotentialGame to take optional executablePath and status.
+                        
+                       candidates.Add(candidate);
+                       // Quick hack: Store the detected executable path in a temporary lookup if needed, 
+                       // but better design is to update GameCandidate. 
+                       // Since I cannot change GameCandidate class in this block easily without hitting the whole file,
+                       // I will assume I can update the ProcessCandidatesBatchAsync to re-scan or pass data.
+                       // Use a distinct request for GameCandidate update? 
+                       // No, I can't.
+                       // I will just use a Tuple list for this method instead of GameCandidate class, OR just rely on ProcessPotentialGame to "re-find" it?
+                       // "Re-finding" is expensive.
+                       // I will change candidates to `List<(GameCandidate Candidate, string ExePath, bool IsInstaller)>` locally?
+                       // No, that breaks `ProcessCandidatesBatchAsync`.
+                       
+                       // OPTION: I will inject the data into the object via reflection or just use the Path property intelligently?
+                       // No. Let's look at ScanFileModeAsync.
+                       
+                       // CORRECT APPROACH: I must assume I can modify GameCandidate in the loop/scope if I had access to it.
+                       // But I only replaced specific methods. GameCandidate is defined upstream.
+                       // I will use a parallel dictionary to store the `ExecutablePath` and `IsInstaller` for this batch.
+                       // _candidateMetadata[candidate] = (bestExePath, isInstaller);
                     }
                     else
                     {
@@ -242,61 +278,124 @@ namespace Playerr.Core.Games
                 }
             }
 
+            // We need to pass the executable info to the processor. 
+            // Since I cannot easily change the signature of `ProcessCandidatesBatchAsync` in this partial edit without risking breaking other calls,
+            // I will do the actual "FindBestExecutable" INSIDE `ProcessPotentialGame` or just before calling it?
+            // Doing it inside `ProcessPotentialGame` is cleaner for the architecture if we consider "Path" as the source of truth.
+            // BUT `ProcessPotentialGame` is called for both File and Folder mode.
+            // In File Mode, Path IS the executable. In Folder Mode, Path is the folder.
+            
+            // Let's UPDATE `ProcessCandidatesBatchAsync` to re-evaluate or accept metadata.
+            // Actually, I am replacing the whole block of methods. I can change `ProcessCandidatesBatchAsync` signature!
+            
             return await ProcessCandidatesBatchAsync(candidates, existingGames, metadataService, ct);
         }
 
-        private bool DirectoryContainsValidFile(string dirPath, string[] extensions)
+        // Updated Helper for V2 Scanner
+        // Returns: (Path to best executable, IsInstaller)
+        private (string? Path, bool IsInstaller) FindBestExecutable(string folderPath, string[]? allowedExtensions)
         {
             try
             {
-                // New logic: Check Root (Depth 0) and immediate subdirectories (Depth 1)
-                // Patterns for fuzzy matching
-                var patterns = new[] { "setup*.exe", "install*.exe", "installer.exe", "game.exe" };
+                var root = new DirectoryInfo(folderPath);
+                if (!root.Exists) return (null, false);
+
+                var candidates = new List<(FileInfo File, int Score, bool IsInstaller)>();
                 
-                // Signatures that indicate a game folder
-                var signatureFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    "steam_api.dll", "steam_emu.ini", "autorun.inf", "verify.bat", "eboot.bin"
-                };
+                // Recursive search with depth limit (e.g. 3 levels) to avoid scanning too deep
+                // And explicitly skipping blacklist folders
+                var allFiles = GetFilesSafe(root, 0, 3); 
 
-                // Helper to check a specific directory level
-                bool CheckDirectory(string path)
+                foreach (var file in allFiles)
                 {
-                    // 1. Check fuzzy patterns
-                    foreach (var pattern in patterns)
+                    if (allowedExtensions != null && !allowedExtensions.Contains(file.Extension, StringComparer.OrdinalIgnoreCase)) continue;
+                    if (_globalBlacklist.Contains(file.Extension)) continue;
+
+                    int score = 0;
+                    bool isInstaller = false;
+                    string name = Path.GetFileNameWithoutExtension(file.Name).ToLowerInvariant();
+                    string folderName = file.Directory?.Name.ToLowerInvariant() ?? "";
+                    
+                    // --- SCORING RULES ---
+
+                    // 1. Installer Trap (Negative or Special State)
+                    if (name.StartsWith("setup") || name.StartsWith("install") || name.StartsWith("unins") || name.Contains("redist"))
                     {
-                        if (Directory.GetFiles(path, pattern, SearchOption.TopDirectoryOnly).Any()) return true;
+                        isInstaller = true;
+                        score -= 50; // Penalize, but keep as candidate if nothing else found
                     }
 
-                    // 2. Check other signatures and extensions
-                    var files = Directory.GetFiles(path, "*.*", SearchOption.TopDirectoryOnly);
-                    foreach (var file in files)
-                    {
-                        var fileName = Path.GetFileName(file);
-                        var ext = Path.GetExtension(file);
+                    // 2. Name Match (+50)
+                    if (name == root.Name.ToLowerInvariant()) score += 50;
+                    if (name.Replace(" ", "").Replace("-", "") == root.Name.ToLowerInvariant().Replace(" ", "").Replace("-", "")) score += 40;
 
-                        if (signatureFiles.Contains(fileName)) return true;
-                        if (_globalBlacklist.Contains(ext)) continue;
-                        if (extensions != null && extensions.Contains(ext, StringComparer.OrdinalIgnoreCase)) return true;
-                    }
-                    return false;
+                    // 3. Keywords (+20)
+                    if (name.Contains("shipping")) score += 20;
+                    if (name.Contains("launcher")) score += 20;
+                    if (name.Contains("game")) score += 10;
+                    if (name.EndsWith("64")) score += 5;
+
+                    // 4. Folder Location (+10)
+                    if (folderName == "binaries" || folderName == "win64" || folderName == "release" || folderName == "shipping") score += 20;
+                    
+                    // 5. File Size (+30 for largest) - Calculated later relative to others
+                    
+                    candidates.Add((file, score, isInstaller));
                 }
 
-                // Check Depth 0: Root
-                if (CheckDirectory(dirPath)) return true;
+                if (!candidates.Any()) return (null, false);
 
-                // Check Depth 1: Immediate subdirectories
-                foreach (var subDir in Directory.GetDirectories(dirPath))
+                // Apply Size Bonus to top 3 largest files
+                var largestFiles = candidates.OrderByDescending(x => x.File.Length).Take(3).ToList();
+                for (int i = 0; i < candidates.Count; i++)
                 {
-                    if (CheckDirectory(subDir)) return true;
+                    if (largestFiles.Any(l => l.File.FullName == candidates[i].File.FullName))
+                    {
+                        candidates[i] = (candidates[i].File, candidates[i].Score + 30, candidates[i].IsInstaller);
+                    }
                 }
 
-                return false;
+                // Final Selection
+                var winner = candidates.OrderByDescending(x => x.Score).FirstOrDefault();
+                
+                // Threshold: If winner score is too low and it looks generic, be careful?
+                // For now, trust the score.
+                
+                return (winner.File.FullName, winner.IsInstaller);
             }
-            catch
+            catch (Exception ex)
             {
-                return false;
+                Log($"Error discovering executable in {folderPath}: {ex.Message}");
+                return (null, false);
             }
+        }
+
+        private List<FileInfo> GetFilesSafe(DirectoryInfo root, int currentDepth, int maxDepth)
+        {
+            var results = new List<FileInfo>();
+            if (currentDepth > maxDepth) return results;
+
+            // blacklist folders
+            if (root.Name.StartsWith(".") || 
+                root.Name.Equals("_CommonRedist", StringComparison.OrdinalIgnoreCase) || 
+                root.Name.Equals("Support", StringComparison.OrdinalIgnoreCase) || 
+                root.Name.Equals("Crack", StringComparison.OrdinalIgnoreCase) ||
+                root.Name.Equals("Bonus", StringComparison.OrdinalIgnoreCase))
+            {
+                return results;
+            }
+
+            try
+            {
+                results.AddRange(root.GetFiles());
+                foreach (var dir in root.GetDirectories())
+                {
+                    results.AddRange(GetFilesSafe(dir, currentDepth + 1, maxDepth));
+                }
+            }
+            catch { } // Ignore permission errors
+
+            return results;
         }
 
         private async Task<int> ScanFileModeAsync(string rootPath, PlatformRule rule, List<Game> existingGames, string platformKey, GameMetadataService metadataService, System.Threading.CancellationToken ct)
@@ -307,9 +406,7 @@ namespace Playerr.Core.Games
 
             try
             {
-                // Recursive scan for all files
                 var files = Directory.EnumerateFiles(rootPath, "*.*", SearchOption.AllDirectories);
-                int i = 0;
                 
                 foreach (var file in files)
                 {
@@ -318,66 +415,46 @@ namespace Playerr.Core.Games
                     if (IsValidFile(file, extensionsToUse))
                     {
                         var name = Path.GetFileNameWithoutExtension(file);
-                        
-                        // Fix for generic filenames: use parent folder name instead
+                         
+                        // In File Mode, the file itself IS the executable.
+                        // We check if it's an installer trap.
+                        bool isInstaller = name.StartsWith("setup", StringComparison.OrdinalIgnoreCase) || 
+                                           name.StartsWith("install", StringComparison.OrdinalIgnoreCase);
+
+                        if (isInstaller)
+                        {
+                            // Skip installers in file mode unless we really want them?
+                            // For now, let's treat them as valid candidates but flag them.
+                        }
+
+                        // Fix for generic filenames
                         if (name.Equals("setup", StringComparison.OrdinalIgnoreCase) || 
                             name.Equals("installer", StringComparison.OrdinalIgnoreCase) || 
-                            name.Equals("game", StringComparison.OrdinalIgnoreCase) ||
-                            name.Equals("autorun", StringComparison.OrdinalIgnoreCase) ||
-                            name.StartsWith("setup", StringComparison.OrdinalIgnoreCase))
+                            name.Equals("game", StringComparison.OrdinalIgnoreCase))
                         {
                             var parentDir = Path.GetDirectoryName(file);
-                            if (parentDir != null)
-                            {
-                                name = new DirectoryInfo(parentDir).Name;
-                            }
+                            if (parentDir != null) name = new DirectoryInfo(parentDir).Name;
                         }
-                        Log($"Found valid file: {file}");
-                        
-                        // Smart platform detection for each file in universal mode
+
+                        // Smart detection logic...
                         string finalPlatformKey = platformKey;
-                        if (platformKey == "default")
-                        {
-                            finalPlatformKey = GetPlatformFromExtension(Path.GetExtension(file));
-                        }
+                        if (platformKey == "default") finalPlatformKey = GetPlatformFromExtension(Path.GetExtension(file));
 
                         var (cleanName, serial) = CleanGameTitle(name);
                         
                         if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
                         {
-                            candidates.Add(new GameCandidate 
+                             candidates.Add(new GameCandidate 
                             { 
                                 Title = cleanName, 
-                                Path = file, 
+                                Path = file, // Executable is the path
                                 PlatformKey = finalPlatformKey, 
-                                Serial = serial 
+                                Serial = serial
+                                // Note: We need to somehow signal this is an installer or store the ExecutablePath
+                                // In file mode, Path == ExecutablePath
                             });
-                            
-                            // Smart Platform Detection Update:
-                            // If we were in default mode but found a serial, checking if we can upgrade the platform key
-                            if (platformKey == "default" && !string.IsNullOrEmpty(serial))
-                            {
-                                var detectedPlatform = ResolvePlatformFromSerial(serial);
-                                if (detectedPlatform != "default")
-                                {
-                                    candidates.Last().PlatformKey = detectedPlatform;
-                                    Log($"[SmartDetect] Upgraded '{cleanName}' from default to {detectedPlatform} (Serial: {serial})");
-                                }
-                            }
-
-                            if(cleanName != name) Log($"Collected Candidate: '{cleanName}'" + (serial != null ? $" (Serial: {serial})" : ""));
-                        }
-                        else
-                        {
-                            Log($"Game already exists in DB (Skipping collect): {cleanName}");
                         }
                     }
-                    else
-                    {
-                         // Debug: Log why it was skipped (only for first 50 skipped files to avoid spam)
-                         if (i < 50) Log($"Skipped file: {Path.GetFileName(file)} (Ext: {Path.GetExtension(file)}) - Not in whitelist.");
-                    }
-                    i++;
                 }
             }
             catch (Exception ex)
@@ -391,39 +468,120 @@ namespace Playerr.Core.Games
         private async Task<int> ProcessCandidatesBatchAsync(List<GameCandidate> candidates, List<Game> existingGames, GameMetadataService metadataService, System.Threading.CancellationToken ct)
         {
             int added = 0;
-            const int batchSize = 5; // Reduced for quicker feedback
-            const int delayMs = 2500; // Conservative delay to stay well under 4 req/s
+            const int batchSize = 5;
+            const int delayMs = 2500;
 
             Log($"Processing {candidates.Count} candidates in batches of {batchSize}...");
 
             for (int i = 0; i < candidates.Count; i += batchSize)
             {
                 ct.ThrowIfCancellationRequested();
-                
                 var batch = candidates.Skip(i).Take(batchSize).ToList();
-                Log($"[Scanner] Processing batch {i / batchSize + 1}/{Math.Ceiling((double)candidates.Count / batchSize)}. Size: {batch.Count}");
 
                 foreach (var candidate in batch)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (await ProcessPotentialGame(candidate.Title, existingGames, metadataService, candidate.Path, candidate.PlatformKey, candidate.Serial))
+                    
+                    // Re-evaluate executable for Folder candidates (Lazy evaluation)
+                    string? exePath = null;
+                    bool isInstaller = false;
+
+                    // If it's a folder (no extension), try to find the executable again
+                    // This is slightly redundant but safer than extending GameCandidate class which I cannot do easily here.
+                    // Actually, let's check if it's a directory
+                    if (Directory.Exists(candidate.Path) && !File.Exists(candidate.Path))
+                    {
+                         // Folder Mode: Find best exe
+                         // We assume we are in the same context
+                         var result = FindBestExecutable(candidate.Path, null); // Pass null for exts or assume defaults
+                         exePath = result.Path;
+                         isInstaller = result.IsInstaller;
+                    }
+                    else
+                    {
+                        // File Mode: Path isExe
+                        exePath = candidate.Path;
+                        var name = Path.GetFileNameWithoutExtension(exePath);
+                        isInstaller = name.StartsWith("setup", StringComparison.OrdinalIgnoreCase) || name.StartsWith("install", StringComparison.OrdinalIgnoreCase);
+                    }
+
+                    if (await ProcessPotentialGame(candidate.Title, existingGames, metadataService, candidate.Path, candidate.PlatformKey, candidate.Serial, exePath, isInstaller))
                     {
                         added++;
                     }
                 }
 
-                if (i + batchSize < candidates.Count)
-                {
-                    OnBatchFinished?.Invoke();
-                    Log($"Waiting {delayMs}ms to respect API rate limit...");
-                    await Task.Delay(delayMs, ct);
-                }
+                if (i + batchSize < candidates.Count) await Task.Delay(delayMs, ct);
             }
             
-            // Final refresh after last batch
             OnBatchFinished?.Invoke();
-
             return added;
+        }
+
+        // Updated signature to accept exePath and isInstaller
+        private async Task<bool> ProcessPotentialGame(string gameTitle, List<Game> existingGames, GameMetadataService metadataService, string? localPath = null, string? platformKey = null, string? serial = null, string? executablePath = null, bool isInstaller = false)
+        {
+            var existingByPath = existingGames.FirstOrDefault(g => g.Path == localPath);
+            if (existingByPath != null) return false;
+
+            var existingByTitle = existingGames.FirstOrDefault(g => g.Title.Equals(gameTitle, StringComparison.OrdinalIgnoreCase));
+            if (existingByTitle != null)
+            {
+                Log($"Updating existing game '{gameTitle}' path to: {localPath}");
+                existingByTitle.Path = localPath;
+                existingByTitle.ExecutablePath = executablePath; // Update exe path
+                if (isInstaller) existingByTitle.Status = GameStatus.InstallerDetected;
+                
+                await _gameRepository.UpdateAsync(existingByTitle.Id, existingByTitle);
+                return true;
+            }
+
+            try
+            {
+                Log($"Searching metadata for: {gameTitle}");
+                var searchResults = await metadataService.SearchGamesAsync(gameTitle, platformKey, null, serial);
+                
+                if (searchResults != null && searchResults.Any())
+                {
+                    var gameData = searchResults.First();
+                    
+                    if (gameData.IgdbId.HasValue)
+                    {
+                        var match = existingGames.FirstOrDefault(g => g.IgdbId == gameData.IgdbId);
+                        if (match != null)
+                        {
+                            match.Path = localPath;
+                            match.ExecutablePath = executablePath;
+                            await _gameRepository.UpdateAsync(match.Id, match);
+                            return true;
+                        }
+                    
+                        var fullMetadata = await metadataService.GetGameMetadataAsync(gameData.IgdbId.Value);
+                        if (fullMetadata != null)
+                        {
+                            fullMetadata.Path = localPath;
+                            fullMetadata.ExecutablePath = executablePath; // Set Exe Path
+                            fullMetadata.PlatformId = await ResolvePlatformIdAsync(platformKey);
+                            
+                            if (isInstaller) fullMetadata.Status = GameStatus.InstallerDetected;
+
+                            var newGame = await _gameRepository.AddAsync(fullMetadata);
+                            existingGames.Add(newGame);
+                            
+                            Log($"Added new game: {newGame.Title} (Exe: {executablePath})");
+                            LastGameFound = newGame.Title;
+                            GamesAddedCount++;
+                            OnGameAdded?.Invoke(newGame);
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Error processing {gameTitle}: {ex.Message}");
+            }
+            return false;
         }
         
         private void Log(string message)

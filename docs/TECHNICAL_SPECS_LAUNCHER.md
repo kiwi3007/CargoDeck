@@ -35,7 +35,36 @@ Se mantiene la heurística de puntuación para encontrar el `.exe` o binario cor
     *   **+20 pts:** Palabras clave: `Shipping`, `Client`, `Game`, `Launcher`.
     *   **+10 pts:** Subcarpetas: `Binaries`, `Win64`.
 
-**Resultado:** Guardar en `Game.ExecutablePath`.
+### 2.2 Patrones de Estructura de Directorios (Folder Structure Patterns)
+Para mejorar la precisión del Scoring, el sistema debe identificar primero ante qué tipo de estructura de carpetas nos encontramos.
+
+#### A. The "Deep Nested" Pattern (Unreal/Unity Games)
+Es el estándar moderno (AAA y muchos Indies). El ejecutable en la raíz suele ser solo un launcher falso o un bootstrap, mientras que el ejecutable real está oculto en subdirectorios.
+
+*   **Lógica de Búsqueda:** Si no se encuentra un candidato claro en la raíz, descender recursivamente buscando carpetas clave:
+    *   `Binaries/Win64` (Standard Unreal Engine)
+    *   `GameData` (Unity)
+    *   `Bin`
+*   **Regla de Oro:** Si existen dos ejecutables con el mismo nombre (uno en raíz y otro en subcarpeta), priorizar el de mayor tamaño en la subcarpeta (suele ser el binario real). El de la raíz se considera válido solo si su tamaño es < 5MB (típico wrapper de Steam) y no hay otro mejor.
+
+#### B. The "Scene Release" Pattern (Carpetas Basura)
+Las descargas de fuentes no oficiales (torrent/repacks) suelen incluir carpetas extras que **DEBEN** ser ignoradas durante el escaneo para evitar falsos positivos y ruido.
+
+*   **Blacklist de Carpetas (Recursive Skip):**
+    *   `_CommonRedist`
+    *   `Support`
+    *   `DirectX`
+    *   `Crack`, `CODEX`, `RUNE`, `SKIDROW`, `TENOKE` (Carpetas de crack sin aplicar).
+    *   `BonusContent`, `Soundtrack`, `Artbook`.
+
+#### C. The "Installer" Trap (Detección de No-Juego)
+Antes de asignar un `ExecutablePath`, el sistema debe verificar si lo que ha encontrado es en realidad el instalador del juego y no el juego en sí.
+
+*   **Heurística de Alerta:** El candidato ganador tiene nombres como `setup.exe`, `install.exe` o `unins000.exe`.
+*   **Acción:**
+    1.  Marcar `GameStatus.InstallerDetected`.
+    2.  **UI:** Cambiar el botón "Jugar" a "Instalar / Setup".
+    3.  **Lógica:** No intentar lanzar como juego nativo silencioso; requiere interacción del usuario.
 
 ---
 

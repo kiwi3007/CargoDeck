@@ -47,6 +47,9 @@ namespace Playerr.Core.Games
         public string? GogId { get; set; }
         public string? InstallPath { get; set; }
         public bool IsInstallable { get; set; }
+        
+        // Launcher V2
+        public string? ExecutablePath { get; set; }
     }
     
     public class GameImages
@@ -73,6 +76,7 @@ namespace Playerr.Core.Games
         Released,
         Downloading,
         Downloaded,
-        Missing
+        Missing,
+        InstallerDetected // Found setup.exe but not game.exe
     }
 }

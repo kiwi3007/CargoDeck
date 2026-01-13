@@ -14,7 +14,7 @@ interface GameCorrectionModalProps {
 }
 
 const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose, onSave, language = 'es' }) => {
-    const [activeTab, setActiveTab] = useState<'metadata' | 'path'>('metadata');
+    const [activeTab, setActiveTab] = useState<'metadata' | 'path' | 'playPath'>('metadata');
 
     // Metadata State
     const [searchTerm, setSearchTerm] = useState(game.title);
@@ -24,7 +24,9 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
 
     // Path State
     const [installPath, setInstallPath] = useState(game.installPath || game.path || '');
+    const [executablePath, setExecutablePath] = useState(game.executablePath || '');
     const [showFileExplorer, setShowFileExplorer] = useState(false);
+    const [explorerMode, setExplorerMode] = useState<'install' | 'executable'>('install');
 
     const t = (key: string) => translate(key as any, language as any);
 
@@ -52,8 +54,16 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
         if (installPath !== game.installPath) {
             updates.installPath = installPath;
         }
+        if (executablePath !== game.executablePath) {
+            updates.executablePath = executablePath;
+        }
 
         onSave(updates);
+    };
+
+    const openExplorer = (mode: 'install' | 'executable') => {
+        setExplorerMode(mode);
+        setShowFileExplorer(true);
     };
 
     return (
@@ -76,6 +86,12 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                         onClick={() => setActiveTab('path')}
                     >
                         {t('installPath') || 'Ruta Instalación'}
+                    </button>
+                    <button
+                        className={`tab-btn ${activeTab === 'playPath' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('playPath')}
+                    >
+                        {t('playPath') || 'Play Path'}
                     </button>
                 </div>
 
@@ -125,10 +141,28 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                                     value={installPath}
                                     onChange={(e) => setInstallPath(e.target.value)}
                                 />
-                                <button onClick={() => setShowFileExplorer(true)}>📁</button>
+                                <button onClick={() => openExplorer('install')}>📁</button>
                             </div>
                             <p className="hint">
-                                {t('pathHint') || 'Selecciona la carpeta donde está instalado el juego o el ejecutable principal.'}
+                                {t('pathHint') || 'Selecciona la carpeta donde está instalado el juego.'}
+                            </p>
+                        </div>
+                    )}
+
+                    {activeTab === 'playPath' && (
+                        <div className="path-correction">
+                            <label>{t('executablePath') || 'Ejecutable'}:</label>
+                            <div className="path-input-group">
+                                <input
+                                    type="text"
+                                    value={executablePath}
+                                    onChange={(e) => setExecutablePath(e.target.value)}
+                                    placeholder="/path/to/game.exe"
+                                />
+                                <button onClick={() => openExplorer('executable')}>📁</button>
+                            </div>
+                            <p className="hint">
+                                {t('playPathHint') || 'Selecciona el archivo ejecutable del juego.'}
                             </p>
                         </div>
                     )}
@@ -142,11 +176,15 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
 
             {showFileExplorer && (
                 <FolderExplorerModal
-                    initialPath={installPath || '/'}
+                    initialPath={explorerMode === 'executable' ? (executablePath || installPath || '/') : (installPath || '/')}
                     language={language}
                     onClose={() => setShowFileExplorer(false)}
                     onSelect={(path) => {
-                        setInstallPath(path);
+                        if (explorerMode === 'install') {
+                            setInstallPath(path);
+                        } else {
+                            setExecutablePath(path);
+                        }
                         setShowFileExplorer(false);
                     }}
                 />
