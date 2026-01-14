@@ -46,7 +46,7 @@ namespace Playerr.Host
         }
 
         [STAThread]
-        public static async Task Main(string[] args)
+        public static void Main(string[] args)
         {
             var exePath = AppContext.BaseDirectory;
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
@@ -230,16 +230,16 @@ namespace Playerr.Host
                     Console.WriteLine("[Database] Checking for schema updates...");
                     try {
                         var connection = context.Database.GetDbConnection();
-                        await connection.OpenAsync();
+                        connection.Open();
                         using var cmdCheck = connection.CreateCommand();
                         
                         // Check ExecutablePath
                         cmdCheck.CommandText = "PRAGMA table_info(Games);";
                         var hasExePath = false;
                         var hasExternal = false;
-                        using (var reader = await cmdCheck.ExecuteReaderAsync())
+                        using (var reader = cmdCheck.ExecuteReader())
                         {
-                            while (await reader.ReadAsync())
+                            while (reader.Read())
                             {
                                 var colName = reader["name"].ToString();
                                 if (colName == "ExecutablePath") hasExePath = true;
@@ -251,7 +251,7 @@ namespace Playerr.Host
                         {
                             using var cmdAdd = connection.CreateCommand();
                             cmdAdd.CommandText = "ALTER TABLE Games ADD COLUMN ExecutablePath TEXT;";
-                            await cmdAdd.ExecuteNonQueryAsync();
+                            cmdAdd.ExecuteNonQuery();
                             Console.WriteLine("[Schema] Added ExecutablePath column.");
                         }
 
@@ -259,11 +259,11 @@ namespace Playerr.Host
                         {
                             using var cmdAdd = connection.CreateCommand();
                             cmdAdd.CommandText = "ALTER TABLE Games ADD COLUMN IsExternal INTEGER DEFAULT 0;";
-                            await cmdAdd.ExecuteNonQueryAsync();
+                            cmdAdd.ExecuteNonQuery();
                             Console.WriteLine("[Schema] Added IsExternal column.");
                         }
 
-                        await connection.CloseAsync();
+                        connection.Close();
                     } catch (Exception ex) {
                         Console.WriteLine($"[Database] Schema check notice: {ex.Message}");
                     }
@@ -310,7 +310,7 @@ namespace Playerr.Host
                     {
                         Console.WriteLine("[Database] Checking for schema updates (v0.4.0)...");
                         var connection = context.Database.GetDbConnection();
-                        await connection.OpenAsync();
+                        connection.Open();
                         using var cmd = connection.CreateCommand();
                         
                         // We use a helper to try adding columns. SQLite ignores repeated ADD COLUMN? No, it throws.
@@ -335,7 +335,7 @@ namespace Playerr.Host
                             try 
                             {
                                 cmd.CommandText = $"ALTER TABLE Games ADD COLUMN {colDef};";
-                                await cmd.ExecuteNonQueryAsync();
+                                cmd.ExecuteNonQuery();
                                 Console.WriteLine($"[Database] Configured legacy column: {colDef.Split(' ')[0]}");
                             }
                             catch (Exception)
@@ -344,7 +344,7 @@ namespace Playerr.Host
                             }
                         }
                         
-                        await connection.CloseAsync();
+                        connection.Close();
                     }
                     catch (Exception ex)
                     {
@@ -435,12 +435,12 @@ namespace Playerr.Host
             // Serve frontend - fallback to index.html for SPA routing
             if (Directory.Exists(uiPath))
             {
-                app.MapFallback(async context =>
+                app.MapFallback(context =>
                 {
                     var indexPath = Path.Combine(uiPath, "index.html");
-                    var html = await File.ReadAllTextAsync(indexPath);
+                    var html = File.ReadAllText(indexPath);
                     context.Response.ContentType = "text/html";
-                    await context.Response.Body.WriteAsync(System.Text.Encoding.UTF8.GetBytes(html));
+                    return context.Response.Body.WriteAsync(System.Text.Encoding.UTF8.GetBytes(html)).AsTask();
                 });
             }
 
@@ -511,13 +511,13 @@ namespace Playerr.Host
                     for (int i = 0; i < 30; i++) // Try for up to 3 seconds
                     {
                         try {
-                            var response = await client.GetAsync(internalAddress);
+                            var response = client.GetAsync(internalAddress).Result;
                             if (response.IsSuccessStatusCode) {
                                 Log($"[Startup] Backend is ALIVE on {internalAddress}");
                                 break;
                             }
                         } catch { }
-                        await Task.Delay(100);
+                        System.Threading.Thread.Sleep(100);
                     }
                 }
             }
