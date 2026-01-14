@@ -77,3 +77,8 @@ Los volúmenes persistentes pueden saltarse la inicialización.
 *   **Revert Unified Indexers:** No hacer refactors masivos. Cambios atómicos.
 *   **Edición de Código:** Reemplazar, no añadir al final.
 *   **Recuperación:** `git reset --hard HEAD` es tu amigo si se rompe la estabilidad.
+
+
+- **Windows Blank Screen / Mac Launch Failure**: Resolved by forcing total synchronous initialization in `Program.Main` to ensure Photino stays on the STA thread. Added an HTTP "Alive-check" that waits for the backend to serve 'index.html' before calling `.Load()`.
+- **Professional Startup**: Implemented smart port selection (trying 5002-5005 before dynamic) and normalized internal addresses to `localhost` for better WebView2/macOS compatibility.
+- **Logging**: Added `playerr.log` in the config directory and a failsafe `playerr_startup.log` in the system TEMP directory for early crash capture.

@@ -554,17 +554,28 @@ namespace Playerr.Host
                        .Center()
                        .SetResizable(true)
                        .SetDevToolsEnabled(true);
+                   
+                   bool isClosing = false;
+                   window.WindowClosing += (s, e) => { 
+                       isClosing = true; 
+                       Log("[UI] Window is closing...");
+                       return false; // Allow close
+                   };
     
                    // Real-time library updates: Subscribe to scanner events
                    var scannerService = app.Services.GetRequiredService<MediaScannerService>();
                    
                    // Update library UI when a batch is finished
-                   scannerService.OnBatchFinished += () => {
-                       Log("[UI] Sending LIBRARY_UPDATED signal to frontend...");
-                       window.Invoke(() => {
-                           try { window.SendWebMessage("LIBRARY_UPDATED"); } catch { }
-                       });
-                   };
+                    scannerService.OnBatchFinished += () => {
+                        if (isClosing) return;
+                        try {
+                            window.Invoke(() => {
+                                if (isClosing) return;
+                                Log("[UI] Sending LIBRARY_UPDATED signal to frontend...");
+                                try { window.SendWebMessage("LIBRARY_UPDATED"); } catch { }
+                            });
+                        } catch { }
+                    };
     
                    // Fix for CS8622: Use object? for sender
                    window.RegisterWebMessageReceivedHandler((object? sender, string message) => {
@@ -601,12 +612,17 @@ namespace Playerr.Host
                                         }
 
                                         configService.SaveMediaSettings(currentMediaSettings);
-                                        
-                                        // Notify UI that settings have changed (this triggers SETTINGS_UPDATED_EVENT in JS)
-                                        windowInstance.Invoke(() => {
-                                            windowInstance.SendWebMessage("SETTINGS_UPDATED");
-                                            windowInstance.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
-                                        });
+                                                                                // Notify UI that settings have changed (this triggers SETTINGS_UPDATED_EVENT in JS)
+                                         if (!isClosing)
+                                         {
+                                             windowInstance.Invoke(() => {
+                                                 if (isClosing) return;
+                                                 try {
+                                                     windowInstance.SendWebMessage("SETTINGS_UPDATED");
+                                                     windowInstance.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
+                                                 } catch { }
+                                             });
+                                         }
                                    }
                                    catch (Exception ex)
                                    {
