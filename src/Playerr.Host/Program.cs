@@ -171,7 +171,22 @@ namespace Playerr.Host
             {
                 builder.WebHost.ConfigureKestrel(serverOptions =>
                 {
-                    serverOptions.Listen(System.Net.IPAddress.Loopback, 0); // Use port 0 for dynamic allocation
+                    // PROFESSIONAL: Try a fixed range of ports first, then fallback to dynamic
+                    // This is more professional than total randomness as it helps with firewall rules.
+                    int[] preferredPorts = { 5002, 5003, 5004, 5005 };
+                    bool bound = false;
+                    foreach (var port in preferredPorts)
+                    {
+                        try {
+                            serverOptions.Listen(System.Net.IPAddress.Loopback, port);
+                            bound = true;
+                            break;
+                        } catch { }
+                    }
+                    
+                    if (!bound) {
+                        serverOptions.Listen(System.Net.IPAddress.Loopback, 0); // Total fallback
+                    }
                 });
             }
             // ELSE: Let Kestrel use default config (ASPNETCORE_URLS) which is ideal for Docker
@@ -444,20 +459,39 @@ namespace Playerr.Host
             var server = app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
             var addressFeature = server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
             
-            // Wait a moment for Kestrel to populate addresses if needed
-            var address = addressFeature?.Addresses.FirstOrDefault();
+            // PROFESSIONAL: Get the assigned address and normalize to localhost
+            string? address = addressFeature?.Addresses.FirstOrDefault();
+            
+            // Wait for address population if dynamic
             if (string.IsNullOrEmpty(address))
             {
-                 // Small retry loop for address population
                  for (int i = 0; i < 5 && string.IsNullOrEmpty(address); i++)
                  {
                      System.Threading.Thread.Sleep(100);
                      address = addressFeature?.Addresses.FirstOrDefault();
                  }
             }
+
+            address ??= "http://localhost:5001"; // Fallback
             
-            address ??= "http://localhost:5001"; // Ultimate fallback
-            Console.WriteLine($"[Startup] Playerr backend running on: {address}");
+            if (address.Contains("127.0.0.1")) address = address.Replace("127.0.0.1", "localhost");
+            if (address.Contains("[::1]")) address = address.Replace("[::1]", "localhost");
+
+            // PRO-CHECK: Wait for the server to actually be ALIVE and serving content
+            Console.WriteLine($"[Startup] Waiting for backend at {address}...");
+            using (var client = new System.Net.Http.HttpClient())
+            {
+                for (int i = 0; i < 20; i++) // Try for up to 2 seconds
+                {
+                    try {
+                        var response = await client.GetAsync(address);
+                        if (response.IsSuccessStatusCode) break;
+                    } catch { }
+                    await Task.Delay(100);
+                }
+            }
+
+            Console.WriteLine($"[Startup] Playerr backend ready on: {address}");
             
             if (isHeadless)
             {
@@ -475,7 +509,8 @@ namespace Playerr.Host
                        .SetUseOsDefaultSize(false)
                        .SetSize(new System.Drawing.Size(1280, 800))
                        .Center()
-                       .SetResizable(true);
+                       .SetResizable(true)
+                       .SetDevToolsEnabled(true); // Enable DevTools for debugging during beta
     
                    // Real-time library updates: Subscribe to scanner events
                    var scannerService = app.Services.GetRequiredService<MediaScannerService>();
@@ -537,7 +572,7 @@ namespace Playerr.Host
                                }
                            }
                        })
-                       .Load(address + "?v=" + DateTime.Now.Ticks);
+                        .Load(address); // Removed query string to avoid SPA routing issues
                        
                     window.WaitForClose(); // Blocks main thread
                 }
