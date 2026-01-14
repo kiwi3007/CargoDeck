@@ -48,12 +48,19 @@ namespace Playerr.Host
         [STAThread]
         public static void Main(string[] args)
         {
-            var exePath = AppContext.BaseDirectory;
-            var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+            try 
             {
-                Args = args,
-                ContentRootPath = exePath
-            });
+                var exePath = AppContext.BaseDirectory;
+                
+                // Initialize default log path in app dir just in case
+                _logPath = Path.Combine(exePath, "playerr_startup.log");
+                Log("=== FATAL ERROR CAPTURE ENABLED ===");
+
+                var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+                {
+                    Args = args,
+                    ContentRootPath = exePath
+                });
             // Add services
             System.Console.WriteLine("DEBUG: Registering Services...");
             builder.Services.AddControllers()
@@ -638,6 +645,15 @@ namespace Playerr.Host
                     // Force process exit to ensure no background threads (like Kestrel) keep the process alive
                     Environment.Exit(0);
                 }
+            }
+        }
+            catch (Exception fatalEx)
+            {
+                Log($"[CRITICAL] Application failed to start: {fatalEx.Message}");
+                Log(fatalEx.StackTrace ?? "No stack trace available.");
+                // Ensure the console stays open if run manually
+                Console.WriteLine("Press any key to exit...");
+                try { Console.ReadKey(); } catch { }
             }
         }
     }
