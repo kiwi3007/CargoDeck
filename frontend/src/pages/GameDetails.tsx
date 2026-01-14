@@ -3,8 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { t, getLanguage, useTranslation } from '../i18n/translations';
 import GameCorrectionModal from '../components/GameCorrectionModal';
+import UninstallModal from '../components/UninstallModal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faPen, faFolderOpen, faDownload, faGamepad, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown } from '@fortawesome/free-solid-svg-icons';
+import { faSearch, faPen, faFolderOpen, faDownload, faGamepad, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown, faTrash } from '@fortawesome/free-solid-svg-icons';
 import './GameDetails.css';
 
 interface Game {
@@ -27,6 +28,9 @@ interface Game {
   isInstallable?: boolean;
   availablePlatforms?: string[];
   steamId?: number;
+  path?: string;
+  uninstallerPath?: string;
+  downloadPath?: string;
 }
 
 interface TorrentResult {
@@ -78,6 +82,7 @@ const GameDetails: React.FC = () => {
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [showUninstallModal, setShowUninstallModal] = useState(false);
   const [showInstallWarning, setShowInstallWarning] = useState(false);
   const [activeTab, setActiveTab] = useState<'search' | 'files' | 'none'>('search'); // 'search' by default to keep existing behavior? Or none? User said "Search Game" is one function. Let's make it toggleable.
   // Actually, standard behavior was "Search Torrents" always visible at bottom. 
@@ -438,6 +443,37 @@ const GameDetails: React.FC = () => {
     }
   };
 
+  const handleRunUninstaller = async () => {
+    try {
+      setNotification({ message: t('launchingUninstaller') || 'Launching Uninstaller...', type: 'info' });
+      await axios.post(`/api/v3/game/${id}/uninstall`);
+      setNotification({ message: t('uninstallerLaunched') || 'Uninstaller Launched', type: 'success' });
+    } catch (err: any) {
+      console.error(err);
+      setNotification({ message: err.response?.data || t('errorLaunchingUninstaller') || 'Error launching uninstaller', type: 'error' });
+    }
+  };
+
+  const handleDeleteGame = async (deleteLibraryFiles: boolean, deleteDownloadFiles: boolean, targetLibraryPath?: string, targetDownloadPath?: string) => {
+    if (!id) return;
+    try {
+      setNotification({ message: t('deletingGame') || 'Deleting...', type: 'info' });
+      let url = `/api/v3/game/${id}?deleteFiles=${deleteLibraryFiles}&deleteDownloadFiles=${deleteDownloadFiles}`;
+      if (targetLibraryPath) url += `&targetPath=${encodeURIComponent(targetLibraryPath)}`;
+      if (targetDownloadPath) url += `&downloadPath=${encodeURIComponent(targetDownloadPath)}`;
+
+      await axios.delete(url);
+      setNotification({ message: t('gameDeleted') || 'Game Deleted', type: 'success' });
+      // Redirect to library after short delay
+      setTimeout(() => {
+        window.location.href = '/library';
+      }, 1000);
+    } catch (err: any) {
+      console.error(err);
+      setNotification({ message: t('errorDeletingGame') || 'Error deleting game', type: 'error' });
+    }
+  };
+
   if (loading) {
     return <div className="game-details"><p>{t('loadingGame')}</p></div>;
   }
@@ -485,6 +521,15 @@ const GameDetails: React.FC = () => {
             >
               <FontAwesomeIcon icon={faPen} />
               <span>{t('correct')}</span>
+            </button>
+
+            <button
+              className="action-btn"
+              onClick={() => setShowUninstallModal(true)}
+              title={t('uninstallTitle')}
+            >
+              <FontAwesomeIcon icon={faTrash} />
+              <span>{t('remove')}</span>
             </button>
 
             <button
@@ -537,6 +582,19 @@ const GameDetails: React.FC = () => {
           )}
         </div>
       </div>
+
+      {game && (
+        <UninstallModal
+          isOpen={showUninstallModal}
+          onClose={() => setShowUninstallModal(false)}
+          onRunUninstaller={handleRunUninstaller}
+          onDelete={handleDeleteGame}
+          gameTitle={game.title}
+          gamePath={game.path}
+          uninstallerPath={game.uninstallerPath}
+          downloadPath={game.downloadPath}
+        />
+      )}
 
       {activeTab === 'search' && (results.length > 0 || error || searching) && (
         <div className="torrent-search">

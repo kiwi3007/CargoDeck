@@ -9,6 +9,7 @@ using System.Linq;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using Playerr.Core.Configuration;
 
 namespace Playerr.Api.V3.Games
 {
@@ -20,13 +21,15 @@ namespace Playerr.Api.V3.Games
         private readonly IGameMetadataServiceFactory _metadataServiceFactory;
         private readonly Playerr.Core.IO.IArchiveService _archiveService;
         private readonly ILauncherService _launcherService;
+        private readonly ConfigurationService _configService;
 
-        public GameController(IGameRepository repository, IGameMetadataServiceFactory metadataServiceFactory, Playerr.Core.IO.IArchiveService archiveService, ILauncherService launcherService)
+        public GameController(IGameRepository repository, IGameMetadataServiceFactory metadataServiceFactory, Playerr.Core.IO.IArchiveService archiveService, ILauncherService launcherService, ConfigurationService configService)
         {
             _repository = repository;
             _metadataServiceFactory = metadataServiceFactory;
             _archiveService = archiveService;
             _launcherService = launcherService;
+            _configService = configService;
         }
 
         [HttpGet]
@@ -84,7 +87,42 @@ namespace Playerr.Api.V3.Games
 
             game.IsInstallable = IsPathInstallable(game.Path);
 
-            return Ok(game);
+            var uninstallerPath = FindUninstaller(game.Path);
+            var downloadPathHint = FindDownloadFolder(game.Title, game.Path);
+
+            return Ok(new
+            {
+                game.Id,
+                game.Title,
+                game.AlternativeTitle,
+                game.Year,
+                game.Overview,
+                game.Storyline,
+                game.PlatformId,
+                game.Platform,
+                game.Added,
+                game.Images,
+                game.Genres,
+                game.AvailablePlatforms,
+                game.Developer,
+                game.Publisher,
+                game.ReleaseDate,
+                game.Rating,
+                game.RatingCount,
+                game.Status,
+                game.Monitored,
+                game.Path,
+                game.SizeOnDisk,
+                game.IgdbId,
+                game.SteamId,
+                game.GogId,
+                game.InstallPath,
+                game.IsInstallable,
+                game.ExecutablePath,
+                game.IsExternal,
+                uninstallerPath,
+                downloadPath = downloadPathHint // Added download path hint
+            });
         }
 
         [HttpPost]
@@ -161,8 +199,99 @@ namespace Playerr.Api.V3.Games
         }
 
         [HttpDelete("{id}")]
-        public async Task<ActionResult> Delete(int id)
+        public async Task<ActionResult> Delete(int id, [FromQuery] bool deleteFiles = false, [FromQuery] string? targetPath = null, [FromQuery] bool deleteDownloadFiles = false, [FromQuery] string? downloadPath = null)
         {
+            var game = await _repository.GetByIdAsync(id);
+            if (game == null) return NotFound();
+
+            if (deleteFiles && !string.IsNullOrEmpty(game.Path))
+            {
+                // Determine what to delete: targetPath override or game.Path default
+                string pathToDelete = !string.IsNullOrEmpty(targetPath) ? targetPath : game.Path;
+                
+                // Security/Safety Check:
+                // 1. If targetPath is provided, it MUST contain the game.Path (i.e. be a parent or the same path)
+                //    Wait, checking "Contains" might be tricky with normalization. 
+                //    A parent path P contains child C? No, C starts with P.
+                //    game.Path (Child) starts with pathToDelete (Parent).
+                
+                bool isSafe = false;
+
+                if (string.IsNullOrEmpty(targetPath) || targetPath == game.Path)
+                {
+                    isSafe = true; // Default behavior is safe-ish (deletes what we know)
+                }
+                else
+                {
+                    // Validate relationship
+                    var normalizedGamePath = System.IO.Path.GetFullPath(game.Path).TrimEnd(System.IO.Path.DirectorySeparatorChar);
+                    var normalizedTarget = System.IO.Path.GetFullPath(pathToDelete).TrimEnd(System.IO.Path.DirectorySeparatorChar);
+                    
+                    if (normalizedGamePath.StartsWith(normalizedTarget, StringComparison.OrdinalIgnoreCase))
+                    {
+                        isSafe = true;
+                    }
+                }
+
+                // Global Safety Blocklist to prevent deleting roots or critical folders
+                if (IsCriticalPath(pathToDelete))
+                {
+                    System.Console.WriteLine($"[Delete] BLOCKED deletion of critical path: {pathToDelete}");
+                    isSafe = false;
+                }
+
+                if (isSafe)
+                {
+                    try
+                    {
+                        if (System.IO.File.Exists(pathToDelete))
+                        {
+                            System.IO.File.Delete(pathToDelete);
+                            System.Console.WriteLine($"[Delete] Deleted file: {pathToDelete}");
+                        }
+                        else if (System.IO.Directory.Exists(pathToDelete))
+                        {
+                            System.IO.Directory.Delete(pathToDelete, true);
+                            System.Console.WriteLine($"[Delete] Deleted directory: {pathToDelete}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Console.WriteLine($"[Delete] Error deleting library files at {pathToDelete}: {ex.Message}");
+                    }
+                }
+                else
+                {
+                    System.Console.WriteLine($"[Delete] Safety check failed for library path: {pathToDelete}");
+                    // We don't abort the metadata delete, but we warn? 
+                    // Or we shout abort? Ideally abort if user explicitly requested file delete and it failed safety.
+                    // But for now, let's proceed to delete metadata so the "broken" game is gone.
+                }
+            }
+
+            // --- Download Folder Deletion Logic ---
+            if (deleteDownloadFiles && !string.IsNullOrEmpty(downloadPath))
+            {
+                bool isDownloadSafe = !IsCriticalPath(downloadPath);
+                
+                if (isDownloadSafe && System.IO.Directory.Exists(downloadPath))
+                {
+                    try
+                    {
+                        System.IO.Directory.Delete(downloadPath, true);
+                        System.Console.WriteLine($"[Delete] Deleted download directory: {downloadPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Console.WriteLine($"[Delete] Error deleting download folder at {downloadPath}: {ex.Message}");
+                    }
+                }
+                else if (!isDownloadSafe)
+                {
+                    System.Console.WriteLine($"[Delete] BLOCKED deletion of critical download path: {downloadPath}");
+                }
+            }
+
             var removed = await _repository.DeleteAsync(id);
             if (!removed)
             {
@@ -171,6 +300,56 @@ namespace Playerr.Api.V3.Games
 
             return NoContent();
         }
+
+        private bool IsCriticalPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return true;
+            var full = System.IO.Path.GetFullPath(path).TrimEnd(System.IO.Path.DirectorySeparatorChar);
+            var root = System.IO.Path.GetPathRoot(full);
+            
+            // 1. Root
+            if (full.Equals(root, StringComparison.OrdinalIgnoreCase)) return true;
+            
+            // 2. Common System Folders (Linux/Mac/Win)
+            var sensitive = new[] { 
+                "/", "/bin", "/boot", "/dev", "/etc", "/home", "/lib", "/proc", "/root", "/run", "/sbin", "/sys", "/tmp", "/usr", "/var",
+                "/Users", "/Users/imaik", "/Users/imaik/Desktop", "/Users/imaik/Documents", "/Users/imaik/Downloads",
+                "C:\\", "C:\\Windows", "C:\\Program Files", "C:\\Users"
+            };
+
+            foreach (var s in sensitive)
+            {
+                 // Exact match blocking
+                 if (full.Equals(s, StringComparison.OrdinalIgnoreCase)) return true;
+                 
+                 // Also block if it's a DIRECT child of a very sensitive root? 
+                 // e.g. /Users/imaik/Desktop/Juegos is OK. 
+                 // /Users/imaik/Desktop is BLOCKED (Safe).
+            }
+
+            return false;
+        }
+
+
+        [HttpPost("{id}/uninstall")]
+        public async Task<ActionResult> Uninstall(int id)
+        {
+            var game = await _repository.GetByIdAsync(id);
+            if (game == null) return NotFound("Game not found");
+            
+            if (string.IsNullOrEmpty(game.Path) || !Directory.Exists(game.Path))
+                return BadRequest("Game path not found or invalid.");
+
+            var uninstaller = FindUninstaller(game.Path);
+            if (!string.IsNullOrEmpty(uninstaller))
+            {
+                // Reuse LaunchInstaller logic but for uninstaller
+                return LaunchInstaller(uninstaller);
+            }
+
+            return NotFound("No uninstaller found.");
+        }
+
 
         [HttpPost("{id}/install")]
         public async Task<ActionResult> Install(int id)
@@ -329,6 +508,8 @@ namespace Playerr.Api.V3.Games
 
             return null;
         }
+
+
 
         private ActionResult LaunchInstaller(string path)
         {
@@ -500,6 +681,105 @@ namespace Playerr.Api.V3.Games
                 System.Console.WriteLine($"[Mount-Win] Exception: {ex.Message}");
             }
             return null;
+        }
+
+        private string? FindUninstaller(string? rootPath)
+        {
+            if (string.IsNullOrEmpty(rootPath) || !System.IO.Directory.Exists(rootPath)) return null;
+
+            try
+            {
+                var patterns = new[] { "unins*.exe", "uninstall.exe", "*uninstall*.exe", "setup.exe" }; // setup.exe is sometimes also the uninstaller
+                var candidates = new List<string>();
+
+                foreach (var pattern in patterns)
+                {
+                    candidates.AddRange(System.IO.Directory.GetFiles(rootPath, pattern, System.IO.SearchOption.TopDirectoryOnly));
+                }
+
+                // Look in common subfolders
+                var subDirs = new[] { "bin", "bin64", "tools" };
+                foreach (var sub in subDirs)
+                {
+                    var subPath = System.IO.Path.Combine(rootPath, sub);
+                    if (System.IO.Directory.Exists(subPath))
+                    {
+                        foreach (var pattern in patterns)
+                            candidates.AddRange(System.IO.Directory.GetFiles(subPath, pattern, System.IO.SearchOption.TopDirectoryOnly));
+                    }
+                }
+
+                if (!candidates.Any()) return null;
+
+                // Prioritize "unins" followed by "uninstall"
+                var prioritized = candidates
+                    .OrderBy(c => {
+                        var name = System.IO.Path.GetFileName(c).ToLower();
+                        if (name.StartsWith("unins")) return 0;
+                        if (name.Contains("uninstall")) return 1;
+                        return 2;
+                    })
+                    .ThenByDescending(c => new System.IO.FileInfo(c).Length)
+                    .FirstOrDefault();
+
+                return prioritized;
+            }
+            catch { return null; }
+        }
+
+        private string? FindDownloadFolder(string gameTitle, string? gamePath)
+        {
+            try
+            {
+                var settings = _configService.LoadMediaSettings();
+                var downloadRoot = settings.DownloadPath;
+
+                if (string.IsNullOrEmpty(downloadRoot) || !System.IO.Directory.Exists(downloadRoot)) return null;
+
+                // Look for directories in downloadRoot (Level 1 and Level 2)
+                var level1Dirs = System.IO.Directory.GetDirectories(downloadRoot);
+                var allDirs = new List<string>(level1Dirs);
+                
+                foreach (var l1 in level1Dirs)
+                {
+                    try { allDirs.AddRange(System.IO.Directory.GetDirectories(l1)); } catch { }
+                }
+
+                // Strategy 1: Match by immediate parent folder name of game.Path
+                if (!string.IsNullOrEmpty(gamePath))
+                {
+                    var parentDir = System.IO.Path.GetDirectoryName(gamePath);
+                    if (!string.IsNullOrEmpty(parentDir))
+                    {
+                        var folderName = new System.IO.DirectoryInfo(parentDir).Name;
+                        var match = allDirs.FirstOrDefault(d => 
+                            string.Equals(System.IO.Path.GetFileName(d), folderName, StringComparison.OrdinalIgnoreCase));
+                        
+                        if (match != null) return match;
+                    }
+                }
+
+                // Strategy 2: Match by game title
+                var titleMatch = allDirs.FirstOrDefault(d => 
+                    System.IO.Path.GetFileName(d).Contains(gameTitle, StringComparison.OrdinalIgnoreCase));
+                
+                if (titleMatch != null) return titleMatch;
+
+                // Strategy 3: Fuzzy match (alphanumeric only)
+                var cleanTitle = System.Text.RegularExpressions.Regex.Replace(gameTitle, @"[^a-zA-Z0-9]", "");
+                if (cleanTitle.Length > 2)
+                {
+                     var fuzzyMatch = allDirs.FirstOrDefault(d => {
+                         var cleanDirName = System.Text.RegularExpressions.Regex.Replace(System.IO.Path.GetFileName(d), @"[^a-zA-Z0-9]", "");
+                         return cleanDirName.Contains(cleanTitle, StringComparison.OrdinalIgnoreCase);
+                     });
+                     
+                     if (fuzzyMatch != null) return fuzzyMatch;
+                }
+
+                return null;
+            }
+            catch { return null; }
         }
     }
 }

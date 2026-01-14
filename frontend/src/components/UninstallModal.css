@@ -1,0 +1,251 @@
+/* Scoped Styles for Uninstall Modal to prevent global leakage */
+
+.um-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.um-overlay * {
+    box-sizing: border-box;
+}
+
+.um-modal {
+    background: #11111b;
+    border-radius: 12px;
+    width: 600px;
+    max-width: 90%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+    border: 1px solid #313244;
+    overflow: hidden;
+    animation: um-modalAppear 0.2s ease-out;
+}
+
+@keyframes um-modalAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.um-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #313244;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #181825;
+}
+
+.um-header h3 {
+    margin: 0;
+    color: #cdd6f4;
+    font-size: 1.2rem;
+}
+
+.um-close {
+    background: none;
+    border: none;
+    color: #a6adc8;
+    font-size: 24px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.um-close:hover {
+    color: #f38ba8;
+}
+
+.um-content {
+    padding: 20px;
+    overflow-y: auto;
+    color: #cdd6f4;
+}
+
+.um-game-title {
+    margin-bottom: 20px;
+    font-size: 1rem;
+}
+
+.um-game-title strong {
+    color: #89b4fa;
+}
+
+.um-section {
+    background: #181825;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    border: 1px solid #313244;
+}
+
+.um-delete-section {
+    background: rgba(243, 139, 168, 0.1);
+    border: 1px solid rgba(243, 139, 168, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.um-section-label {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+.um-section-desc {
+    color: #a6adc8;
+    font-size: 0.9rem;
+    margin-bottom: 16px;
+    line-height: 1.4;
+}
+
+.um-checkbox-container {
+    display: flex;
+    align-items: flex-start;
+    cursor: pointer;
+    margin-top: 12px;
+}
+
+.um-checkbox-container input {
+    margin-top: 4px;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.um-checkbox-content {
+    flex: 1;
+    min-width: 0;
+    /* Important for word-break */
+}
+
+.um-checkbox-label {
+    font-weight: bold;
+    color: #cdd6f4;
+}
+
+.um-warning {
+    color: #f38ba8;
+    font-size: 0.85rem;
+    margin-top: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.um-path-preview {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 10px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #eba0ac;
+    word-break: break-all;
+    overflow-wrap: break-word;
+    border: 1px solid rgba(243, 139, 168, 0.1);
+    line-height: 1.5;
+}
+
+.um-actions {
+    margin-top: 20px;
+}
+
+.um-btn-secondary,
+.um-btn-delete {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: filter 0.2s;
+}
+
+.um-btn-secondary {
+    background: #313244;
+    color: #cdd6f4;
+}
+
+.um-btn-delete {
+    background: #f38ba8;
+    color: #11111b;
+}
+
+.um-btn-secondary:hover,
+.um-btn-delete:hover {
+    filter: brightness(1.1);
+}
+
+.um-depth-selector {
+    margin-top: 16px;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(243, 139, 168, 0.1);
+}
+
+.um-selector-label {
+    font-size: 0.85rem;
+    color: #a6adc8;
+    margin-bottom: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.um-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.um-radio-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #181825;
+    border: 1px solid #313244;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.um-radio-item:hover {
+    border-color: #f38ba8;
+    background: #1e1e2e;
+}
+
+.um-radio-item.active {
+    border-color: #f38ba8;
+    background: rgba(243, 139, 168, 0.1);
+}
+
+.um-radio-item input[type="radio"] {
+    margin: 0;
+    cursor: pointer;
+    accent-color: #f38ba8;
+}
+
+.um-radio-item span {
+    font-size: 0.9rem;
+    color: #cdd6f4;
+}

@@ -154,7 +154,7 @@ If you want to modify the code or build the image locally instead of pulling it 
   - [x] **Atomic Move (Hardlinks):** Instant file management without data fragmentation.
   - [x] **Unraid Integration:** Community XML template support (`_unraid/playerr.xml`).
   - [x] **Smart API Handling:** Advanced rate-limiting and batching for metadata providers.
-- [ ] **One-Click Launch Integration:** Direct execution support for installed local assets with automated path detection.
+- [x] **One-Click Launch Integration:** Direct execution support for **Steam** and initial implementation for **Installed Local Games**.
 - [x] **UI/UX Refinement:** Premium iconography (FontAwesome) and consistent Nord-themed design.
 
 ### Phase 3: Ecosystem & Future Vision

@@ -76,6 +76,20 @@ namespace Playerr.Core.Games
             ".ds_store", ".db"
         };
 
+        private static readonly HashSet<string> _filenameBlacklist = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "crashpad_handler.exe", "unitycrashhandler.exe", "unitycrashhandler64.exe", 
+            "dxsetup.exe", "vcredist_x64.exe", "vcredist_x86.exe", "credist.exe", "bsndrpt.exe"
+        };
+
+        private static readonly HashSet<string> _folderBlacklist = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "_CommonRedist", "CommonRedist", "Redist", "DirectX", "Support", 
+            "Prerequisites", "Launcher", "Windows", "Program Files", "Program Files (x86)", 
+            "Common Files", "Users", "drive_c", "dosdevices", "Ship", "Shipping", 
+            "Retail", "x64", "x86", "System", "Binaries", "Engine", "Content", "Asset", "Resource"
+        };
+
         [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
         private class PlatformRule
         {
@@ -236,7 +250,7 @@ namespace Playerr.Core.Games
                 var folderName = Path.GetFileName(dir);
                 
                 // Advanced Scanner Logic V2: Find the best executable in the folder structure
-                var (bestExePath, isInstaller) = FindBestExecutable(dir, rule.Extensions);
+                var (bestExePath, isInstaller) = FindBestExecutable(dir, rule.Extensions, isExternal: false);
                 
                 if (!string.IsNullOrEmpty(bestExePath))
                 {
@@ -308,7 +322,7 @@ namespace Playerr.Core.Games
 
         // Updated Helper for V2 Scanner
         // Returns: (Path to best executable, IsInstaller)
-        private (string? Path, bool IsInstaller) FindBestExecutable(string folderPath, string[]? allowedExtensions)
+        private (string? Path, bool IsInstaller) FindBestExecutable(string folderPath, string[]? allowedExtensions, bool isExternal = false)
         {
             try
             {
@@ -332,9 +346,12 @@ namespace Playerr.Core.Games
                     string folderName = file.Directory?.Name.ToLowerInvariant() ?? "";
                     
                     // --- SCORING RULES ---
+                    
+                    // New V2 Blacklist Filtering
+                    if (IsBlacklistedFile(file.Name, isExternal)) continue;
 
                     // 1. Installer Trap (Negative or Special State)
-                    if (name.StartsWith("setup") || name.StartsWith("install") || name.StartsWith("unins") || name.Contains("redist"))
+                    if (name.StartsWith("setup") || name.StartsWith("install") || name.StartsWith("unins") || name.Contains("redist") || name.StartsWith("config"))
                     {
                         isInstaller = true;
                         score -= 50; // Penalize, but keep as candidate if nothing else found
@@ -391,11 +408,7 @@ namespace Playerr.Core.Games
             if (currentDepth > maxDepth) return results;
 
             // blacklist folders
-            if (root.Name.StartsWith(".") || 
-                root.Name.Equals("_CommonRedist", StringComparison.OrdinalIgnoreCase) || 
-                root.Name.Equals("Support", StringComparison.OrdinalIgnoreCase) || 
-                root.Name.Equals("Crack", StringComparison.OrdinalIgnoreCase) ||
-                root.Name.Equals("Bonus", StringComparison.OrdinalIgnoreCase))
+            if (root.Name.StartsWith(".") || _folderBlacklist.Contains(root.Name) || IsMetadataSubfolder(root.Name))
             {
                 return results;
             }
@@ -426,6 +439,9 @@ namespace Playerr.Core.Games
                 foreach (var file in files)
                 {
                     ct.ThrowIfCancellationRequested();
+
+                    string fileName = Path.GetFileName(file);
+                    if (IsBlacklistedFile(fileName, isExternal: false)) continue;
                     
                     if (IsValidFile(file, extensionsToUse))
                     {
@@ -484,59 +500,130 @@ namespace Playerr.Core.Games
         private async Task<int> ScanExternalLibraryAsync(string rootPath, List<Game> existingGames, GameMetadataService metadataService, System.Threading.CancellationToken ct)
         {
             var candidates = new List<GameCandidate>();
-            string[] allDirs;
-            try 
+            Log($"Starting Hierarchical External Scan: {rootPath}");
+            
+            await ScanDirectoryHierarchicalAsync(new DirectoryInfo(rootPath), candidates, existingGames, ct);
+            
+            return await ProcessCandidatesBatchAsync(candidates, existingGames, metadataService, ct);
+        }
+
+        private async Task ScanDirectoryHierarchicalAsync(DirectoryInfo dir, List<GameCandidate> candidates, List<Game> existingGames, System.Threading.CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (!dir.Exists || IsBlacklistedFolder(dir)) return;
+            if (IsMetadataSubfolder(dir.Name)) return; // Skip sub-metadata folders like 'artworks'
+
+            // 1. Try to find a valid game IN THIS specific folder first
+            var (bestExe, isInstaller) = FindBestExecutable(dir.FullName, new[] { ".exe" }, isExternal: true);
+            
+            if (!string.IsNullOrEmpty(bestExe))
             {
-                allDirs = Directory.GetDirectories(rootPath, "*", SearchOption.AllDirectories);
+                var folderName = dir.Name;
+                var (cleanName, serial) = CleanGameTitle(folderName);
+                
+                // If the folder name is generic (e.g. "Ship"), try to use the parent folder name
+                if (IsGenericFolderName(folderName) && dir.Parent != null)
+                {
+                    var parentClean = CleanGameTitle(dir.Parent.Name).Title;
+                    if (!IsGenericFolderName(dir.Parent.Name))
+                    {
+                        Log($"Generic folder '{folderName}' detected. Using parent title candidate: {parentClean}");
+                        cleanName = parentClean;
+                    }
+                }
+
+                if (!IsBlacklistedTitle(cleanName))
+                {
+                    // If the folder name is actually the game, we proceed.
+                    // But wait, if it's 'Ship', 'Binaries', etc. we already handled that with IsGenericFolderName.
+                    // Let's ensure top-level folders are prioritized.
+                    if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)) &&
+                        !candidates.Any(c => c.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        candidates.Add(new GameCandidate
+                        {
+                            Title = cleanName,
+                            Path = dir.FullName,
+                            ExecutablePath = bestExe,
+                            IsInstaller = isInstaller,
+                            IsExternal = true,
+                            PlatformKey = "pc_windows",
+                            Serial = serial
+                        });
+                        
+                        Log($"[ExternalScan] Identified game candidate at top-level: {cleanName}. Skipping subdirectories.");
+                        return; // <--- This is the hierarchical fix: DON'T recurse if match found
+                    }
+                }
+            }
+
+            // 2. If no game found in this directory, continue searching subdirectories
+            try
+            {
+                foreach (var subDir in dir.GetDirectories())
+                {
+                    await ScanDirectoryHierarchicalAsync(subDir, candidates, existingGames, ct);
+                }
             }
             catch (Exception ex)
             {
-                Log($"Error scanning external path {rootPath}: {ex.Message}");
-                return 0;
+                Log($"Error accessing subdirectories of {dir.FullName}: {ex.Message}");
             }
-            
-            foreach (var dir in allDirs)
-            {
-                ct.ThrowIfCancellationRequested();
-                if (IsBlacklistedFolder(new DirectoryInfo(dir))) continue;
+        }
 
-                var (bestExe, isInstaller) = FindBestExecutable(dir, new[] { ".exe" });
-                
-                if (!string.IsNullOrEmpty(bestExe))
-                {
-                     var folderName = Path.GetFileName(dir);
-                     var (cleanName, serial) = CleanGameTitle(folderName);
-                     if (IsBlacklistedTitle(cleanName)) continue;
-
-                     if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)) &&
-                         !candidates.Any(c => c.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
-                     {
-                         candidates.Add(new GameCandidate
-                         {
-                             Title = cleanName,
-                             Path = dir,
-                             ExecutablePath = bestExe, 
-                             IsInstaller = isInstaller,
-                             IsExternal = true, 
-                             PlatformKey = "pc_windows",
-                             Serial = serial
-                         });
-                     }
-                }
-            }
-            return await ProcessCandidatesBatchAsync(candidates, existingGames, metadataService, ct);
+        private bool IsGenericFolderName(string name)
+        {
+            var generics = new[] { "Ship", "Shipping", "Retail", "Binaries", "x64", "x86", "Win64", "Win32", "Release" };
+            return generics.Any(g => name.Equals(g, StringComparison.OrdinalIgnoreCase));
         }
         
+        private bool IsBlacklistedFile(string fileName, bool isExternal)
+        {
+            if (string.IsNullOrEmpty(fileName)) return false;
+
+            // 1. Exact Filename Blacklist
+            if (_filenameBlacklist.Contains(fileName)) return true;
+
+            // 2. Pattern Ignore List (Prefixes)
+            string lowered = fileName.ToLowerInvariant();
+            if (lowered.StartsWith("unins") || 
+                lowered.StartsWith("uninstall"))
+            {
+                return true;
+            }
+
+            // Strictly ignore config/setup only if it's EXTERNAL (Wine/Whisky)
+            // In the main library, setup.exe might be the only entry point for an uninstalled game.
+            if (isExternal && (lowered.StartsWith("config") || lowered.StartsWith("setup")))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool IsMetadataSubfolder(string name)
+        {
+            var metadataFolders = new[] { "artworks", "soundtrack", "avatars", "manual", "wallpapers", "Goodies", "MD5", "Bonus" };
+            return metadataFolders.Any(f => name.EndsWith(f, StringComparison.OrdinalIgnoreCase) || name.Contains(f, StringComparison.OrdinalIgnoreCase));
+        }
+
         private bool IsBlacklistedTitle(string title)
         {
-             var badNames = new[] { "Binaries", "Win64", "Win32", "Redist", "Support", "Common", "DirectX", "Launcher", "Prerequisites", "Engine", "Content" };
-             return badNames.Any(b => title.Equals(b, StringComparison.OrdinalIgnoreCase));
+             return _folderBlacklist.Contains(title) || 
+                    title.Equals("Binaries", StringComparison.OrdinalIgnoreCase) || 
+                    title.Equals("Win64", StringComparison.OrdinalIgnoreCase) || 
+                    title.Equals("Win32", StringComparison.OrdinalIgnoreCase) || 
+                    title.Equals("Common", StringComparison.OrdinalIgnoreCase) || 
+                    title.Equals("Engine", StringComparison.OrdinalIgnoreCase) || 
+                    title.Equals("Content", StringComparison.OrdinalIgnoreCase) ||
+                    IsMetadataSubfolder(title);
         }
 
         private bool IsBlacklistedFolder(DirectoryInfo dir)
         {
-             var badNames = new[] { "Windows", "Program Files", "Program Files (x86)", "Common Files", "Users", "drive_c", "dosdevices" };
-             return badNames.Contains(dir.Name, StringComparer.OrdinalIgnoreCase) || dir.Name.StartsWith(".");
+             return _folderBlacklist.Contains(dir.Name) || dir.Name.StartsWith(".");
         }
 
         private async Task<int> ProcessCandidatesBatchAsync(List<GameCandidate> candidates, List<Game> existingGames, GameMetadataService metadataService, System.Threading.CancellationToken ct)
@@ -564,7 +651,7 @@ namespace Playerr.Core.Games
                     if (string.IsNullOrEmpty(exePath) && Directory.Exists(candidate.Path) && !File.Exists(candidate.Path))
                     {
                          // Folder Mode: Find best exe
-                         var result = FindBestExecutable(candidate.Path, null); // Pass null for exts or assume defaults
+                         var result = FindBestExecutable(candidate.Path, null, candidate.IsExternal); // Pass null for exts or assume defaults
                          exePath = result.Path;
                          isInstaller = result.IsInstaller;
                     }
@@ -572,7 +659,12 @@ namespace Playerr.Core.Games
                     {
                         // File Mode: Path isExe
                         exePath = candidate.Path;
+                        string fileName = Path.GetFileName(exePath);
                         var name = Path.GetFileNameWithoutExtension(exePath);
+                        
+                        // Check if file is blacklisted in File Mode (re-check with context if needed)
+                        if (IsBlacklistedFile(fileName, candidate.IsExternal)) continue;
+
                         isInstaller = name.StartsWith("setup", StringComparison.OrdinalIgnoreCase) || name.StartsWith("install", StringComparison.OrdinalIgnoreCase);
                     }
 

@@ -34,7 +34,7 @@ const Navigation: React.FC = () => {
         marginLeft: '10px',
         whiteSpace: 'nowrap'
       }}>
-        BETA: post-download
+        BETA Release
       </div>
     </nav>
   );

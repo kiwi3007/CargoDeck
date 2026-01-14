@@ -1,15 +1,9 @@
-# Playerr v0.4.0 (In Development)
-*   **Status:** Initializing development cycle.
+# Playerr v0.4.0 - Important Update!
+*   **Steam Launch Support:** You can now launch your Steam games directly from the app (local machine)!
+*   **Installed Games:** Initial implementation of the execution system for all your already installed games (Early stage).
+*   **Wine/Whisky Integration:** You can now specify the path where Wine/Whisky games are installed to run them conveniently from the application.
 
----
 
-# Playerr v0.3.13: UI Refinement & Stability
-*   **UI/UX Polishing:**
-    *   **Visual Consistency:** Standardized checkboxes and action buttons across Settings.
-    *   **Media Folder:** Restored the missing "Scan Now" button and improved layout.
-*   **Stability:**
-    *   **Persistent Modals:** implemented custom, persistent delete confirmation modals for the Status and Library pages, replacing flaky browser alerts.
-    *   **Bug Fixes:** Fixed JSX syntax errors and added missing translation keys to ensure reliable builds.
 
 
 
