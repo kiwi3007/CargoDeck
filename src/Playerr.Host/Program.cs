@@ -196,18 +196,46 @@ namespace Playerr.Host
                     Console.WriteLine($"[Database] SQLite initialized at: {dbPath}");
 
                     // [Schema Update] v0.4.0
-                    Console.WriteLine("[Database] Checking for schema updates (v0.4.0)...");
+                    Console.WriteLine("[Database] Checking for schema updates...");
                     try {
-                        // Check if ExecutablePath column exists
-                        context.Database.ExecuteSqlRaw("ALTER TABLE Games ADD COLUMN ExecutablePath TEXT;");
-                        Console.WriteLine("[Schema] Added ExecutablePath column.");
-                    } catch {} 
+                        var connection = context.Database.GetDbConnection();
+                        await connection.OpenAsync();
+                        using var cmdCheck = connection.CreateCommand();
+                        
+                        // Check ExecutablePath
+                        cmdCheck.CommandText = "PRAGMA table_info(Games);";
+                        var hasExePath = false;
+                        var hasExternal = false;
+                        using (var reader = await cmdCheck.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var colName = reader["name"].ToString();
+                                if (colName == "ExecutablePath") hasExePath = true;
+                                if (colName == "IsExternal") hasExternal = true;
+                            }
+                        }
+                        
+                        if (!hasExePath)
+                        {
+                            using var cmdAdd = connection.CreateCommand();
+                            cmdAdd.CommandText = "ALTER TABLE Games ADD COLUMN ExecutablePath TEXT;";
+                            await cmdAdd.ExecuteNonQueryAsync();
+                            Console.WriteLine("[Schema] Added ExecutablePath column.");
+                        }
 
-                    try {
-                        // Check if IsExternal column exists
-                        context.Database.ExecuteSqlRaw("ALTER TABLE Games ADD COLUMN IsExternal INTEGER DEFAULT 0;");
-                         Console.WriteLine("[Schema] Added IsExternal column.");
-                    } catch {}
+                        if (!hasExternal)
+                        {
+                            using var cmdAdd = connection.CreateCommand();
+                            cmdAdd.CommandText = "ALTER TABLE Games ADD COLUMN IsExternal INTEGER DEFAULT 0;";
+                            await cmdAdd.ExecuteNonQueryAsync();
+                            Console.WriteLine("[Schema] Added IsExternal column.");
+                        }
+
+                        await connection.CloseAsync();
+                    } catch (Exception ex) {
+                        Console.WriteLine($"[Database] Schema check notice: {ex.Message}");
+                    }
 
                     // Ensure required platforms exist (Seed missing ones for existing databases)
                     Console.WriteLine("[Database] Verifying default platforms...");

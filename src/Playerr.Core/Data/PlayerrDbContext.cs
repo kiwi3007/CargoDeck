@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Playerr.Core.Games;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Linq;
+using System;
 
 namespace Playerr.Core.Data
 {
@@ -27,26 +29,39 @@ namespace Playerr.Core.Data
                 // Owned type for Images
                 entity.OwnsOne(e => e.Images, images =>
                 {
+                    var stringListComparer = new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<string>>(
+                        (c1, c2) => c1.SequenceEqual(c2),
+                        c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                        c => c.ToList());
+
                     images.Property(i => i.Screenshots)
                         .HasConversion(
                             v => JsonSerializer.Serialize(v, (JsonSerializerOptions)null),
-                            v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions)null) ?? new List<string>());
+                            v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions)null) ?? new List<string>())
+                        .Metadata.SetValueComparer(stringListComparer);
 
                     images.Property(i => i.Artworks)
                         .HasConversion(
                             v => JsonSerializer.Serialize(v, (JsonSerializerOptions)null),
-                            v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions)null) ?? new List<string>());
+                            v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions)null) ?? new List<string>())
+                        .Metadata.SetValueComparer(stringListComparer);
                 });
 
-                // Genres as JSON string
+                // Genres as JSON string with comparer
+                var stringListComparer = new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<string>>(
+                    (c1, c2) => c1.SequenceEqual(c2),
+                    c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                    c => c.ToList());
+
                 entity.Property(e => e.Genres)
                     .HasConversion(
                         v => JsonSerializer.Serialize(v, (JsonSerializerOptions)null),
-                        v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions)null) ?? new List<string>());
+                        v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions)null) ?? new List<string>())
+                    .Metadata.SetValueComparer(stringListComparer);
 
                 entity.HasMany(e => e.GameFiles)
-                    .WithOne()
-                    .HasForeignKey("GameId");
+                    .WithOne(f => f.Game)
+                    .HasForeignKey(f => f.GameId);
             });
 
             modelBuilder.Entity<Platform>(entity =>
