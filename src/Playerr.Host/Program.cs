@@ -52,9 +52,9 @@ namespace Playerr.Host
             {
                 var exePath = AppContext.BaseDirectory;
                 
-                // Initialize default log path in app dir just in case
-                _logPath = Path.Combine(exePath, "playerr_startup.log");
-                Log("=== FATAL ERROR CAPTURE ENABLED ===");
+                // Temporary log path until config service is ready
+                _logPath = Path.Combine(Path.GetTempPath(), "playerr_startup.log");
+                Log("=== Playerr Startup Started ===");
 
                 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
                 {
@@ -645,8 +645,8 @@ namespace Playerr.Host
                     // Force process exit to ensure no background threads (like Kestrel) keep the process alive
                     Environment.Exit(0);
                 }
-            }
-        }
+            } // Close else
+            } // Close try
             catch (Exception fatalEx)
             {
                 Log($"[CRITICAL] Application failed to start: {fatalEx.Message}");
