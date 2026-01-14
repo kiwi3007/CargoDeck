@@ -515,53 +515,52 @@ namespace Playerr.Core.Games
             ct.ThrowIfCancellationRequested();
 
             if (!dir.Exists || IsBlacklistedFolder(dir)) return;
-            if (IsMetadataSubfolder(dir.Name)) return; // Skip sub-metadata folders like 'artworks'
+            if (IsMetadataSubfolder(dir.Name)) return;
 
-            // 1. Try to find a valid game IN THIS specific folder first
-            var (bestExe, isInstaller) = FindBestExecutable(dir.FullName, new[] { ".exe" }, isExternal: true);
+            // 1. Is this folder a game candidate?
+            // Criteria: Not generic AND has a "local" executable.
+            bool isGeneric = IsGenericFolderName(dir.Name);
             
-            if (!string.IsNullOrEmpty(bestExe))
+            if (!isGeneric)
             {
-                var folderName = dir.Name;
-                var (cleanName, serial) = CleanGameTitle(folderName);
-                
-                // If the folder name is generic (e.g. "Ship"), try to use the parent folder name
-                if (IsGenericFolderName(folderName) && dir.Parent != null)
-                {
-                    var parentClean = CleanGameTitle(dir.Parent.Name).Title;
-                    if (!IsGenericFolderName(dir.Parent.Name))
-                    {
-                        Log($"Generic folder '{folderName}' detected. Using parent title candidate: {parentClean}");
-                        cleanName = parentClean;
-                    }
-                }
+                // We use FindBestExecutable with depth 5 for external libraries, 
+                // but we check if the found EXE actually "belongs" to this folder level.
+                var (bestExe, isInstaller) = FindBestExecutable(dir.FullName, new[] { ".exe" }, isExternal: true);
 
-                if (!IsBlacklistedTitle(cleanName))
+                if (!string.IsNullOrEmpty(bestExe))
                 {
-                    // If the folder name is actually the game, we proceed.
-                    // But wait, if it's 'Ship', 'Binaries', etc. we already handled that with IsGenericFolderName.
-                    // Let's ensure top-level folders are prioritized.
-                    if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)) &&
-                        !candidates.Any(c => c.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
+                    // Logic: If the EXE is found deep inside another NON-GENERIC folder, 
+                    // then this current folder is just a container, and we should recurse.
+                    if (IsExeBelongingToFolder(dir.FullName, bestExe))
                     {
-                        candidates.Add(new GameCandidate
+                        var folderName = dir.Name;
+                        var (cleanName, serial) = CleanGameTitle(folderName);
+
+                        if (!IsBlacklistedTitle(cleanName))
                         {
-                            Title = cleanName,
-                            Path = dir.FullName,
-                            ExecutablePath = bestExe,
-                            IsInstaller = isInstaller,
-                            IsExternal = true,
-                            PlatformKey = "pc_windows",
-                            Serial = serial
-                        });
-                        
-                        Log($"[ExternalScan] Identified game candidate at top-level: {cleanName}. Skipping subdirectories.");
-                        return; // <--- This is the hierarchical fix: DON'T recurse if match found
+                            if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)) &&
+                                !candidates.Any(c => c.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                candidates.Add(new GameCandidate
+                                {
+                                    Title = cleanName,
+                                    Path = dir.FullName,
+                                    ExecutablePath = bestExe,
+                                    IsInstaller = isInstaller,
+                                    IsExternal = true,
+                                    PlatformKey = "pc_windows",
+                                    Serial = serial
+                                });
+                                
+                                Log($"[ExternalScan] Identified game at: {dir.FullName} -> {cleanName}. Stopping recursion for this path.");
+                                return; // Found game! Stop recursion for this branch.
+                            }
+                        }
                     }
                 }
             }
 
-            // 2. If no game found in this directory, continue searching subdirectories
+            // 2. Otherwise (generic folder or no local EXE), continue searching subdirectories
             try
             {
                 foreach (var subDir in dir.GetDirectories())
@@ -575,9 +574,33 @@ namespace Playerr.Core.Games
             }
         }
 
+        private bool IsExeBelongingToFolder(string folderPath, string exePath)
+        {
+            var relative = Path.GetRelativePath(folderPath, exePath);
+            var parts = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            
+            // If it's more than 3 levels deep, it's likely a sub-game or too nested to be "the" game of this folder.
+            if (parts.Length > 4) return false; 
+            
+            // If any folder in the path between current folder and EXE is NOT generic,
+            // then the EXE probably belongs to that sub-folder instead.
+            for (int i = 0; i < parts.Length - 1; i++)
+            {
+                if (!IsGenericFolderName(parts[i])) return false;
+            }
+            
+            return true;
+        }
+
         private bool IsGenericFolderName(string name)
         {
-            var generics = new[] { "Ship", "Shipping", "Retail", "Binaries", "x64", "x86", "Win64", "Win32", "Release", "drive_c", "Program Files", "Program Files (x86)", "Users", "Games", "FitGirl", "FitGirl Repack", "DODI", "DODI Repack", "KaOs", "ElAmigos", "Repack", "Bottles", "drive_c/Games" };
+            var generics = new[] 
+            { 
+                "Ship", "Shipping", "Retail", "Binaries", "x64", "x86", "Win64", "Win32", "Release", 
+                "drive_c", "Program Files", "Program Files (x86)", "Users", "Games", "Juegos", "My Games", "Mis Juegos",
+                "FitGirl", "FitGirl Repack", "DODI", "DODI Repack", "KaOs", "ElAmigos", "Repack", "Bottles", "drive_c/Games",
+                "GOG Games", "Epic Games", "SteamLibrary", "SteamApps", "common", "Games_Installed", "Installer"
+            };
             return generics.Any(g => name.Equals(g, StringComparison.OrdinalIgnoreCase) || name.Contains(g, StringComparison.OrdinalIgnoreCase));
         }
         
