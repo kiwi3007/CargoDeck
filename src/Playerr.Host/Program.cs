@@ -171,7 +171,7 @@ namespace Playerr.Host
             {
                 builder.WebHost.ConfigureKestrel(serverOptions =>
                 {
-                    serverOptions.Listen(System.Net.IPAddress.Loopback, 5002);
+                    serverOptions.Listen(System.Net.IPAddress.Loopback, 0); // Use port 0 for dynamic allocation
                 });
             }
             // ELSE: Let Kestrel use default config (ASPNETCORE_URLS) which is ideal for Docker
@@ -413,16 +413,23 @@ namespace Playerr.Host
             // We need to start the app non-blocking
             app.Start();
 
-            // Get the actual address assigned by Kestrel (since we used port 0)
-            // We need to request the IServer interface to get the features
             var server = app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
             var addressFeature = server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
             
-            var address = addressFeature?.Addresses.FirstOrDefault() ?? "http://localhost:5001";
+            // Wait a moment for Kestrel to populate addresses if needed
+            var address = addressFeature?.Addresses.FirstOrDefault();
+            if (string.IsNullOrEmpty(address))
+            {
+                 // Small retry loop for address population
+                 for (int i = 0; i < 5 && string.IsNullOrEmpty(address); i++)
+                 {
+                     System.Threading.Thread.Sleep(100);
+                     address = addressFeature?.Addresses.FirstOrDefault();
+                 }
+            }
             
-            Console.WriteLine($"Playerr running on {address}");
-            
-            Console.WriteLine($"Playerr running on {address}");
+            address ??= "http://localhost:5001"; // Ultimate fallback
+            Console.WriteLine($"[Startup] Playerr backend running on: {address}");
             
             if (isHeadless)
             {
@@ -448,7 +455,9 @@ namespace Playerr.Host
                    // Update library UI when a batch is finished
                    scannerService.OnBatchFinished += () => {
                        Console.WriteLine("[UI] Sending LIBRARY_UPDATED signal to frontend...");
-                       window.SendWebMessage("LIBRARY_UPDATED");
+                       window.Invoke(() => {
+                           try { window.SendWebMessage("LIBRARY_UPDATED"); } catch { }
+                       });
                    };
     
                    // Fix for CS8622: Use object? for sender
@@ -488,9 +497,10 @@ namespace Playerr.Host
                                         configService.SaveMediaSettings(currentMediaSettings);
                                         
                                         // Notify UI that settings have changed (this triggers SETTINGS_UPDATED_EVENT in JS)
-                                        windowInstance.SendWebMessage("SETTINGS_UPDATED");
-                                        // Also send specific signal for immediate UI update if desired
-                                        windowInstance.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
+                                        windowInstance.Invoke(() => {
+                                            windowInstance.SendWebMessage("SETTINGS_UPDATED");
+                                            windowInstance.SendWebMessage($"FOLDER_SELECTED:{selectedPath}");
+                                        });
                                    }
                                    catch (Exception ex)
                                    {

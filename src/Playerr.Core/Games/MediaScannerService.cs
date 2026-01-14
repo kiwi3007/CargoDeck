@@ -538,8 +538,10 @@ namespace Playerr.Core.Games
 
                         if (!IsBlacklistedTitle(cleanName))
                         {
-                            if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)) &&
-                                !candidates.Any(c => c.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
+                            bool alreadyInLibrary = existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase));
+                            bool alreadyInBatch = candidates.Any(c => c.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase));
+
+                            if (!alreadyInLibrary && !alreadyInBatch)
                             {
                                 candidates.Add(new GameCandidate
                                 {
@@ -552,9 +554,14 @@ namespace Playerr.Core.Games
                                     Serial = serial
                                 });
                                 
-                                Log($"[ExternalScan] Identified game at: {dir.FullName} -> {cleanName}. Stopping recursion for this path.");
-                                return; // Found game! Stop recursion for this branch.
+                                Log($"[ExternalScan] Identified new game at: {dir.FullName} -> {cleanName}. Following subdirectories skipped.");
                             }
+                            else
+                            {
+                                Log($"[ExternalScan] Folder {dir.FullName} identified as existing game '{cleanName}'. Skipping subdirectories.");
+                            }
+
+                            return; // STOP recursion here because this folder IS a game
                         }
                     }
                 }
