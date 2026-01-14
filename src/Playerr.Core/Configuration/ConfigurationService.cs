@@ -66,6 +66,8 @@ namespace Playerr.Core.Configuration
             }
         }
 
+        public string GetConfigDirectory() => _configDirectory;
+
         public ProwlarrSettings LoadProwlarrSettings()
         {
             if (File.Exists(_prowlarrConfigFile))

@@ -33,6 +33,18 @@ namespace Playerr.Host
     [SuppressMessage("Microsoft.Usage", "CA2012:UseValueTasksCorrectly")]
     public class Program
     {
+        private static string? _logPath;
+
+        public static void Log(string message)
+        {
+            var logLine = $"[{DateTime.Now:HH:mm:ss}] {message}";
+            Console.WriteLine(logLine);
+            if (_logPath != null)
+            {
+                try { File.AppendAllText(_logPath, logLine + Environment.NewLine); } catch { }
+            }
+        }
+
         [STAThread]
         public static async Task Main(string[] args)
         {
@@ -66,7 +78,7 @@ namespace Playerr.Host
 
             // Configuration service for persistence
             var configPath = Path.Combine(exePath, "config");
-            
+
             // In development/build scenarios, the exe is deep in _output/net8.0/osx-arm64/
             // We want to look for the 'config' folder in the project root so it persists across builds (which wipe _output)
             if (!Directory.Exists(configPath))
@@ -74,7 +86,7 @@ namespace Playerr.Host
                 // Try to find project root by looking for the 'config' folder up the tree
                 var candidate = exePath;
                 bool found = false;
-
+ 
                 // 1. Try relative search (works for Terminal runs)
                 for (int i = 0; i < 10; i++)
                 {
@@ -84,14 +96,13 @@ namespace Playerr.Host
                     var checkPath = Path.Combine(candidate, "config");
                     if (Directory.Exists(checkPath))
                     {
-                        Console.WriteLine($"[Config] Found persistent configuration at: {checkPath}");
                         configPath = checkPath;
                         exePath = candidate; 
                         found = true;
                         break;
                     }
                 }
-
+ 
                 // 2. Fallback for macOS App Translocation / Sandbox (works for .app double-click)
                 if (!found)
                 {
@@ -101,7 +112,6 @@ namespace Playerr.Host
                      
                      if (Directory.Exists(appDataConfig))
                      {
-                         Console.WriteLine($"[Config] Using AppData configuration at: {appDataConfig}");
                          configPath = appDataConfig;
                          // exePath remains where the executable is
                      }
@@ -111,6 +121,12 @@ namespace Playerr.Host
             // Note: ConfigurationService adds "/config" to the path passed to it
             var configService = new ConfigurationService(exePath);
             builder.Services.AddSingleton(configService);
+
+            // Initialize Log Path
+            _logPath = Path.Combine(configService.GetConfigDirectory(), "playerr.log");
+            try { File.WriteAllText(_logPath, $"--- Playerr Startup {DateTime.Now} ---" + Environment.NewLine); } catch { }
+            Log($"[Startup] EXE Path: {exePath}");
+            Log($"[Startup] Config Path: {configService.GetConfigDirectory()}");
 
             // Persistence with SQLite
             var dbPath = Path.Combine(configPath, "playerr.db");
@@ -455,47 +471,66 @@ namespace Playerr.Host
             // Kestrel is configured via appsettings or LaunchSettings to listen on 5001
             // We need to start the app non-blocking
             app.Start();
+            Log("[Startup] Kestrel server started.");
 
             var server = app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
             var addressFeature = server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
-            
+
             // PROFESSIONAL: Get the assigned address and normalize to localhost
-            string? address = addressFeature?.Addresses.FirstOrDefault();
+            string? rawAddress = addressFeature?.Addresses.FirstOrDefault();
             
             // Wait for address population if dynamic
-            if (string.IsNullOrEmpty(address))
+            if (string.IsNullOrEmpty(rawAddress))
             {
-                 for (int i = 0; i < 5 && string.IsNullOrEmpty(address); i++)
+                 Log("[Startup] Waiting for Kestrel address to be populated...");
+                 for (int i = 0; i < 5 && string.IsNullOrEmpty(rawAddress); i++)
                  {
                      System.Threading.Thread.Sleep(100);
-                     address = addressFeature?.Addresses.FirstOrDefault();
+                     rawAddress = addressFeature?.Addresses.FirstOrDefault();
                  }
             }
 
-            address ??= "http://localhost:5001"; // Fallback
+            rawAddress ??= "http://localhost:5001"; // Fallback
             
+            // Use 127.0.0.1 for internal alive-check
+            string internalAddress = rawAddress;
+            if (internalAddress.Contains("localhost")) internalAddress = internalAddress.Replace("localhost", "127.0.0.1");
+            
+            // Define the final UI address
+            string address = rawAddress;
             if (address.Contains("127.0.0.1")) address = address.Replace("127.0.0.1", "localhost");
             if (address.Contains("[::1]")) address = address.Replace("[::1]", "localhost");
 
             // PRO-CHECK: Wait for the server to actually be ALIVE and serving content
-            Console.WriteLine($"[Startup] Waiting for backend at {address}...");
-            using (var client = new System.Net.Http.HttpClient())
+            Log($"[Startup] Waiting for backend at {internalAddress}...");
+            try 
             {
-                for (int i = 0; i < 20; i++) // Try for up to 2 seconds
+                using (var client = new System.Net.Http.HttpClient())
                 {
-                    try {
-                        var response = await client.GetAsync(address);
-                        if (response.IsSuccessStatusCode) break;
-                    } catch { }
-                    await Task.Delay(100);
+                    client.Timeout = TimeSpan.FromSeconds(5);
+                    for (int i = 0; i < 30; i++) // Try for up to 3 seconds
+                    {
+                        try {
+                            var response = await client.GetAsync(internalAddress);
+                            if (response.IsSuccessStatusCode) {
+                                Log($"[Startup] Backend is ALIVE on {internalAddress}");
+                                break;
+                            }
+                        } catch { }
+                        await Task.Delay(100);
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                Log($"[Startup] Warning: Alive-check failed to execute: {ex.Message}");
+            }
 
-            Console.WriteLine($"[Startup] Playerr backend ready on: {address}");
+            Log($"[Startup] Playerr backend ready on: {address}");
             
             if (isHeadless)
             {
-                 Console.WriteLine("Running in Headless Mode (Docker/Server). Press Ctrl+C to exit.");
+                 Log("Running in Headless Mode (Docker/Server). Press Ctrl+C to exit.");
                  app.WaitForShutdown();
             }
             else
@@ -504,20 +539,21 @@ namespace Playerr.Host
                 // This blocks until the window is closed
                 try 
                 {
+                   Log("[UI] Initializing Photino Window...");
                    var window = new Photino.NET.PhotinoWindow()
                        .SetTitle("Playerr")
                        .SetUseOsDefaultSize(false)
                        .SetSize(new System.Drawing.Size(1280, 800))
                        .Center()
                        .SetResizable(true)
-                       .SetDevToolsEnabled(true); // Enable DevTools for debugging during beta
+                       .SetDevToolsEnabled(true);
     
                    // Real-time library updates: Subscribe to scanner events
                    var scannerService = app.Services.GetRequiredService<MediaScannerService>();
                    
                    // Update library UI when a batch is finished
                    scannerService.OnBatchFinished += () => {
-                       Console.WriteLine("[UI] Sending LIBRARY_UPDATED signal to frontend...");
+                       Log("[UI] Sending LIBRARY_UPDATED signal to frontend...");
                        window.Invoke(() => {
                            try { window.SendWebMessage("LIBRARY_UPDATED"); } catch { }
                        });
