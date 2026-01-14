@@ -79,14 +79,14 @@ namespace Playerr.Core.Games
         private static readonly HashSet<string> _filenameBlacklist = new(StringComparer.OrdinalIgnoreCase)
         {
             "crashpad_handler.exe", "unitycrashhandler.exe", "unitycrashhandler64.exe", 
-            "dxsetup.exe", "vcredist_x64.exe", "vcredist_x86.exe", "credist.exe", "bsndrpt.exe"
+            "dxsetup.exe", "vcredist_x64.exe", "vcredist_x86.exe", "credist.exe", "bsndrpt.exe",
+            "socialclub.exe", "epicgameslauncher.exe", "eaapp.exe", "origin.exe", "ubisoftconnect.exe"
         };
 
         private static readonly HashSet<string> _folderBlacklist = new(StringComparer.OrdinalIgnoreCase)
         {
             "_CommonRedist", "CommonRedist", "Redist", "DirectX", "Support", 
-            "Prerequisites", "Launcher", "Windows", "Program Files", "Program Files (x86)", 
-            "Common Files", "Users", "drive_c", "dosdevices", "Ship", "Shipping", 
+            "Prerequisites", "Launcher", "Ship", "Shipping", 
             "Retail", "x64", "x86", "System", "Binaries", "Engine", "Content", "Asset", "Resource"
         };
 
@@ -331,9 +331,9 @@ namespace Playerr.Core.Games
 
                 var candidates = new List<(FileInfo File, int Score, bool IsInstaller)>();
                 
-                // Recursive search with depth limit (e.g. 3 levels) to avoid scanning too deep
+                // Recursive search with depth limit (e.g. 3-4 levels) to avoid scanning too deep
                 // And explicitly skipping blacklist folders
-                var allFiles = GetFilesSafe(root, 0, 3); 
+                var allFiles = GetFilesSafe(root, 0, isExternal ? 5 : 3); 
 
                 foreach (var file in allFiles)
                 {
@@ -358,8 +358,11 @@ namespace Playerr.Core.Games
                     }
 
                     // 2. Name Match (+50)
-                    if (name == root.Name.ToLowerInvariant()) score += 50;
-                    if (name.Replace(" ", "").Replace("-", "") == root.Name.ToLowerInvariant().Replace(" ", "").Replace("-", "")) score += 40;
+                    if (name == root.Name.ToLowerInvariant()) score += 60;
+                    if (name.Replace(" ", "").Replace("-", "") == root.Name.ToLowerInvariant().Replace(" ", "").Replace("-", "")) score += 50;
+
+                    // 2.1 Parent Folder Name Match (+40) - Good for deeper structures
+                    if (name == folderName) score += 40;
 
                     // 3. Keywords (+20)
                     if (name.Contains("shipping")) score += 20;
@@ -368,7 +371,7 @@ namespace Playerr.Core.Games
                     if (name.EndsWith("64")) score += 5;
 
                     // 4. Folder Location (+10)
-                    if (folderName == "binaries" || folderName == "win64" || folderName == "release" || folderName == "shipping") score += 20;
+                    if (folderName == "binaries" || folderName == "win64" || folderName == "release" || folderName == "shipping" || folderName == "retail") score += 25;
                     
                     // 5. File Size (+30 for largest) - Calculated later relative to others
                     
@@ -574,8 +577,8 @@ namespace Playerr.Core.Games
 
         private bool IsGenericFolderName(string name)
         {
-            var generics = new[] { "Ship", "Shipping", "Retail", "Binaries", "x64", "x86", "Win64", "Win32", "Release" };
-            return generics.Any(g => name.Equals(g, StringComparison.OrdinalIgnoreCase));
+            var generics = new[] { "Ship", "Shipping", "Retail", "Binaries", "x64", "x86", "Win64", "Win32", "Release", "drive_c", "Program Files", "Program Files (x86)", "Users", "Games", "FitGirl", "FitGirl Repack", "DODI", "DODI Repack", "KaOs", "ElAmigos", "Repack", "Bottles", "drive_c/Games" };
+            return generics.Any(g => name.Equals(g, StringComparison.OrdinalIgnoreCase) || name.Contains(g, StringComparison.OrdinalIgnoreCase));
         }
         
         private bool IsBlacklistedFile(string fileName, bool isExternal)
@@ -605,20 +608,17 @@ namespace Playerr.Core.Games
 
         private bool IsMetadataSubfolder(string name)
         {
-            var metadataFolders = new[] { "artworks", "soundtrack", "avatars", "manual", "wallpapers", "Goodies", "MD5", "Bonus" };
+            var metadataFolders = new[] { "artworks", "soundtrack", "avatars", "manual", "wallpapers", "Goodies", "MD5", "Bonus", "Documentation", "Support", "Redist", "DirectX", "DotNet", "VCRedist", "PhysX" };
             return metadataFolders.Any(f => name.EndsWith(f, StringComparison.OrdinalIgnoreCase) || name.Contains(f, StringComparison.OrdinalIgnoreCase));
         }
 
         private bool IsBlacklistedTitle(string title)
         {
-             return _folderBlacklist.Contains(title) || 
-                    title.Equals("Binaries", StringComparison.OrdinalIgnoreCase) || 
-                    title.Equals("Win64", StringComparison.OrdinalIgnoreCase) || 
-                    title.Equals("Win32", StringComparison.OrdinalIgnoreCase) || 
-                    title.Equals("Common", StringComparison.OrdinalIgnoreCase) || 
-                    title.Equals("Engine", StringComparison.OrdinalIgnoreCase) || 
-                    title.Equals("Content", StringComparison.OrdinalIgnoreCase) ||
-                    IsMetadataSubfolder(title);
+             var block = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { 
+                 "Windows", "Program Files", "Program Files (x86)", "Common Files", "Users", 
+                 "drive_c", "dosdevices", "Binaries", "Win64", "Win32", "Common", "Engine", "Content" 
+             };
+             return block.Contains(title) || _folderBlacklist.Contains(title) || IsMetadataSubfolder(title);
         }
 
         private bool IsBlacklistedFolder(DirectoryInfo dir)
@@ -776,87 +776,6 @@ namespace Playerr.Core.Games
             return validExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase) && !_globalBlacklist.Contains(ext);
         }
 
-        private async Task<bool> ProcessPotentialGame(string gameTitle, List<Game> existingGames, GameMetadataService metadataService, string? localPath = null, string? platformKey = null, string? serial = null)
-        {
-            // 1. Check if a game with exactly this path already exists
-            var existingByPath = existingGames.FirstOrDefault(g => g.Path == localPath);
-            if (existingByPath != null)
-            {
-                Log($"Game at path '{localPath}' already exists in library: {existingByPath.Title}");
-                return false;
-            }
-
-            // 2. Check if a game with this title already exists but at a different path
-            // (Moved Game or different folder name but same game)
-            var existingByTitle = existingGames.FirstOrDefault(g => g.Title.Equals(gameTitle, StringComparison.OrdinalIgnoreCase));
-            if (existingByTitle != null)
-            {
-                Log($"Game '{gameTitle}' already exists with a different path. Updating path to: {localPath}");
-                existingByTitle.Path = localPath;
-                await _gameRepository.UpdateAsync(existingByTitle.Id, existingByTitle);
-                return true;
-            }
-
-            try
-            {
-                Log($"Searching metadata for: {gameTitle}" + (serial != null ? $" (Serial: {serial})" : "") + (platformKey != null ? $" Platform: {platformKey}" : ""));
-                var searchResults = await metadataService.SearchGamesAsync(gameTitle, platformKey, null, serial);
-                
-                if (searchResults != null && searchResults.Any())
-                {
-                    var gameData = searchResults.First();
-                    Log($"Processing potential match: {gameData.Title} (IGDB: {gameData.IgdbId})");
-                    
-                    // 3. Verify if this IGDB ID is already in our database
-                    if (gameData.IgdbId.HasValue)
-                    {
-                        var match = existingGames.FirstOrDefault(g => g.IgdbId == gameData.IgdbId);
-                        if (match != null)
-                        {
-                            Log($"ID match found: {gameData.Title} (ID: {gameData.IgdbId}) is already in library as '{match.Title}'. Updating its path.");
-                            match.Path = localPath;
-                            await _gameRepository.UpdateAsync(match.Id, match);
-                            return true;
-                        }
-                    }
-
-                    if (gameData.IgdbId.HasValue)
-                    {
-                        var fullMetadata = await metadataService.GetGameMetadataAsync(gameData.IgdbId.Value);
-                        if (fullMetadata != null)
-                        {
-                            fullMetadata.Path = localPath;
-                            
-                            // CRITICAL FIX: Set PlatformId to avoid Foreign Key constraint violation
-                            // If platformKey is null or "default", assume PC (Id 1/6) via dynamic lookup
-                            fullMetadata.PlatformId = await ResolvePlatformIdAsync(platformKey);
-
-                            var newGame = await _gameRepository.AddAsync(fullMetadata);
-                            existingGames.Add(newGame);
-                            
-                            Log($"Added new game: {newGame.Title} (Local ID: {newGame.Id}, Platform ID: {newGame.PlatformId})");
-                            LastGameFound = newGame.Title;
-                            GamesAddedCount++;
-                            OnGameAdded?.Invoke(newGame);
-                            return true;
-                        }
-                        else
-                        {
-                            Log($"CRITICAL: Metadata fetch returned null for ID {gameData.IgdbId.Value} (Game: {gameData.Title}). Check IgdbClient logs.");
-                        }
-                    }
-                }
-                else
-                {
-                    Log($"No metadata found for: {gameTitle}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log($"Error processing {gameTitle}: {ex.Message}");
-            }
-            return false;
-        }
 
         private string GetPlatformFromExtension(string ext)
         {
