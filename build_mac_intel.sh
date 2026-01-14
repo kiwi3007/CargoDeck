@@ -69,7 +69,7 @@ cat > "${APP_NAME}.app/Contents/Info.plist" <<EOF
     <key>CFBundleIdentifier</key>
     <string>app.playerr.desktop</string>
     <key>CFBundleVersion</key>
-    <string>0.1.2-beta</string>
+    <string>0.4.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
