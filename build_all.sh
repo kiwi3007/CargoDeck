@@ -2,7 +2,7 @@
 set -e
 
 # Define version
-VERSION="0.4.0"
+VERSION="0.4.1"
 OUTPUT_DIR="build_artifacts"
 
 echo "=================================="
