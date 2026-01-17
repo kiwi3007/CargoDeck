@@ -22,6 +22,7 @@ using Playerr.Core.Configuration;
 using System.Linq;
 using Photino.NET;
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.Configuration;
 
 namespace Playerr.Host
 {
@@ -186,9 +187,11 @@ namespace Playerr.Host
             // This is crucial for desktop apps where we can't guarantee a specific port is free
             // CHECK IF RUNNING IN CONTAINER OR HEADLESS
             var envVar = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
-            var isHeadless = args.Contains("--headless") || envVar == "true";
+            var isHeadless = args.Contains("--headless") || 
+                             envVar == "true" || 
+                             builder.Configuration.GetValue<bool>("HeadlessMode");
             
-            Console.WriteLine($"[Startup] Checking Headless Mode: Args={string.Join(",", args)}, EnvVar={envVar}, Result={isHeadless}");
+            Console.WriteLine($"[Startup] Checking Headless Mode: Args={string.Join(",", args)}, Config={builder.Configuration.GetValue<bool>("HeadlessMode")}, EnvVar={envVar}, Result={isHeadless}");
 
             if (!isHeadless)
             {

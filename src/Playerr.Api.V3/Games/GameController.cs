@@ -90,6 +90,18 @@ namespace Playerr.Api.V3.Games
             var uninstallerPath = FindUninstaller(game.Path);
             var downloadPathHint = FindDownloadFolder(game.Title, game.Path);
 
+            var isInstaller = game.Status == GameStatus.InstallerDetected || 
+                              (!string.IsNullOrEmpty(game.ExecutablePath) && 
+                               (game.ExecutablePath.EndsWith("setup.exe", System.StringComparison.OrdinalIgnoreCase) || 
+                                game.ExecutablePath.EndsWith("install.exe", System.StringComparison.OrdinalIgnoreCase)));
+
+            bool canPlay = (game.SteamId.HasValue && game.SteamId.Value > 0) || 
+                           (!string.IsNullOrEmpty(game.ExecutablePath) && 
+                            System.IO.File.Exists(game.ExecutablePath) && 
+                            !isInstaller);
+
+            System.Console.WriteLine($"[API] Game {id} GetById - canPlay: {canPlay} (Path: {game.ExecutablePath}, SteamId: {game.SteamId}, Status: {game.Status})");
+
             return Ok(new
             {
                 game.Id,
@@ -121,7 +133,8 @@ namespace Playerr.Api.V3.Games
                 game.ExecutablePath,
                 game.IsExternal,
                 uninstallerPath,
-                downloadPath = downloadPathHint // Added download path hint
+                downloadPath = downloadPathHint,
+                canPlay = canPlay // Explicit property name
             });
         }
 

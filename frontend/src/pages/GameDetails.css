@@ -101,13 +101,26 @@
 }
 
 .action-btn.install-ready {
-  background-color: #a6e3a1;
-  /* Green */
+  background-color: #2fb55d;
   color: #11111b;
+  box-shadow: 0 0 10px rgba(47, 181, 93, 0.3);
 }
 
 .action-btn.install-ready:hover {
-  background-color: #94e2d5;
+  background-color: #3ecc71;
+}
+
+.action-btn.play-ready {
+  background-color: #2fb55d;
+  color: #11111b;
+  box-shadow: 0 0 15px rgba(47, 181, 93, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.action-btn.play-ready:hover {
+  background-color: #3ecc71;
+  transform: translateY(-3px);
+  box-shadow: 0 0 20px rgba(47, 181, 93, 0.6);
 }
 
 .action-btn svg {

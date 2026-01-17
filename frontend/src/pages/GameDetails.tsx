@@ -31,6 +31,7 @@ interface Game {
   path?: string;
   uninstallerPath?: string;
   downloadPath?: string;
+  canPlay?: boolean;
 }
 
 interface TorrentResult {
@@ -533,7 +534,7 @@ const GameDetails: React.FC = () => {
             </button>
 
             <button
-              className={`action-btn ${game.isInstallable ? 'install-ready' : ''}`}
+              className={`action-btn ${game.isInstallable && !game.canPlay ? 'install-ready' : ''}`}
               onClick={handleInstallClick}
               title={t('install')}
             >
@@ -541,7 +542,7 @@ const GameDetails: React.FC = () => {
               <span>{t('install')}</span>
             </button>
             <button
-              className="action-btn"
+              className={`action-btn ${game.canPlay ? 'play-ready' : ''}`}
               onClick={handlePlay}
               title={t('play')}
             >
