@@ -43,11 +43,15 @@ namespace Playerr.Core.Download
                 {
                     var settings = _configService.LoadPostDownloadSettings();
                     var clients = _configService.LoadDownloadClients();
-                    _logger.LogInformation($"[DownloadMonitor] Loaded {clients.Count} clients. Checking enabled ones...");
+                    var enabledClients = clients.Where(c => c.Enable).ToList();
 
-                    foreach (var clientConfig in clients.Where(c => c.Enable))
+                    if (enabledClients.Any())
                     {
-                        await MonitorClientAsync(clientConfig, stoppingToken);
+                        _logger.LogDebug($"[DownloadMonitor] Checking {enabledClients.Count} enabled clients...");
+                        foreach (var clientConfig in enabledClients)
+                        {
+                            await MonitorClientAsync(clientConfig, stoppingToken);
+                        }
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(settings.MonitorIntervalSeconds), stoppingToken);

@@ -33,8 +33,18 @@ namespace Playerr.Core.Games
         public int GamesAddedCount { get; private set; }
         private System.Threading.CancellationTokenSource? _scanCts;
 
-        public event Action<Game>? OnGameAdded;
+        public delegate void GameAddedHandler(Game game);
+        public event GameAddedHandler? OnGameAdded;
         public event Action? OnScanStarted;
+
+        private static readonly HashSet<string> _noiseWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            "setup", "install", "installer", "gog", "repack", "fitgirl", "dodi", "cracked", 
+            "unpacked", "steamrip", "portable", "multi10", "multi5", "multi2", "v1", "v2",
+            "xatab", "codex", "skidrow", "reloaded", "razor1911", "plaza", "cpy", "dlpsgame",
+            "nsw2u", "egold", "quacked", "venom", "inc", "rpgonly", "gamesfull", "bitsearch",
+            "www", "app", "to", "com", "net", "org", "iso", "bin", "decepticon", "empress", 
+            "tenoke", "rune", "goldberg", "ali213", "p2p", "fairlight"
+        };
         public event Action<int>? OnScanFinished;
         public event Action? OnBatchFinished;
 
@@ -73,7 +83,13 @@ namespace Playerr.Core.Games
             ".nfo", ".txt", ".url", ".website", ".html", ".md",
             ".sfv", ".md5", ".sha1",
             ".jpg", ".png", ".jpeg", ".bmp",
-            ".ds_store", ".db"
+            ".ds_store", ".db",
+            ".dll", ".so", ".lib", ".a", ".bin" // Strictly ignore these in folder scans
+        };
+
+        private static readonly HashSet<string> _keywordBlacklist = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "steam_api", "crashpad", "unitycrash", "unins000", "uninstall", "update", "config", "dxsetup", "redist", "vcredist", "fna", "mono", "bios", "firmware"
         };
 
         private static readonly HashSet<string> _filenameBlacklist = new(StringComparer.OrdinalIgnoreCase)
@@ -87,7 +103,9 @@ namespace Playerr.Core.Games
         {
             "_CommonRedist", "CommonRedist", "Redist", "DirectX", "Support", 
             "Prerequisites", "Launcher", "Ship", "Shipping", 
-            "Retail", "x64", "x86", "System", "Binaries", "Engine", "Content", "Asset", "Resource"
+            "Retail", "x64", "x86", "System", "Binaries", "Engine", "Content", "Asset", "Resource",
+            "shadercache", "compatdata", "depotcache", "steamapps", ".steam", ".local", ".cache", "temp", "tmp", "node_modules",
+            "windows", "system32", "syswow64", "Microsoft.NET", "Framework", "Framework64", "Internet Explorer", "Accessories", "Windows NT", "INF", "WinSxS", "SysARM32", "Sysnative", "command"
         };
 
         [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
@@ -343,50 +361,56 @@ namespace Playerr.Core.Games
                     int score = 0;
                     bool isInstaller = false;
                     string name = Path.GetFileNameWithoutExtension(file.Name).ToLowerInvariant();
+                    if (string.IsNullOrEmpty(name)) name = file.Name.ToLowerInvariant(); // Support extensionless files (v0.4.2)
                     string folderName = file.Directory?.Name.ToLowerInvariant() ?? "";
                     
-                    // --- SCORING RULES ---
+                    // --- SCORING RULES (v0.4.2 Winner Takes All) ---
                     
-                    // New V2 Blacklist Filtering
+                    // 1. Blacklist Filtering (TAREA 1)
                     if (IsBlacklistedFile(file.Name, isExternal)) continue;
 
-                    // 1. Installer Trap (Negative or Special State)
-                    if (name.StartsWith("setup") || name.StartsWith("install") || name.StartsWith("unins") || name.Contains("redist") || name.StartsWith("config"))
+                    // 2. Name Match (+100) (TAREA 3)
+                    var rootFolderName = root.Name.ToLowerInvariant();
+                    if (name == rootFolderName) score += 100;
+                    else if (name.Replace(" ", "").Replace("-", "") == rootFolderName.Replace(" ", "").Replace("-", "")) score += 90;
+                    else if (rootFolderName.Contains(name) && name.Length > 4) score += 30;
+
+                    // 3. Priority Names (+50) (TAREA 2 & 3)
+                    if (file.Name.Equals("AppRun", StringComparison.OrdinalIgnoreCase) || 
+                        file.Name.Equals("Start.sh", StringComparison.OrdinalIgnoreCase))
                     {
-                        isInstaller = true;
-                        score -= 50; // Penalize, but keep as candidate if nothing else found
+                        score += 50;
                     }
 
-                    // 2. Name Match (+50)
-                    if (name == root.Name.ToLowerInvariant()) score += 60;
-                    if (name.Replace(" ", "").Replace("-", "") == root.Name.ToLowerInvariant().Replace(" ", "").Replace("-", "")) score += 50;
+                    // 4. Installer/Config Penalty (-50) (TAREA 3)
+                    if (name.Contains("launch") || name.Contains("settings") || name.Contains("server") || 
+                        name.Contains("config") || name.Contains("setup") || name.Contains("install"))
+                    {
+                        score -= 50;
+                        if (name.Contains("setup") || name.Contains("install")) isInstaller = true;
+                    }
 
-                    // 2.1 Parent Folder Name Match (+40) - Good for deeper structures
-                    if (name == folderName) score += 40;
-
-                    // 3. Keywords (+20)
-                    if (name.Contains("shipping")) score += 20;
-                    if (name.Contains("launcher")) score += 20;
-                    if (name.Contains("game")) score += 10;
-                    if (name.EndsWith("64")) score += 5;
-
-                    // 4. Folder Location (+10)
+                    // 5. Folder Location Bonus
                     if (folderName == "binaries" || folderName == "win64" || folderName == "release" || folderName == "shipping" || folderName == "retail") score += 25;
                     
-                    // 5. File Size (+30 for largest) - Calculated later relative to others
+                    // 6. Native Linux executable bonus (on Linux systems)
+                    if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux) && string.IsNullOrEmpty(file.Extension))
+                    {
+                        score += 10;
+                    }
                     
                     candidates.Add((file, score, isInstaller));
                 }
 
                 if (!candidates.Any()) return (null, false);
 
-                // Apply Size Bonus to top 3 largest files
-                var largestFiles = candidates.OrderByDescending(x => x.File.Length).Take(3).ToList();
+                // 7. Largest File Bonus (+20) (TAREA 3)
+                var largestFile = candidates.OrderByDescending(x => x.File.Length).FirstOrDefault();
                 for (int i = 0; i < candidates.Count; i++)
                 {
-                    if (largestFiles.Any(l => l.File.FullName == candidates[i].File.FullName))
+                    if (candidates[i].File.FullName == largestFile.File.FullName)
                     {
-                        candidates[i] = (candidates[i].File, candidates[i].Score + 30, candidates[i].IsInstaller);
+                        candidates[i] = (candidates[i].File, candidates[i].Score + 20, candidates[i].IsInstaller);
                     }
                 }
 
@@ -433,59 +457,116 @@ namespace Playerr.Core.Games
         {
             var candidates = new List<GameCandidate>();
             var extensionsToUse = platformKey == "default" ? _allExtensions : rule.Extensions;
-            Log($"Scanning (File Mode) Root: {rootPath}. Valid Extensions: {(extensionsToUse != null ? string.Join(", ", extensionsToUse) : "ALL")}");
+            Log($"Scanning (Fast FileMode) Root: {rootPath}. Valid Extensions: {(extensionsToUse != null ? string.Join(", ", extensionsToUse) : "ALL")}");
 
             try
             {
-                var files = Directory.EnumerateFiles(rootPath, "*.*", SearchOption.AllDirectories);
+                var validFilesByFolder = new Dictionary<string, List<string>>();
                 
-                foreach (var file in files)
+                // Fast Hierarchical Discovery (v0.4.2)
+                // Instead of SearchOption.AllDirectories (Slow), we recurse manually and skip blacklisted branches
+                DiscoverFilesHierarchical(new DirectoryInfo(rootPath), extensionsToUse, validFilesByFolder, ct);
+
+                Log($"[FileMode] Discovery phase finished. Found {validFilesByFolder.Count} candidate folders items. Applying clustering...");
+
+                foreach (var folderEntry in validFilesByFolder)
                 {
                     ct.ThrowIfCancellationRequested();
+                    var folderPath = folderEntry.Key;
+                    var filePaths = folderEntry.Value;
 
-                    string fileName = Path.GetFileName(file);
-                    if (IsBlacklistedFile(fileName, isExternal: false)) continue;
-                    
-                    if (IsValidFile(file, extensionsToUse))
+                    // Choose ONLY THE BEST per folder
+                    var (bestExePath, isInstaller) = FindBestExecutableInList(folderPath, filePaths);
+
+                    if (!string.IsNullOrEmpty(bestExePath))
                     {
-                        var name = Path.GetFileNameWithoutExtension(file);
-                         
-                        // In File Mode, the file itself IS the executable.
-                        // We check if it's an installer trap.
-                        bool isInstaller = name.StartsWith("setup", StringComparison.OrdinalIgnoreCase) || 
-                                           name.StartsWith("install", StringComparison.OrdinalIgnoreCase);
-
-                        if (isInstaller)
-                        {
-                            // Skip installers in file mode unless we really want them?
-                            // For now, let's treat them as valid candidates but flag them.
-                        }
-
-                        // Fix for generic filenames
-                        if (name.Equals("setup", StringComparison.OrdinalIgnoreCase) || 
-                            name.Equals("installer", StringComparison.OrdinalIgnoreCase) || 
-                            name.Equals("game", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var parentDir = Path.GetDirectoryName(file);
-                            if (parentDir != null) name = new DirectoryInfo(parentDir).Name;
-                        }
-
-                        // Smart detection logic...
-                        string finalPlatformKey = platformKey;
-                        if (platformKey == "default") finalPlatformKey = GetPlatformFromExtension(Path.GetExtension(file));
-
-                        var (cleanName, serial) = CleanGameTitle(name);
+                        var rawFileName = Path.GetFileNameWithoutExtension(bestExePath);
+                        if (string.IsNullOrEmpty(rawFileName)) rawFileName = Path.GetFileName(bestExePath);
                         
-                        if (!existingGames.Any(g => g.Title.Equals(cleanName, StringComparison.OrdinalIgnoreCase)))
+                        var rawFolderName = new DirectoryInfo(folderPath).Name;
+                        
+                        // Clean both to compare their "quality"
+                        var (cleanFile, _) = CleanGameTitle(rawFileName);
+                        var (cleanFolder, _) = CleanGameTitle(rawFolderName);
+
+                        // Selection Heuristic:
+                        // 1. If cleanFile is empty/too short and cleanFolder is better -> Folder
+                        // 2. If cleanFolder contains more words or is significantly longer -> Folder
+                        // 3. If file is "setup" or "install" -> Folder
+                        bool isGenericFile = rawFileName.Equals("setup", StringComparison.OrdinalIgnoreCase) || 
+                                             rawFileName.Equals("install", StringComparison.OrdinalIgnoreCase) || 
+                                             rawFileName.Equals("game", StringComparison.OrdinalIgnoreCase);
+
+                        string selectedName;
+                        string source;
+
+                        // QUALITY HEURISTIC (v0.4.4):
+                        // 1. Prefer cleaner strings (fewer surplus words).
+                        // 2. Protect sequels (e.g., '4' in 'Game Title 4').
+                        // 3. Folder Name is a tie-breaker for installers.
+
+                        if (isGenericFile)
+                        {
+                            selectedName = cleanFolder;
+                            source = "Folder (Generic File)";
+                        }
+                        else if (cleanFolder.Equals(cleanFile, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Perfect match: default to Folder for better path consistency
+                            selectedName = cleanFolder;
+                            source = "Folder (Exact Match)";
+                        }
+                        else if (cleanFolder.Contains(cleanFile, StringComparison.OrdinalIgnoreCase) && !_noiseWords.Any(nw => cleanFolder.Contains(nw, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            // Folder is "Game A Title", File is "Title" -> Pick Folder
+                            // Only if folder doesn't contain known noise words
+                            selectedName = cleanFolder;
+                            source = "Folder (Subset Match)";
+                        }
+                        else if (cleanFile.Contains(cleanFolder, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // File is "Game B Special Edition", Folder is "Game B" -> Pick File
+                            selectedName = cleanFile;
+                            source = "Filename (Subset Match)";
+                        }
+                        else if (cleanFolder.Length > 3 && cleanFile.StartsWith(cleanFolder, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Example: Folder='Game II', File='Game II Build 123'
+                            selectedName = cleanFolder;
+                            source = "Folder (Cleaner Prefix)";
+                        }
+                        else if (cleanFile.Length > 3 && cleanFolder.StartsWith(cleanFile, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Example: Folder='Game Title Special Edition', File='Game Title'
+                            selectedName = cleanFile;
+                            source = "Filename (Cleaner Prefix)";
+                        }
+                        else
+                        {
+                            // Tie or generic difference: default to Folder as it's usually the "Release Name"
+                            selectedName = cleanFolder.Length > 0 ? cleanFolder : cleanFile;
+                            source = cleanFolder.Length > 0 ? "Folder (Context Default)" : "Filename (Fallback)";
+                        }
+
+                        // Use the cleaned name for the final candidate
+                        var finalTitle = selectedName;
+                        var (_, serial) = CleanGameTitle(rawFileName); // Extract serial from filename if possible
+                        
+                        Log($"[Scanner] Title Resolution: File('{cleanFile}') vs Folder('{cleanFolder}') -> Selected: '{finalTitle}' (Source: {source})");
+
+                        string finalPlatformKey = platformKey;
+                        if (platformKey == "default") finalPlatformKey = GetPlatformFromExtension(Path.GetExtension(bestExePath));
+
+                        if (!existingGames.Any(g => g.Title.Equals(finalTitle, StringComparison.OrdinalIgnoreCase)))
                         {
                              candidates.Add(new GameCandidate 
                             { 
-                                Title = cleanName, 
-                                Path = file, // Executable is the path
+                                Title = finalTitle, 
+                                Path = folderPath,
                                 PlatformKey = finalPlatformKey, 
-                                Serial = serial
-                                // Note: We need to somehow signal this is an installer or store the ExecutablePath
-                                // In file mode, Path == ExecutablePath
+                                Serial = serial,
+                                ExecutablePath = bestExePath,
+                                IsInstaller = isInstaller
                             });
                         }
                     }
@@ -493,11 +574,87 @@ namespace Playerr.Core.Games
             }
             catch (Exception ex)
             {
-                Log($"Error accessing directories: {ex.Message}");
+                Log($"Error during Fast FileMode scan: {ex.Message}");
             }
 
             return await ProcessCandidatesBatchAsync(candidates, existingGames, metadataService, ct);
+        }
 
+        private void DiscoverFilesHierarchical(DirectoryInfo root, string[]? allowedExtensions, Dictionary<string, List<string>> results, System.Threading.CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (!root.Exists) return;
+            if (root.Name.StartsWith(".") || _folderBlacklist.Contains(root.Name) || IsMetadataSubfolder(root.Name)) return;
+
+            try
+            {
+                var files = root.EnumerateFiles();
+                foreach (var file in files)
+                {
+                    if (IsBlacklistedFile(file.Name, isExternal: false)) continue;
+
+                    if (IsValidFile(file.FullName, allowedExtensions))
+                    {
+                        if (!results.ContainsKey(root.FullName))
+                            results[root.FullName] = new List<string>();
+
+                        results[root.FullName].Add(file.FullName);
+                    }
+                }
+
+                foreach (var subDir in root.EnumerateDirectories())
+                {
+                    DiscoverFilesHierarchical(subDir, allowedExtensions, results, ct);
+                }
+            }
+            catch { /* Skip permission errors */ }
+        }
+
+        // New Helper for clustering in File Mode
+        private (string? Path, bool IsInstaller) FindBestExecutableInList(string folderPath, List<string> filePaths)
+        {
+            var candidates = new List<(string FilePath, int Score, bool IsInstaller)>();
+            var root = new DirectoryInfo(folderPath);
+
+            foreach (var filePath in filePaths)
+            {
+                var file = new FileInfo(filePath);
+                int score = 0;
+                bool isInstaller = false;
+                string name = Path.GetFileNameWithoutExtension(file.Name).ToLowerInvariant();
+                if (string.IsNullOrEmpty(name)) name = file.Name.ToLowerInvariant();
+                
+                // Scoring (Same logic as FindBestExecutable but for a specific list)
+                var rootFolderName = root.Name.ToLowerInvariant();
+                if (name == rootFolderName) score += 100;
+                else if (name.Replace(" ", "").Replace("-", "") == rootFolderName.Replace(" ", "").Replace("-", "")) score += 90;
+                else if (rootFolderName.Contains(name) && name.Length > 4) score += 30;
+
+                if (file.Name.Equals("AppRun", StringComparison.OrdinalIgnoreCase) || 
+                    file.Name.Equals("Start.sh", StringComparison.OrdinalIgnoreCase)) score += 50;
+
+                if (name.Contains("launch") || name.Contains("settings") || name.Contains("server") || 
+                    name.Contains("config") || name.Contains("setup") || name.Contains("install"))
+                {
+                    score -= 50;
+                    if (name.Contains("setup") || name.Contains("install")) isInstaller = true;
+                }
+
+                candidates.Add((filePath, score, isInstaller));
+            }
+
+            if (!candidates.Any()) return (null, false);
+
+            var bestByScore = candidates.OrderByDescending(c => c.Score).First();
+            // Tie-break with size if scores are equal
+            var topScorers = candidates.Where(c => c.Score == bestByScore.Score).ToList();
+            if (topScorers.Count > 1)
+            {
+                 bestByScore = topScorers.OrderByDescending(c => new FileInfo(c.FilePath).Length).First();
+            }
+
+            return (bestByScore.FilePath, bestByScore.IsInstaller);
         }
 
         private async Task<int> ScanExternalLibraryAsync(string rootPath, List<Game> existingGames, GameMetadataService metadataService, System.Threading.CancellationToken ct)
@@ -606,7 +763,8 @@ namespace Playerr.Core.Games
                 "Ship", "Shipping", "Retail", "Binaries", "x64", "x86", "Win64", "Win32", "Release", 
                 "drive_c", "Program Files", "Program Files (x86)", "Users", "Games", "Juegos", "My Games", "Mis Juegos",
                 "FitGirl", "FitGirl Repack", "DODI", "DODI Repack", "KaOs", "ElAmigos", "Repack", "Bottles", "drive_c/Games",
-                "GOG Games", "Epic Games", "SteamLibrary", "SteamApps", "common", "Games_Installed", "Installer"
+                "GOG Games", "Epic Games", "SteamLibrary", "SteamApps", "common", "Games_Installed", "Installer",
+                "windows", "system32", "syswow64", "Microsoft.NET", "Internet Explorer", "Windows NT"
             };
             return generics.Any(g => name.Equals(g, StringComparison.OrdinalIgnoreCase) || name.Contains(g, StringComparison.OrdinalIgnoreCase));
         }
@@ -618,19 +776,11 @@ namespace Playerr.Core.Games
             // 1. Exact Filename Blacklist
             if (_filenameBlacklist.Contains(fileName)) return true;
 
-            // 2. Pattern Ignore List (Prefixes)
+            // 2. Keyword/Substring Blacklist (TAREA 1)
             string lowered = fileName.ToLowerInvariant();
-            if (lowered.StartsWith("unins") || 
-                lowered.StartsWith("uninstall"))
+            foreach (var keyword in _keywordBlacklist)
             {
-                return true;
-            }
-
-            // Strictly ignore config/setup only if it's EXTERNAL (Wine/Whisky)
-            // In the main library, setup.exe might be the only entry point for an uninstalled game.
-            if (isExternal && (lowered.StartsWith("config") || lowered.StartsWith("setup")))
-            {
-                return true;
+                if (lowered.Contains(keyword)) return true;
             }
 
             return false;
@@ -646,9 +796,10 @@ namespace Playerr.Core.Games
         {
              var block = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { 
                  "Windows", "Program Files", "Program Files (x86)", "Common Files", "Users", 
-                 "drive_c", "dosdevices", "Binaries", "Win64", "Win32", "Common", "Engine", "Content" 
+                 "drive_c", "dosdevices", "Binaries", "Win64", "Win32", "Common", "Engine", "Content",
+                 "System32", "syswow64", "Microsoft.NET", "Accessories", "Command"
              };
-             return block.Contains(title) || _folderBlacklist.Contains(title) || IsMetadataSubfolder(title);
+             return block.Contains(title) || _folderBlacklist.Contains(title) || IsMetadataSubfolder(title) || Regex.IsMatch(title, @"^\d+$");
         }
 
         private bool IsBlacklistedFolder(DirectoryInfo dir)
@@ -732,6 +883,8 @@ namespace Playerr.Core.Games
                 return true;
             }
 
+            Game? finalGame = null;
+
             try
             {
                 Log($"Searching metadata for: {gameTitle}");
@@ -739,10 +892,10 @@ namespace Playerr.Core.Games
                 
                 if (searchResults != null && searchResults.Any())
                 {
-                    var gameData = searchResults.First();
-                    
-                    if (gameData.IgdbId.HasValue)
+                    foreach (var gameData in searchResults)
                     {
+                        if (!gameData.IgdbId.HasValue) continue;
+                        
                         var match = existingGames.FirstOrDefault(g => g.IgdbId == gameData.IgdbId);
                         if (match != null)
                         {
@@ -756,30 +909,71 @@ namespace Playerr.Core.Games
                         var fullMetadata = await metadataService.GetGameMetadataAsync(gameData.IgdbId.Value);
                         if (fullMetadata != null)
                         {
-                            fullMetadata.Path = localPath;
-                            fullMetadata.ExecutablePath = executablePath; // Set Exe Path
-                            fullMetadata.IsExternal = isExternal; // Set Flag
-                            fullMetadata.PlatformId = await ResolvePlatformIdAsync(platformKey);
-                            
-                            if (isInstaller) fullMetadata.Status = GameStatus.InstallerDetected;
+                            // ROBUSTNESS CHECK: If mandatory metadata is missing, try next result
+                            if (fullMetadata.Year == 0 && string.IsNullOrEmpty(fullMetadata.Images.CoverUrl))
+                            {
+                                Log($"[Scanner] Metadata for Id {gameData.IgdbId} is empty (No Year/Cover). Trying next search result...");
+                                continue;
+                            }
 
-                            var newGame = await _gameRepository.AddAsync(fullMetadata);
-                            existingGames.Add(newGame);
-                            
-                            Log($"Added new game: {newGame.Title} (Exe: {executablePath}, Ext: {isExternal})");
-                            LastGameFound = newGame.Title;
-                            GamesAddedCount++;
-                            OnGameAdded?.Invoke(newGame);
-                            return true;
+                            finalGame = fullMetadata;
+                            break; // Found a good one
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Log($"Error processing {gameTitle}: {ex.Message}");
+                Log($"Error processing metadata for {gameTitle}: {ex.Message}.");
+                
+                // CRITICAL FIX: If authentication fails, do NOT add the game as "Offline".
+                // We want to force the user to fix credentials rather than polluting the library.
+                if (ex.Message.Contains("Forbidden") || ex.Message.Contains("authenticate") || ex.Message.Contains("Unauthorized"))
+                {
+                    Log("Skipping game addition due to authentication failure. Please check IGDB credentials.");
+                    return false;
+                }
+
+                Log("Proceeding with offline fallback.");
             }
-            return false;
+
+            // Fallback: DISABLED (v0.4.3+)
+            // We no longer add games in "Offline" mode if metadata is not found.
+            // This prevents the library from being cluttered with messy filenames.
+            if (finalGame == null)
+            {
+                Log($"[Scanner] No metadata found for: '{gameTitle}'. Skipping game addition (Offline mode disabled).");
+                return false;
+            }
+
+            // Finalize and Add
+            finalGame.Path = localPath;
+            finalGame.ExecutablePath = executablePath;
+            finalGame.IsExternal = isExternal;
+            
+            // CRITICAL FIX: Ensure PlatformId is ALWAYS set, even when metadata is found.
+            // If fullMetadata was fetched, its PlatformId might be 0, which would cause an FK constraint violation.
+            finalGame.PlatformId = await ResolvePlatformIdAsync(platformKey);
+
+            if (isInstaller) finalGame.Status = GameStatus.InstallerDetected;
+
+            try 
+            {
+                var newGame = await _gameRepository.AddAsync(finalGame);
+                existingGames.Add(newGame);
+                
+                Log($"Added new game: {newGame.Title} (Exe: {executablePath ?? "None"}, Ext: {isExternal})");
+                LastGameFound = newGame.Title;
+                GamesAddedCount++;
+                OnGameAdded?.Invoke(newGame);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                 var innerParam = ex.InnerException != null ? $" Inner: {ex.InnerException.Message}" : "";
+                 Log($"Error saving game to DB {gameTitle} (with Metadata: {finalGame.IgdbId.HasValue}): {ex.Message}{innerParam}");
+                 return false;
+            }
         }
         
         private void Log(string message)
@@ -788,6 +982,16 @@ namespace Playerr.Core.Games
             {
                 // Log to the executable directory
                 string logPath = Path.Combine(AppContext.BaseDirectory, "scanner_log.txt");
+                
+                // Log Rotation: Keep it under 5MB for the scanner (can be noisy)
+                var fileInfo = new FileInfo(logPath);
+                if (fileInfo.Exists && fileInfo.Length > 5 * 1024 * 1024)
+                {
+                    var oldLog = logPath + ".old";
+                    if (File.Exists(oldLog)) File.Delete(oldLog);
+                    File.Move(logPath, oldLog);
+                }
+
                 File.AppendAllText(logPath, $"{DateTime.Now}: {message}\n");
                 Console.WriteLine(message);
             }
@@ -796,14 +1000,26 @@ namespace Playerr.Core.Games
 
         private bool IsValidFile(string filePath, string[]? validExtensions)
         {
+            var fileName = Path.GetFileName(filePath);
             var ext = Path.GetExtension(filePath);
-            if (string.IsNullOrEmpty(ext)) return false;
-            // Case-insensitive check
-            if (validExtensions == null) // All extensions allowed (default mode)
+
+            // TAREA 2: Linux support for extensionless binaries
+            bool isLinux = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
+            if (isLinux && string.IsNullOrEmpty(ext))
             {
-                 return !_globalBlacklist.Contains(ext);
+                // On Linux, we allow files without extensions as valid candidates
+                // provided they aren't hidden files.
+                return !fileName.StartsWith(".");
             }
-            return validExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase) && !_globalBlacklist.Contains(ext);
+
+            if (string.IsNullOrEmpty(ext)) return false;
+            
+            // Check global blacklist (TAREA 1)
+            if (_globalBlacklist.Contains(ext)) return false;
+
+            if (validExtensions == null) return true; // Default mode, any extension not blacklisted
+
+            return validExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase);
         }
 
 
@@ -844,50 +1060,65 @@ namespace Playerr.Core.Games
             return null;
         }
 
-        private (string Title, string? Serial) CleanGameTitle(string title)
+        private (string Title, string? Serial) CleanGameTitle(string originalTitle)
         {
-            if (string.IsNullOrWhiteSpace(title)) return (title, null);
+            if (string.IsNullOrWhiteSpace(originalTitle)) return (originalTitle, null);
             
+            string title = originalTitle;
             string? serial = null;
-            // 0. Extract Platform IDs (CUSA12345, CUSA-12345, BLES12345, BLUS12345, etc) before cleaning
+
+            // 0. Extract Serial (CUSA12345, etc)
             var serialMatch = Regex.Match(title, @"([A-Z]{4}-?\d{5})", RegexOptions.IgnoreCase);
             if (serialMatch.Success)
             {
                 serial = serialMatch.Value.Replace("-", "").ToUpper();
             }
 
-            // 1. Remove common site tags and scene groups (Case Insensitive)
-            string[] noise = { 
-                "OPOISSO893", "OPOISSO", "CyB1K", "DLPSGAME.COM", "DLPSGAME", 
-                "RPGONLY.COM", "RPGONLY", "NSW2U.COM", "NSW2U.IN", "NSW2U",
-                "QUARK", "VENOM", "RAZOR1911", "RELOADED", "SKIDROW", "CODEX",
-                "FitGirl", "DODI", "EMPRESS", "GOG", "xatab", "gamesfull", "bitsearch", 
-                "www", "com", "app", "org", "net"
-            };
+            // 0.1 PRE-SPLIT CLEANING (v0.4.9): Strip complex version markers before tokenization
+            // Handles: v1.2.3, v.1.2.3, v 1.2.3, build.123, build 123
+            title = Regex.Replace(title, @"[vV][\.\s]?\d+(\.\d+)*\b", "", RegexOptions.IgnoreCase);
+            title = Regex.Replace(title, @"build[\.\s]?\d+\b", "", RegexOptions.IgnoreCase);
+
+            // 4. Word-by-Word Filtering (Universal Separators)
+            var separators = new[] { ' ', '.', '_', '-', '[', ']', '(', ')' };
+            var words = title.Split(separators, StringSplitOptions.RemoveEmptyEntries);
             
-            foreach (var n in noise)
+            // Refined Filtering:
+            // - Stop at common site extensions (com, net, etc)
+            // - Skip noise words
+            // - Keep numbers that look like sequels (single digits)
+            var cleanWords = new List<string>();
+            foreach (var word in words)
             {
-                title = Regex.Replace(title, n, "", RegexOptions.IgnoreCase);
+                if (_noiseWords.Contains(word)) continue;
+                
+                // version codes: v1, v05g, r10978, (39928)
+                // PRESERVE single digits (1-9) as sequels unless they have a 'v' prefix
+                if (Regex.IsMatch(word, @"^v\d+[a-z]?$", RegexOptions.IgnoreCase)) continue; 
+                if (Regex.IsMatch(word, @"^r\d+$", RegexOptions.IgnoreCase)) continue;
+                if (Regex.IsMatch(word, @"^\d{2,6}$")) continue; // Multi-digit versions/builds (10, 2024, 39928)
+
+                cleanWords.Add(word);
             }
-
-            // 2. Remove Versioning (v1.0, v1.0.4, 1.0.4, 1.00, etc)
-            title = Regex.Replace(title, @"v?\d+\.\d+(\.\d+)*", "", RegexOptions.IgnoreCase);
-
-            // 3. Remove Platform IDs (CUSA12345, CUSA-12345, BLES12345, BLUS12345, etc)
-            title = Regex.Replace(title, @"[A-Z]{4}-?\d{5}", "", RegexOptions.IgnoreCase);
             
-            // 4. Remove Content IDs (EP9000, UP0001, etc)
-            title = Regex.Replace(title, @"[A-Z]{2}\d{4}", "", RegexOptions.IgnoreCase);
+            title = string.Join(" ", cleanWords);
 
-            // 5. Remove content in brackets [] and parentheses ()
-            title = Regex.Replace(title, @"\[.*?\]", "");
-            title = Regex.Replace(title, @"\(.*?\)", "");
+            // 5. Global Regex Pass (Architectures, years, metadata)
+            title = Regex.Replace(title, @"\b(64bit|32bit|x64|x86|build|v|ver|version)\b", "", RegexOptions.IgnoreCase);
+            title = Regex.Replace(title, @"(?<=\w\s)(19|20)\d{2}", ""); // Year check
 
-            // 6. Replace separators (dots, underscores, dashes) with spaces
-            title = Regex.Replace(title, @"[._-]", " ");
-
+            // Cleanup
             title = Regex.Replace(title, @"\s+", " ").Trim();
 
+            // Final Validation: 
+    // If the title is too short (1 char) or just a number (e.g. "0", "1"), it's likely noise
+    if (title.Length <= 1 || Regex.IsMatch(title, @"^\d+$"))
+    {
+        return (string.Empty, serial);
+    }
+
+    Log($"[Scanner] Cleaning Title: '{originalTitle}' -> '{title}'");
+            
             return (title, serial);
         }
 

@@ -51,6 +51,9 @@ namespace Playerr.Core.Games
         // Launcher V2
         public string? ExecutablePath { get; set; }
         public bool IsExternal { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+        public bool IsOwned { get; set; }
     }
     
     public class GameImages

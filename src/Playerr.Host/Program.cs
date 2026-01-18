@@ -42,7 +42,19 @@ namespace Playerr.Host
             Console.WriteLine(logLine);
             if (_logPath != null)
             {
-                try { File.AppendAllText(_logPath, logLine + Environment.NewLine); } catch { }
+                try 
+                {
+                    // Log Rotation: Keep it under 10MB
+                    var fileInfo = new FileInfo(_logPath);
+                    if (fileInfo.Exists && fileInfo.Length > 10 * 1024 * 1024)
+                    {
+                        var oldLog = _logPath + ".old";
+                        if (File.Exists(oldLog)) File.Delete(oldLog);
+                        File.Move(_logPath, oldLog);
+                    }
+                    File.AppendAllText(_logPath, logLine + Environment.NewLine); 
+                } 
+                catch { }
             }
         }
 
@@ -333,6 +345,7 @@ namespace Playerr.Host
                             "Images_BannerUrl TEXT",
                             "Images_Screenshots TEXT", // JSON
                             "Images_Artworks TEXT",    // JSON
+                            "Genres TEXT",             // JSON (New)
                             "IsInstallable INTEGER NOT NULL DEFAULT 0",
                             "InstallPath TEXT",
                             "IgdbId INTEGER",
@@ -359,6 +372,44 @@ namespace Playerr.Host
                     catch (Exception ex)
                     {
                         Console.WriteLine($"[Database] Schema check warning: {ex.Message}");
+                    }
+
+                    // [Schema Update] Ensure GameFiles table exists (v0.4.x)
+                    try 
+                    {
+                        var connection = context.Database.GetDbConnection();
+                        connection.Open();
+                        using var cmdCheckTable = connection.CreateCommand();
+                        cmdCheckTable.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name='GameFiles';";
+                        var tableName = cmdCheckTable.ExecuteScalar();
+
+                        if (tableName == null)
+                        {
+                            Console.WriteLine("[Database] Creating missing GameFiles table...");
+                            using var cmdCreateTable = connection.CreateCommand();
+                            cmdCreateTable.CommandText = @"
+                                CREATE TABLE GameFiles (
+                                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                    GameId INTEGER NOT NULL,
+                                    RelativePath TEXT,
+                                    Size INTEGER NOT NULL,
+                                    DateAdded TEXT NOT NULL DEFAULT '0001-01-01 00:00:00',
+                                    Quality TEXT,
+                                    ReleaseGroup TEXT,
+                                    Edition TEXT,
+                                    Languages TEXT,
+                                    CONSTRAINT FK_GameFiles_Games_GameId FOREIGN KEY (GameId) REFERENCES Games (Id) ON DELETE CASCADE
+                                );
+                                CREATE INDEX IX_GameFiles_GameId ON GameFiles (GameId);
+                            ";
+                            cmdCreateTable.ExecuteNonQuery();
+                            Console.WriteLine("[Database] GameFiles table created.");
+                        }
+                        connection.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Database] GameFiles table check warning: {ex.Message}");
                     }
                 }
                 catch (Exception ex)

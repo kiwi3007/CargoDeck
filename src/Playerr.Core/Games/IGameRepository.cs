@@ -13,5 +13,6 @@ namespace Playerr.Core.Games
         Task<int> DeleteSteamGamesAsync();
         Task DeleteAllAsync();
         Task<int?> GetPlatformIdBySlugAsync(string slug);
+        Task<HashSet<int>> GetIgdbIdsAsync();
     }
 }

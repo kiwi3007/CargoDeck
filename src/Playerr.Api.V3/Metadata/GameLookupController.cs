@@ -16,10 +16,12 @@ namespace Playerr.Api.V3.Metadata
     public class GameLookupController : ControllerBase
     {
         private readonly IGameMetadataServiceFactory _metadataServiceFactory;
+        private readonly IGameRepository _gameRepository;
 
-        public GameLookupController(IGameMetadataServiceFactory metadataServiceFactory)
+        public GameLookupController(IGameMetadataServiceFactory metadataServiceFactory, IGameRepository gameRepository)
         {
             _metadataServiceFactory = metadataServiceFactory;
+            _gameRepository = gameRepository;
         }
 
         /// <summary>
@@ -37,6 +39,17 @@ namespace Playerr.Api.V3.Metadata
             {
                 var metadataService = _metadataServiceFactory.CreateService();
                 var games = await metadataService.SearchGamesAsync(term, platformKey, lang);
+
+                // Check which of these are already in the library
+                var ownedIds = await _gameRepository.GetIgdbIdsAsync();
+                foreach (var game in games)
+                {
+                    if (game.IgdbId.HasValue && ownedIds.Contains(game.IgdbId.Value))
+                    {
+                        game.IsOwned = true;
+                    }
+                }
+
                 return Ok(games);
             }
             catch (Exception ex)

@@ -3,6 +3,10 @@ export const translations = {
     es: {
         // Settings
         settings: 'Configuración',
+        settingsMedia: 'Media',
+        settingsConnections: 'Conexiones',
+        settingsIndexers: 'Indexadores',
+        settingsLanguage: 'Idioma',
         languageTitle: 'Idioma',
         languageDesc: 'Selecciona el idioma de la aplicación',
         saveLanguage: 'Guardar idioma',
@@ -276,6 +280,10 @@ export const translations = {
     en: {
         // Settings
         settings: 'Settings',
+        settingsMedia: 'Media',
+        settingsConnections: 'Connections',
+        settingsIndexers: 'Indexers',
+        settingsLanguage: 'Language',
         languageTitle: 'Language',
         languageDesc: 'Select the interface language for the application.',
         saveLanguage: 'Save Language',

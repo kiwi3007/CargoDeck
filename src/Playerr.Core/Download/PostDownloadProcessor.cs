@@ -10,7 +10,7 @@ using System.Diagnostics.CodeAnalysis;
 using SharpCompress.Archives;
 using SharpCompress.Archives.Rar;
 using SharpCompress.Common;
-
+using System.Text.RegularExpressions;
 using Playerr.Core.MetadataSource;
 
 namespace Playerr.Core.Download
@@ -199,6 +199,7 @@ namespace Playerr.Core.Download
                 }
 
                 var originalFolderName = new DirectoryInfo(download.DownloadPath!).Name;
+                bool gameAdded = false;
 
                 foreach (var file in files)
                 {
@@ -219,7 +220,29 @@ namespace Playerr.Core.Download
                     Console.WriteLine($"[PostDownload] Moving to library: {relativePath} -> {destPath}");
                     Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
                     
-                    if (_fileMover.ImportFile(file, destPath)) { }
+                    if (_fileMover.ImportFile(file, destPath))
+                    {
+                        // If this looks like the main setup or exe, let's track it
+                        var lowerName = Path.GetFileName(file).ToLowerInvariant();
+                        if (!gameAdded && (lowerName.Contains("setup") || lowerName.Contains("install") || lowerName.EndsWith(".exe")))
+                        {
+                            // We use the first likely candidate as the game entry
+                            var metadataSvc = _metadataFactory.CreateService();
+                            await AddMovedGameToLibraryAsync(containerName, destPath, metadataSvc);
+                            gameAdded = true;
+                        }
+                    }
+                }
+
+                // Cleanup source directory after successful import
+                try
+                {
+                    Console.WriteLine($"[PostDownload] Cleaning up source directory: {download.DownloadPath}");
+                    Directory.Delete(download.DownloadPath, true);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[PostDownload] Warning: Could not delete source directory {download.DownloadPath}: {ex.Message}");
                 }
             }
             else if (File.Exists(download.DownloadPath))
@@ -228,13 +251,76 @@ namespace Playerr.Core.Download
                 if (validExtensions.Contains(Path.GetExtension(file).ToLower()))
                 {
                     // For single files, we put them directly in the container or maybe nest?
-                    // Usually single files don't have a "Release Name" folder structure, so putting in container is safer.
                     var destPath = Path.Combine(libraryRoot, containerName, Path.GetFileName(file));
                     Console.WriteLine($"[PostDownload] Moving to library: {Path.GetFileName(file)} -> {destPath}");
-                    Directory.CreateDirectory(Path.GetDirectoryName(destPath)!); // Ensure container dir exists
-                    _fileMover.ImportFile(file, destPath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+                    
+                    if (_fileMover.ImportFile(file, destPath))
+                    {
+                        // NEW: Add the game to the library immediately so the user doesn't have to scan.
+                        var metadataSvc = _metadataFactory.CreateService();
+                        await AddMovedGameToLibraryAsync(containerName, destPath, metadataSvc);
+
+                        // Cleanup source file
+                        try { File.Delete(file); } catch { }
+                    }
                 }
             }
+        }
+
+        private async System.Threading.Tasks.Task AddMovedGameToLibraryAsync(string title, string path, GameMetadataService metadataService)
+        {
+            try
+            {
+                // Only add if not already present
+                var allGames = await _gameRepository.GetAllAsync();
+                if (allGames.Any(g => g.ExecutablePath == path)) return;
+
+                // CLEAN TITLE for search using the same logic as the scanner
+                var (cleanTitle, _) = CleanGameTitleForPostDownload(title);
+
+                var searchResults = await metadataService.SearchGamesAsync(cleanTitle);
+                Game? game = null;
+
+                if (searchResults.Any())
+                {
+                    game = await metadataService.GetGameMetadataAsync(searchResults.First().IgdbId!.Value);
+                }
+
+                if (game != null)
+                {
+                    game.Path = Path.GetDirectoryName(path);
+                    game.ExecutablePath = path;
+                    game.Added = DateTime.Now;
+                    
+                    // Installer tagging
+                    var fileName = Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
+                    if (fileName.Contains("setup") || fileName.Contains("install"))
+                    {
+                        game.Status = GameStatus.InstallerDetected;
+                    }
+
+                    await _gameRepository.AddAsync(game);
+                    Console.WriteLine($"[PostDownload] Successfully added '{game.Title}' to library (Metadata: {game.IgdbId}).");
+                }
+                else
+                {
+                    Console.WriteLine($"[PostDownload] No metadata found for '{cleanTitle}'. Skipping addition.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[PostDownload] Error adding game to library: {ex.Message}");
+            }
+        }
+
+        private (string Title, string? Serial) CleanGameTitleForPostDownload(string title)
+        {
+            // Simple version of the scanner's cleaning logic for PostDownload
+            var noise = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "repack", "multi", "goty", "iso", "v1", "v2", "gog", "setup", "install" };
+            var words = title.Split(new[] { ' ', '.', '_', '-', '[', ']', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
+            var cleanWords = words.Where(w => !noise.Contains(w) && !Regex.IsMatch(w, @"^v?\d+[a-z]?$", RegexOptions.IgnoreCase)).ToList();
+            return (string.Join(" ", cleanWords), null);
         }
 
         private string CleanReleaseName(string input)

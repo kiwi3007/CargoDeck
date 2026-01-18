@@ -92,5 +92,15 @@ namespace Playerr.Core.Games
                 .FirstOrDefaultAsync(p => p.Slug == slug);
             return platform?.Id;
         }
+
+        public async Task<HashSet<int>> GetIgdbIdsAsync()
+        {
+            using var context = await _contextFactory.CreateDbContextAsync();
+            var ids = await context.Games
+                .Where(g => g.IgdbId.HasValue)
+                .Select(g => g.IgdbId!.Value)
+                .ToListAsync();
+            return new HashSet<int>(ids);
+        }
     }
 }

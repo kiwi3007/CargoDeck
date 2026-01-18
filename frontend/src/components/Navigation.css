@@ -65,6 +65,76 @@
   /* Playerr Yellow */
 }
 
+/* Dropdown Submenu - Steam Inspired */
+.nav-item-dropdown {
+  position: relative;
+}
+
+.nav-link-with-arrow {
+  display: flex !important;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dropdown-arrow {
+  font-size: 0.8rem;
+  transition: transform 0.2s;
+  display: inline-block;
+  line-height: 1;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: rgba(23, 26, 33, 0.98);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  min-width: 200px;
+  padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1001;
+  margin-top: 10px;
+}
+
+.dropdown-menu.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.dropdown-menu a {
+  padding: 0.8rem 1.5rem !important;
+  font-size: 0.85rem !important;
+  color: #c7d5e0 !important;
+  text-transform: none !important;
+  font-weight: 500 !important;
+  letter-spacing: normal !important;
+  transition: all 0.2s !important;
+  text-align: left !important;
+  border-left: 3px solid transparent !important;
+  display: block !important;
+}
+
+.dropdown-menu a:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+  border-left-color: #f9e2af !important;
+  text-shadow: none !important;
+  padding-left: 1.7rem !important;
+}
+
 @media (max-width: 768px) {
   .navigation {
     padding: 0.75rem 1rem;

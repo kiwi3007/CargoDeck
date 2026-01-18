@@ -20,7 +20,7 @@ namespace Playerr.Api.V3.Debug
         }
 
         [HttpGet("prowlarr-raw")]
-        public async Task<IActionResult> GetProwlarrRaw([FromQuery] string query = "hades")
+        public async Task<IActionResult> GetProwlarrRaw([FromQuery] string query = "game")
         {
             if (!_prowlarrSettings.IsConfigured)
             {

@@ -34,6 +34,9 @@ namespace Playerr.Core.MetadataSource
             var igdbSettings = _configService.LoadIgdbSettings();
             var steamSettings = _configService.LoadSteamSettings();
             
+            System.Console.WriteLine($"[MetadataFactory] Refreshing Configuration. IGDB Configured: {igdbSettings.IsConfigured}");
+
+            // ALWAYS recreate the service to ensure fresh credentials are used
             if (igdbSettings.IsConfigured)
             {
                 var igdbClient = new IgdbClient(igdbSettings.ClientId, igdbSettings.ClientSecret);

@@ -1,5 +1,6 @@
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from '../i18n/translations';
+import { useState } from 'react';
 import './Navigation.css';
 import navEye from '../assets/nav_eye.png';
 import navLetters from '../assets/nav_letters.png';
@@ -9,6 +10,13 @@ import { useUI } from '../context/UIContext';
 const Navigation: React.FC = () => {
   const { t } = useTranslation();
   const { toggleKofi } = useUI();
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
+  const location = useLocation();
+
+  const handleDropdownItemClick = (tabName: string) => {
+    setShowSettingsDropdown(false);
+    // Hash change will be handled by Link to="/settings#..."
+  };
 
   return (
     <nav className="navigation">
@@ -22,7 +30,21 @@ const Navigation: React.FC = () => {
         <li><NavLink to="/library">{t('library')}</NavLink></li>
         <li><NavLink to="/status">{t('status')}</NavLink></li>
         <li><NavLink to="/user">{t('user')}</NavLink></li>
-        <li><NavLink to="/settings">{t('settings')}</NavLink></li>
+        <li
+          className="nav-item-dropdown"
+          onMouseEnter={() => setShowSettingsDropdown(true)}
+          onMouseLeave={() => setShowSettingsDropdown(false)}
+        >
+          <NavLink to="/settings" className="nav-link-with-arrow">
+            {t('settings')} <span className={`dropdown-arrow ${showSettingsDropdown ? 'open' : ''}`}>▾</span>
+          </NavLink>
+          <div className={`dropdown-menu ${showSettingsDropdown ? 'show' : ''}`}>
+            <Link to="/settings#media" onClick={() => handleDropdownItemClick('media')}>{t('settingsMedia')}</Link>
+            <Link to="/settings#connections" onClick={() => handleDropdownItemClick('connections')}>{t('settingsConnections')}</Link>
+            <Link to="/settings#indexers" onClick={() => handleDropdownItemClick('indexers')}>{t('settingsIndexers')}</Link>
+            <Link to="/settings#language" onClick={() => handleDropdownItemClick('language')}>{t('settingsLanguage')}</Link>
+          </div>
+        </li>
         <li><NavLink to="/about">{t('about')}</NavLink></li>
       </ul>
       <div className="nav-branch-tag" style={{
