@@ -521,5 +521,41 @@
 /* Make checkboxes in cards larger as requested */
 .client-card .checkbox-group {
   margin-bottom: 0;
+
   /* Ensure no extra margin affecting layout */
+}
+
+/* Social Buttons in About Page */
+.social-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #ffffff !important;
+  transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.social-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.social-btn.github {
+  background-color: #24292e;
+}
+
+.social-btn.github:hover {
+  background-color: #2f363d;
+}
+
+.social-btn.sponsor {
+  background-color: #db61a2;
+}
+
+.social-btn.sponsor:hover {
+  background-color: #e37cb1;
 }

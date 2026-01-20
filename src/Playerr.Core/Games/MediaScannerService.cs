@@ -42,8 +42,16 @@ namespace Playerr.Core.Games
             "unpacked", "steamrip", "portable", "multi10", "multi5", "multi2", "v1", "v2",
             "xatab", "codex", "skidrow", "reloaded", "razor1911", "plaza", "cpy", "dlpsgame",
             "nsw2u", "egold", "quacked", "venom", "inc", "rpgonly", "gamesfull", "bitsearch",
-            "www", "app", "to", "com", "net", "org", "iso", "bin", "decepticon", "empress", 
-            "tenoke", "rune", "goldberg", "ali213", "p2p", "fairlight"
+            "www", "app", "com", "net", "org", "iso", "bin", "decepticon", "empress", 
+            "tenoke", "rune", "goldberg", "ali213", "p2p", "fairlight",
+            "xyz", "dot", "v0", "v196608", "v65536", "v131072", "dlc", "update", "upd", "collection", "anniversary", "edition",
+            "us", "eu", "es", "uk", "asia", "cn", "ru", "gb", "mb", "kb", "romslab", "nsw2u", "madloader", "rpgonly", "usa", "eur", "jp", "region",
+            "eng", "english", "spa", "spanish", "fra", "french", "ger", "german", "ita", "italian", "kor", "korean", "chi", "chinese", "tw", "hk",
+            "repack", "fitgirl", "dodi", "xatab", "codex", "skidrow", "reloaded", "plaza", "cpy", "dlpsgame", "egold", "quacked", "venom", "inc",
+            "rpgarchive", "gamesmega", "gamesfull", "bitsearch", "nxdump", "nx", "switch", "game",
+            "opoisso893", "cyb1k", "dlpsgame", "pppwn", "pppwngo", "goldhen", "ps4", "ps5", "playstation", "sony",
+            "definitive", "edition", "collection", "remastered", "remake",
+            "nsp", "xci", "nsz", "xcz", "vpk", "pkg", "iso", "bin", "nla", "zip", "rar", "7z"
         };
         public event Action<int>? OnScanFinished;
         public event Action? OnBatchFinished;
@@ -52,7 +60,7 @@ namespace Playerr.Core.Games
         private static readonly Dictionary<string, PlatformRule> _platformRules = new(StringComparer.OrdinalIgnoreCase)
         {
             ["nintendo_switch"] = new() { Extensions = new[] { ".nsp", ".xci", ".nsz", ".xcz" } },
-            ["ps4"] = new() { Extensions = new[] { ".pkg", ".bin" } },
+            ["ps4"] = new() { Extensions = new[] { ".pkg" } }, // Removed .bin to avoid exploits/payloads
             ["pc_windows"] = new() { Extensions = new[] { ".iso", ".exe", ".zip", ".rar", ".7z", ".setup" }, IsFolderMode = true },
             ["ps3"] = new() { Extensions = new[] { ".iso", ".pkg", ".bin" }, IsFolderMode = true },
             ["retro_emulation"] = new() { Extensions = new[] { 
@@ -89,14 +97,16 @@ namespace Playerr.Core.Games
 
         private static readonly HashSet<string> _keywordBlacklist = new(StringComparer.OrdinalIgnoreCase)
         {
-            "steam_api", "crashpad", "unitycrash", "unins000", "uninstall", "update", "config", "dxsetup", "redist", "vcredist", "fna", "mono", "bios", "firmware"
+            "steam_api", "crashpad", "unitycrash", "unins000", "uninstall", "update", "config", "dxsetup", "redist", "vcredist", "fna", "mono", "bios", "firmware", "retroarch", "overlay", "shdr", "slang", "glsl", "cg", "dlc", "update"
         };
 
-        private static readonly HashSet<string> _filenameBlacklist = new(StringComparer.OrdinalIgnoreCase)
+        private readonly HashSet<string> _filenameBlacklist = new(StringComparer.OrdinalIgnoreCase)
         {
-            "crashpad_handler.exe", "unitycrashhandler.exe", "unitycrashhandler64.exe", 
-            "dxsetup.exe", "vcredist_x64.exe", "vcredist_x86.exe", "credist.exe", "bsndrpt.exe",
-            "socialclub.exe", "epicgameslauncher.exe", "eaapp.exe", "origin.exe", "ubisoftconnect.exe"
+            "steam_api.dll", "steam_api64.dll", "openvr_api.dll", "nvapi.dll", "nvapi64.dll",
+            "d3dcompiler_47.dll", "d3dcompiler_43.dll", "xinput1_3.dll", "xinput9_1_0.dll",
+            "msvcp140.dll", "vcruntime140.dll", "unityplayer.dll", "crashpad_handler.exe", "unitycrashhandler64.exe",
+            "unins000.exe", "uninstall.exe", "update.exe", "updater.exe", "config.exe", "settings.exe",
+            "wmplayer.exe"
         };
 
         private static readonly HashSet<string> _folderBlacklist = new(StringComparer.OrdinalIgnoreCase)
@@ -104,8 +114,26 @@ namespace Playerr.Core.Games
             "_CommonRedist", "CommonRedist", "Redist", "DirectX", "Support", 
             "Prerequisites", "Launcher", "Ship", "Shipping", 
             "Retail", "x64", "x86", "System", "Binaries", "Engine", "Content", "Asset", "Resource",
-            "shadercache", "compatdata", "depotcache", "steamapps", ".steam", ".local", ".cache", "temp", "tmp", "node_modules",
-            "windows", "system32", "syswow64", "Microsoft.NET", "Framework", "Framework64", "Internet Explorer", "Accessories", "Windows NT", "INF", "WinSxS", "SysARM32", "Sysnative", "command"
+            "shadercache", "compatdata", "depotcache", ".steam", ".local", ".cache", "temp", "tmp", "node_modules",
+            "windows", "system32", "syswow64", "Microsoft.NET", "Framework", "Framework64", "Internet Explorer", "Accessories", "Windows NT", "INF", "WinSxS", "SysARM32", "Sysnative", "command",
+            "retroarch", "autoconfig", "assets", "overlays", "database", "cursors", "cheats", "filters", "libretro", "thumbnails", "config", "remaps", "playlists", "cores", "screenshots",
+            "z:", "d:"
+        };
+
+        private static readonly HashSet<string> _containerNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "common", "steamapps", "games", "juegos", "roms", "emulators", "others", "downloads", "library", "biblioteca", "collection"
+        };
+
+        private static readonly HashSet<string> _noClusterExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".iso", ".bin", ".cue", ".pkg",
+            ".nsp", ".xci", ".nsz", ".xcz",
+            ".z64", ".n64", ".v64",
+            ".sfc", ".smc", ".nes",
+            ".gb", ".gbc", ".gba",
+            ".md", ".gen", ".smd", ".sms", ".gg",
+            ".pce"
         };
 
         [SuppressMessage("Microsoft.Performance", "CA1852:SealInternalTypes")]
@@ -219,8 +247,11 @@ namespace Playerr.Core.Games
 
                 // NEW: Wine/Whisky Integration (External Library)
                 // We scan this separately if configured.
+                // NEW: Wine/Whisky Integration (External Library)
+                // We scan this separately if configured.
                 var winePath = settings.WinePrefixPath;
-                if (!string.IsNullOrEmpty(winePath) && Directory.Exists(winePath))
+                // Only scan external libraries if we are doing a FULL library scan (no override path)
+                if (string.IsNullOrEmpty(overridePath) && !string.IsNullOrEmpty(winePath) && Directory.Exists(winePath))
                 {
                     Log($"Scanning Wine/Whisky External Path: {winePath}");
                     var externalGames = await ScanExternalLibraryAsync(winePath, existingGames, metadataService, _scanCts.Token);
@@ -417,9 +448,17 @@ namespace Playerr.Core.Games
                 // Final Selection
                 var winner = candidates.OrderByDescending(x => x.Score).FirstOrDefault();
                 
-                // Threshold: If winner score is too low and it looks generic, be careful?
-                // For now, trust the score.
-                
+                // --- Linux Executable Intelligence (v0.4.4) ---
+                if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux) && 
+                    winner.File != null && string.IsNullOrEmpty(winner.File.Extension))
+                {
+                    if (!IsBinaryExecutable(winner.File.FullName))
+                    {
+                        Log($"[Scanner] Skipping non-binary Linux candidate: {winner.File.Name}");
+                        return (null, false);
+                    }
+                }
+
                 return (winner.File.FullName, winner.IsInstaller);
             }
             catch (Exception ex)
@@ -429,9 +468,37 @@ namespace Playerr.Core.Games
             }
         }
 
+        private bool IsBinaryExecutable(string filePath)
+        {
+            try
+            {
+                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                {
+                    if (fs.Length < 4) return false;
+                    var buffer = new byte[4];
+                    fs.Read(buffer, 0, 4);
+
+                    // 1. ELF Header: 0x7F 'E' 'L' 'F'
+                    if (buffer[0] == 0x7F && buffer[1] == 0x45 && buffer[2] == 0x4C && buffer[3] == 0x46) return true;
+
+                    // 2. Shebang: #!
+                    if (buffer[0] == 0x23 && buffer[1] == 0x21) return true;
+                }
+            }
+            catch { }
+            return false;
+        }
+
         private List<FileInfo> GetFilesSafe(DirectoryInfo root, int currentDepth, int maxDepth)
         {
             var results = new List<FileInfo>();
+            
+            // Intelligence: If we are in a "Bridge" folder (common, SteamApps), reset depth to allow finding games inside
+            if (root.Name.Equals("common", StringComparison.OrdinalIgnoreCase) || root.Name.Equals("SteamApps", StringComparison.OrdinalIgnoreCase))
+            {
+                maxDepth += 2; // Allow 2 more levels for Steam nested games
+            }
+
             if (currentDepth > maxDepth) return results;
 
             // blacklist folders
@@ -465,7 +532,7 @@ namespace Playerr.Core.Games
                 
                 // Fast Hierarchical Discovery (v0.4.2)
                 // Instead of SearchOption.AllDirectories (Slow), we recurse manually and skip blacklisted branches
-                DiscoverFilesHierarchical(new DirectoryInfo(rootPath), extensionsToUse, validFilesByFolder, ct);
+                DiscoverFilesHierarchical(new DirectoryInfo(rootPath), extensionsToUse, validFilesByFolder, ct, 0, 4); 
 
                 Log($"[FileMode] Discovery phase finished. Found {validFilesByFolder.Count} candidate folders items. Applying clustering...");
 
@@ -475,7 +542,51 @@ namespace Playerr.Core.Games
                     var folderPath = folderEntry.Key;
                     var filePaths = folderEntry.Value;
 
-                    // Choose ONLY THE BEST per folder
+                    var folderName = new DirectoryInfo(folderPath).Name;
+                    bool isContainer = _containerNames.Contains(folderName);
+                    bool isConsole = platformKey != "pc_windows" && platformKey != "macos" && platformKey != "default";
+
+                    // TAREA 2: Skip clustering for specific extensions (ROMs, ISOs, PKG, etc.)
+                    // Check if ANY file in the folder has an extension that skips clustering
+                    bool hasNoClusterExtension = filePaths.Any(f => _noClusterExtensions.Contains(Path.GetExtension(f)));
+
+                    // LOGIC SWITCH: If it's a container, a console platform, or has "No-Cluster" extensions, DO NOT cluster.
+                    if (isContainer || isConsole || hasNoClusterExtension)
+                    {
+                        foreach (var filePath in filePaths)
+                        {
+                            var rawFileName = Path.GetFileNameWithoutExtension(filePath);
+                            if (string.IsNullOrEmpty(rawFileName)) rawFileName = Path.GetFileName(filePath);
+                            
+                            var (cleanTitle, serial) = CleanGameTitle(rawFileName);
+
+                            if (!existingGames.Any(g => g.Title.Equals(cleanTitle, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                var candidate = new GameCandidate 
+                                { 
+                                    Title = cleanTitle, 
+                                    Path = filePath, // For ROMs/ISOs, Path is the file itself
+                                    PlatformKey = platformKey == "default" ? GetPlatformFromExtension(Path.GetExtension(filePath)) : platformKey, 
+                                    Serial = serial,
+                                    ExecutablePath = filePath,
+                                    IsInstaller = false
+                                };
+
+                                // TAREA: Ambiguity Resolution for ISO/BIN/PKG in console mode too
+                                if (candidate.PlatformKey == "default" || candidate.PlatformKey == "ps4")
+                                {
+                                    var refined = ResolvePlatformFromSerial(serial ?? "");
+                                    if (refined != "default") candidate.PlatformKey = refined;
+                                }
+
+                                candidates.Add(candidate);
+                            }
+                        }
+                        continue;
+                    }
+
+                    // TAREA 3: PC/Desktop Logic: Only apply clustering if we have executable scripts/binaries
+                    // Otherwise treat them as one-file-one-game if they are unique enough (or let the filter handle it)
                     var (bestExePath, isInstaller) = FindBestExecutableInList(folderPath, filePaths);
 
                     if (!string.IsNullOrEmpty(bestExePath))
@@ -483,27 +594,40 @@ namespace Playerr.Core.Games
                         var rawFileName = Path.GetFileNameWithoutExtension(bestExePath);
                         if (string.IsNullOrEmpty(rawFileName)) rawFileName = Path.GetFileName(bestExePath);
                         
-                        var rawFolderName = new DirectoryInfo(folderPath).Name;
+                        var dirInfo = new DirectoryInfo(folderPath);
+                        var rawFolderName = dirInfo.Name;
+
+                        // Intelligence: If folder name is generic (e.g. "bin", "x64", "x64.gog"), climb up
+                        var genericFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase) 
+                        { 
+                            "bin", "binaries", "data", "system", "system32", "x64", "x86", "win64", "win32", 
+                            "release", "retail", "debug", "shipping", "gog", "game", "games"
+                        };
+
+                        if ((genericFolders.Contains(rawFolderName) || rawFolderName.EndsWith(".gog", StringComparison.OrdinalIgnoreCase)) && dirInfo.Parent != null)
+                        {
+                            // Check if parent is also generic (could happen in nested structures like bin/x64)
+                             if (genericFolders.Contains(dirInfo.Parent.Name))
+                             {
+                                 if (dirInfo.Parent.Parent != null) rawFolderName = dirInfo.Parent.Parent.Name;
+                             }
+                             else
+                             {
+                                 rawFolderName = dirInfo.Parent.Name;
+                             }
+                        }
                         
                         // Clean both to compare their "quality"
                         var (cleanFile, _) = CleanGameTitle(rawFileName);
                         var (cleanFolder, _) = CleanGameTitle(rawFolderName);
 
-                        // Selection Heuristic:
-                        // 1. If cleanFile is empty/too short and cleanFolder is better -> Folder
-                        // 2. If cleanFolder contains more words or is significantly longer -> Folder
-                        // 3. If file is "setup" or "install" -> Folder
+                        // Selection Heuristic
                         bool isGenericFile = rawFileName.Equals("setup", StringComparison.OrdinalIgnoreCase) || 
                                              rawFileName.Equals("install", StringComparison.OrdinalIgnoreCase) || 
                                              rawFileName.Equals("game", StringComparison.OrdinalIgnoreCase);
 
                         string selectedName;
                         string source;
-
-                        // QUALITY HEURISTIC (v0.4.4):
-                        // 1. Prefer cleaner strings (fewer surplus words).
-                        // 2. Protect sequels (e.g., '4' in 'Game Title 4').
-                        // 3. Folder Name is a tie-breaker for installers.
 
                         if (isGenericFile)
                         {
@@ -512,54 +636,65 @@ namespace Playerr.Core.Games
                         }
                         else if (cleanFolder.Equals(cleanFile, StringComparison.OrdinalIgnoreCase))
                         {
-                            // Perfect match: default to Folder for better path consistency
                             selectedName = cleanFolder;
                             source = "Folder (Exact Match)";
                         }
                         else if (cleanFolder.Contains(cleanFile, StringComparison.OrdinalIgnoreCase) && !_noiseWords.Any(nw => cleanFolder.Contains(nw, StringComparison.OrdinalIgnoreCase)))
                         {
-                            // Folder is "Game A Title", File is "Title" -> Pick Folder
-                            // Only if folder doesn't contain known noise words
                             selectedName = cleanFolder;
                             source = "Folder (Subset Match)";
                         }
                         else if (cleanFile.Contains(cleanFolder, StringComparison.OrdinalIgnoreCase))
                         {
-                            // File is "Game B Special Edition", Folder is "Game B" -> Pick File
-                            selectedName = cleanFile;
-                            source = "Filename (Subset Match)";
+                            // If filename contains folder name, usually filename has MORE noise (e.g. "Streets of Rage 4 g" vs "Streets of Rage 4")
+                            // Prefer folder if it's cleaner/shorter
+                            if (cleanFile.Length > cleanFolder.Length + 3)
+                            {
+                                selectedName = cleanFolder;
+                                source = "Folder (Cleaner Substring)";
+                            }
+                            else
+                            {
+                                selectedName = cleanFile;
+                                source = "Filename (Subset Match)";
+                            }
                         }
                         else if (cleanFolder.Length > 3 && cleanFile.StartsWith(cleanFolder, StringComparison.OrdinalIgnoreCase))
                         {
-                            // Example: Folder='Game II', File='Game II Build 123'
                             selectedName = cleanFolder;
                             source = "Folder (Cleaner Prefix)";
                         }
                         else if (cleanFile.Length > 3 && cleanFolder.StartsWith(cleanFile, StringComparison.OrdinalIgnoreCase))
                         {
-                            // Example: Folder='Game Title Special Edition', File='Game Title'
                             selectedName = cleanFile;
                             source = "Filename (Cleaner Prefix)";
                         }
                         else
                         {
-                            // Tie or generic difference: default to Folder as it's usually the "Release Name"
                             selectedName = cleanFolder.Length > 0 ? cleanFolder : cleanFile;
                             source = cleanFolder.Length > 0 ? "Folder (Context Default)" : "Filename (Fallback)";
                         }
 
-                        // Use the cleaned name for the final candidate
                         var finalTitle = selectedName;
-                        var (_, serial) = CleanGameTitle(rawFileName); // Extract serial from filename if possible
+                        var (_, serial) = CleanGameTitle(rawFileName); 
                         
                         Log($"[Scanner] Title Resolution: File('{cleanFile}') vs Folder('{cleanFolder}') -> Selected: '{finalTitle}' (Source: {source})");
 
-                        string finalPlatformKey = platformKey;
-                        if (platformKey == "default") finalPlatformKey = GetPlatformFromExtension(Path.GetExtension(bestExePath));
-
                         if (!existingGames.Any(g => g.Title.Equals(finalTitle, StringComparison.OrdinalIgnoreCase)))
                         {
-                             candidates.Add(new GameCandidate 
+                            string finalPlatformKey = platformKey;
+                            if (platformKey == "default") 
+                            {
+                                finalPlatformKey = GetPlatformFromExtension(Path.GetExtension(bestExePath));
+                                
+                                if (finalPlatformKey == "default" || finalPlatformKey == "ps4")
+                                {
+                                    var refined = ResolvePlatformFromSerial(serial ?? "");
+                                    if (refined != "default") finalPlatformKey = refined;
+                                }
+                            }
+
+                            candidates.Add(new GameCandidate 
                             { 
                                 Title = finalTitle, 
                                 Path = folderPath,
@@ -580,15 +715,28 @@ namespace Playerr.Core.Games
             return await ProcessCandidatesBatchAsync(candidates, existingGames, metadataService, ct);
         }
 
-        private void DiscoverFilesHierarchical(DirectoryInfo root, string[]? allowedExtensions, Dictionary<string, List<string>> results, System.Threading.CancellationToken ct)
+        private void DiscoverFilesHierarchical(DirectoryInfo root, string[]? allowedExtensions, Dictionary<string, List<string>> results, System.Threading.CancellationToken ct, int currentDepth, int maxDepth)
         {
             ct.ThrowIfCancellationRequested();
 
             if (!root.Exists) return;
+
+            bool isContainer = _containerNames.Contains(root.Name);
+
+            // Intelligence: If we are in a "Bridge" (Container) folder, allow deeper scan
+            if (isContainer)
+            {
+                maxDepth += 2;
+            }
+
+            if (currentDepth > maxDepth) return;
+
             if (root.Name.StartsWith(".") || _folderBlacklist.Contains(root.Name) || IsMetadataSubfolder(root.Name)) return;
 
             try
             {
+                // If it's a container, we still look for files (e.g., ROMs in 'Juegos')
+                // but we give them a chance to be clustered differently.
                 var files = root.EnumerateFiles();
                 foreach (var file in files)
                 {
@@ -605,7 +753,22 @@ namespace Playerr.Core.Games
 
                 foreach (var subDir in root.EnumerateDirectories())
                 {
-                    DiscoverFilesHierarchical(subDir, allowedExtensions, results, ct);
+                    // TAREA: PS3 Folder Detection
+                    if (subDir.Name.Equals("PS3_GAME", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // If we find PS3_GAME, the root folder is a PS3 game
+                        if (!results.ContainsKey(root.FullName))
+                            results[root.FullName] = new List<string>();
+                        
+                        // We mark it by adding the directory itself or a dummy marker if needed
+                        // For now, let's treat the folder as the "file" so ScanFileMode treats it as 1-game.
+                        if (!results[root.FullName].Contains(subDir.FullName))
+                            results[root.FullName].Add(subDir.FullName); 
+                        
+                        continue; // No need to recurse into PS3_GAME for files
+                    }
+
+                    DiscoverFilesHierarchical(subDir, allowedExtensions, results, ct, currentDepth + 1, maxDepth);
                 }
             }
             catch { /* Skip permission errors */ }
@@ -646,15 +809,29 @@ namespace Playerr.Core.Games
 
             if (!candidates.Any()) return (null, false);
 
-            var bestByScore = candidates.OrderByDescending(c => c.Score).First();
-            // Tie-break with size if scores are equal
-            var topScorers = candidates.Where(c => c.Score == bestByScore.Score).ToList();
-            if (topScorers.Count > 1)
+            // TAREA 3: Only cluster if we found typical PC executables/scripts
+            // If we only have data files or other extensions, the selection might be weaker
+            var winner = candidates.OrderByDescending(c => c.Score).First();
+            
+            // Check if winner extension is PC-specific for clustering
+            var winnerExt = Path.GetExtension(winner.FilePath).ToLowerInvariant();
+            bool isPcExec = winnerExt == ".exe" || winnerExt == ".bat" || winnerExt == ".sh" || string.IsNullOrEmpty(winnerExt);
+            
+            if (!isPcExec)
             {
-                 bestByScore = topScorers.OrderByDescending(c => new FileInfo(c.FilePath).Length).First();
+                // If the "best" file isn't an executable, we might be mis-clustering.
+                // However, FindBestExecutableInList is only called if clustering IS ALLOWED.
+                // We already filtered No-Cluster extensions in ScanFileModeAsync.
             }
 
-            return (bestByScore.FilePath, bestByScore.IsInstaller);
+            // Tie-break with size if scores are equal
+            var topScorers = candidates.Where(c => c.Score == winner.Score).ToList();
+            if (topScorers.Count > 1)
+            {
+                 winner = topScorers.OrderByDescending(c => new FileInfo(c.FilePath).Length).First();
+            }
+
+            return (winner.FilePath, winner.IsInstaller);
         }
 
         private async Task<int> ScanExternalLibraryAsync(string rootPath, List<Game> existingGames, GameMetadataService metadataService, System.Threading.CancellationToken ct)
@@ -763,7 +940,7 @@ namespace Playerr.Core.Games
                 "Ship", "Shipping", "Retail", "Binaries", "x64", "x86", "Win64", "Win32", "Release", 
                 "drive_c", "Program Files", "Program Files (x86)", "Users", "Games", "Juegos", "My Games", "Mis Juegos",
                 "FitGirl", "FitGirl Repack", "DODI", "DODI Repack", "KaOs", "ElAmigos", "Repack", "Bottles", "drive_c/Games",
-                "GOG Games", "Epic Games", "SteamLibrary", "SteamApps", "common", "Games_Installed", "Installer",
+                "GOG Games", "Epic Games", "SteamLibrary", "common", "Games_Installed", "Installer",
                 "windows", "system32", "syswow64", "Microsoft.NET", "Internet Explorer", "Windows NT"
             };
             return generics.Any(g => name.Equals(g, StringComparison.OrdinalIgnoreCase) || name.Contains(g, StringComparison.OrdinalIgnoreCase));
@@ -788,8 +965,10 @@ namespace Playerr.Core.Games
 
         private bool IsMetadataSubfolder(string name)
         {
-            var metadataFolders = new[] { "artworks", "soundtrack", "avatars", "manual", "wallpapers", "Goodies", "MD5", "Bonus", "Documentation", "Support", "Redist", "DirectX", "DotNet", "VCRedist", "PhysX" };
-            return metadataFolders.Any(f => name.EndsWith(f, StringComparison.OrdinalIgnoreCase) || name.Contains(f, StringComparison.OrdinalIgnoreCase));
+            var metadataFolders = new[] { "artworks", "soundtrack", "avatars", "manual", "wallpapers", "Goodies",            "Common", "Prerequisites", "Support", "Redist", "DirectX", "DotNet", "VCRedist", "PhysX",
+            "Windows Media Player", "MD5", "z:"
+        };
+    return metadataFolders.Any(f => name.EndsWith(f, StringComparison.OrdinalIgnoreCase) || name.Contains(f, StringComparison.OrdinalIgnoreCase));
         }
 
         private bool IsBlacklistedTitle(string title)
@@ -797,7 +976,8 @@ namespace Playerr.Core.Games
              var block = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { 
                  "Windows", "Program Files", "Program Files (x86)", "Common Files", "Users", 
                  "drive_c", "dosdevices", "Binaries", "Win64", "Win32", "Common", "Engine", "Content",
-                 "System32", "syswow64", "Microsoft.NET", "Accessories", "Command"
+                 "System32", "syswow64", "Microsoft.NET", "Accessories", "Command",
+                 "x64", "x86", "Windows Media Player"
              };
              return block.Contains(title) || _folderBlacklist.Contains(title) || IsMetadataSubfolder(title) || Regex.IsMatch(title, @"^\d+$");
         }
@@ -865,22 +1045,31 @@ namespace Playerr.Core.Games
         // Updated signature to accept exePath and isInstaller and isExternal
         private async Task<bool> ProcessPotentialGame(string gameTitle, List<Game> existingGames, GameMetadataService metadataService, string? localPath = null, string? platformKey = null, string? serial = null, string? executablePath = null, bool isInstaller = false, bool isExternal = false)
         {
+            Log($"[Scanner-Trace] Processing Candidate: '{localPath}' (Title: {gameTitle})");
+            
             var existingByPath = existingGames.FirstOrDefault(g => g.Path == localPath);
             if (existingByPath != null) return false;
 
             var existingByTitle = existingGames.FirstOrDefault(g => g.Title.Equals(gameTitle, StringComparison.OrdinalIgnoreCase));
             if (existingByTitle != null)
             {
-                // If it's the SAME path, update metadata. If it's different path, maybe we want to keep the existing one or update?
-                // For now, update logic:
-                Log($"Updating existing game '{gameTitle}' path to: {localPath}");
-                existingByTitle.Path = localPath;
-                existingByTitle.ExecutablePath = executablePath; 
-                existingByTitle.IsExternal = isExternal; // Update Flag
-                if (isInstaller) existingByTitle.Status = GameStatus.InstallerDetected;
-                
-                await _gameRepository.UpdateAsync(existingByTitle.Id, existingByTitle);
-                return true;
+                // If the existing game has NO metadata (offline fallback), try to search again with the new cleaner title!
+                if (!existingByTitle.IgdbId.HasValue || existingByTitle.IgdbId == 0)
+                {
+                    Log($"[Scanner] Game '{gameTitle}' exists but lacks metadata. Attempting re-resolution...");
+                }
+                else
+                {
+                    // If it already has metadata, just update paths
+                    Log($"Updating existing game '{gameTitle}' path to: {localPath}");
+                    existingByTitle.Path = localPath;
+                    existingByTitle.ExecutablePath = executablePath; 
+                    existingByTitle.IsExternal = isExternal; 
+                    if (isInstaller) existingByTitle.Status = GameStatus.InstallerDetected;
+                    
+                    await _gameRepository.UpdateAsync(existingByTitle.Id, existingByTitle);
+                    return true;
+                }
             }
 
             Game? finalGame = null;
@@ -937,23 +1126,69 @@ namespace Playerr.Core.Games
                 Log("Proceeding with offline fallback.");
             }
 
-            // Fallback: DISABLED (v0.4.3+)
-            // We no longer add games in "Offline" mode if metadata is not found.
-            // This prevents the library from being cluttered with messy filenames.
+            // Fallback: Enable for Console/ROMs (v0.4.5)
+            // If we are here, finalGame is null and metadata search was not successful.
             if (finalGame == null)
             {
-                Log($"[Scanner] No metadata found for: '{gameTitle}'. Skipping game addition (Offline mode disabled).");
-                return false;
+                bool isConsole = platformKey != "pc_windows" && platformKey != "macos" && platformKey != "default";
+                if (isConsole)
+                {
+                    Log($"[Scanner] Metadata not found for console game '{gameTitle}'. Creating offline entry.");
+                    finalGame = new Game
+                    {
+                        Title = gameTitle,
+                        Path = localPath,
+                        ExecutablePath = executablePath,
+                        IsExternal = isExternal,
+                        PlatformId = await ResolvePlatformIdAsync(platformKey),
+                        Status = GameStatus.Released,
+                        Year = 0,
+                        Overview = "Metadata not found. Added via offline fallback.",
+                        Images = new GameImages()
+                    };
+                }
+                else
+                {
+                    // Fallback to Offline Mode for PC too!
+                    // If metadata fails, we still add the game so user can fix it.
+                    finalGame = new Game
+                    {
+                        Title = gameTitle,
+                        Path = localPath,
+                        ExecutablePath = executablePath,
+                        IsExternal = isExternal,
+                        PlatformId = await ResolvePlatformIdAsync(platformKey),
+                        Status = GameStatus.Released,
+                        Year = 0,
+                        Overview = "Metadata not found. Added via offline fallback.",
+                        Images = new GameImages()
+                    };
+                    Log($"[Scanner] No metadata found for: '{gameTitle}'. Added as offline game.");
+                }
             }
 
             // Finalize and Add
+            if (existingByTitle != null)
+            {
+                // Updating existing offline game with new metadata
+                existingByTitle.Title = finalGame.Title;
+                existingByTitle.Overview = finalGame.Overview;
+                existingByTitle.Year = finalGame.Year;
+                existingByTitle.Images = finalGame.Images;
+                existingByTitle.IgdbId = finalGame.IgdbId;
+                existingByTitle.PlatformId = finalGame.PlatformId > 0 ? finalGame.PlatformId : await ResolvePlatformIdAsync(platformKey);
+                
+                await _gameRepository.UpdateAsync(existingByTitle.Id, existingByTitle);
+                return true;
+            }
+
             finalGame.Path = localPath;
             finalGame.ExecutablePath = executablePath;
             finalGame.IsExternal = isExternal;
             
-            // CRITICAL FIX: Ensure PlatformId is ALWAYS set, even when metadata is found.
-            // If fullMetadata was fetched, its PlatformId might be 0, which would cause an FK constraint violation.
-            finalGame.PlatformId = await ResolvePlatformIdAsync(platformKey);
+            // Ensure PlatformId is set
+            if (finalGame.PlatformId == 0)
+                finalGame.PlatformId = await ResolvePlatformIdAsync(platformKey);
 
             if (isInstaller) finalGame.Status = GameStatus.InstallerDetected;
 
@@ -978,6 +1213,7 @@ namespace Playerr.Core.Games
         
         private void Log(string message)
         {
+            Console.WriteLine($"[Scanner] {message}");
             try
             {
                 // Log to the executable directory
@@ -1001,6 +1237,16 @@ namespace Playerr.Core.Games
         private bool IsValidFile(string filePath, string[]? validExtensions)
         {
             var fileName = Path.GetFileName(filePath);
+            if (fileName.StartsWith("._")) return false; // Skip macOS metadata
+            
+            // Ignore common tool directories for PS4 exploits to prevent false positives
+            if (filePath.Contains("PPPwnGo", StringComparison.OrdinalIgnoreCase) || 
+                filePath.Contains("GoldHEN", StringComparison.OrdinalIgnoreCase)) return false;
+
+            // Explicitly Ignore known PS4 tools that are often in the folder
+            if (fileName.Contains("PS4.Remote.PKG.Sender", StringComparison.OrdinalIgnoreCase) ||
+                fileName.Contains("npcap", StringComparison.OrdinalIgnoreCase)) return false;
+
             var ext = Path.GetExtension(filePath);
 
             // TAREA 2: Linux support for extensionless binaries
@@ -1008,8 +1254,10 @@ namespace Playerr.Core.Games
             if (isLinux && string.IsNullOrEmpty(ext))
             {
                 // On Linux, we allow files without extensions as valid candidates
-                // provided they aren't hidden files.
-                return !fileName.StartsWith(".");
+                // provided they aren't hidden files AND they pass magic byte check.
+                if (fileName.StartsWith(".")) return false;
+                
+                return IsExecutableBinary(filePath);
             }
 
             if (string.IsNullOrEmpty(ext)) return false;
@@ -1028,18 +1276,20 @@ namespace Playerr.Core.Games
             if (string.IsNullOrEmpty(ext)) return "default";
             ext = ext.ToLower();
 
-            // Direct mapping for clear-cut extensions
+            // TAREA 1: Hardcoded Platform Mapping (v0.4.1 Restore / Granular)
             if (ext == ".nsp" || ext == ".xci" || ext == ".nsz" || ext == ".xcz") return "nintendo_switch";
+            if (ext == ".pkg") return "ps4"; 
             if (ext == ".dmg" || ext == ".app") return "macos";
             
-            // Retro Emulation covers most cartridge-based extensions
-            string[] retroExts = { ".z64", ".n64", ".v64", ".sfc", ".smc", ".nes", ".gb", ".gba", ".gbc", ".md", ".gen", ".smd", ".sms", ".gg", ".pce" };
-            if (retroExts.Contains(ext)) return "retro_emulation";
+            // Retro Mappings (Granular again)
+            if (ext == ".z64" || ext == ".n64" || ext == ".v64") return "nintendo_64";
+            if (ext == ".sfc" || ext == ".smc") return "snes";
+            if (ext == ".nes") return "nes";
+            if (ext == ".gb" || ext == ".gbc" || ext == ".gba") return "gameboy_advance";
+            if (ext == ".md" || ext == ".gen" || ext == ".smd" || ext == ".sms" || ext == ".gg") return "sega_genesis";
+            if (ext == ".pce") return "pc_engine";
 
-            // Disk-based or compressed could be many things, default to 'default' or guess
-            // For now, let's keep it simple. If it's .pkg, it's mostly PS4/PS3
-            if (ext == ".pkg") return "ps4";
-            
+            // Default fallback (includes .iso, .exe, .bin, etc.)
             return "default";
         }
 
@@ -1064,61 +1314,85 @@ namespace Playerr.Core.Games
         {
             if (string.IsNullOrWhiteSpace(originalTitle)) return (originalTitle, null);
             
-            string title = originalTitle;
-            string? serial = null;
+            // 0. Pre-clean URL encoded brackets often found in scene releases (Asterix example)
+            // 5B = [, 5D = ]
+            string workingTitle = originalTitle.Replace("5B", "[", StringComparison.OrdinalIgnoreCase)
+                                               .Replace("5D", "]", StringComparison.OrdinalIgnoreCase);
 
-            // 0. Extract Serial (CUSA12345, etc)
-            var serialMatch = Regex.Match(title, @"([A-Z]{4}-?\d{5})", RegexOptions.IgnoreCase);
-            if (serialMatch.Success)
+            // 0. Aggressive Noise Stripping (Content in brackets/parens)
+            // This is very common in Switch filenames for TitleIDs, Versions, Scene Tags
+            workingTitle = workingTitle.Replace('\u00A0', ' ').Replace('_', ' ').Replace('-', ' ').Replace('+', ' ');
+            workingTitle = Regex.Replace(workingTitle, @"[\[［].*?[\]］]", " ");
+            workingTitle = Regex.Replace(workingTitle, @"\(.*?\)", " ");
+            workingTitle = Regex.Replace(workingTitle, @"\{.*?\}", " ");
+
+            // 1. Size patterns (e.g. 2.90GB, 500MB)
+            workingTitle = Regex.Replace(workingTitle, @"\d+(\.\d+)?\s*(gb|mb|kb|gr|mg)", " ", RegexOptions.IgnoreCase);
+
+            string? serial = null;
+            
+            // 0a. Try to find PlayStation Serial (Global Regions: US, EU, JP, Asia)
+            // Covers: PS1 (SLPS, SCCS...), PS2 (SLPM, SLKA...), PS3 (BCAS, BLJM...), PS4 (PLJS, PCJS...), PS5 (ELJS, ELJM...)
+            var psSerialMatch = Regex.Match(originalTitle, @"(CUSA|PPSA|BLES|BLUS|BCES|BCUS|NPEB|NPUB|NPEA|NPUA|SLES|SLUS|SCES|SCUS|SLPS|SLPM|SCCS|SLKA|BCAS|BLAS|BCJM|BLJM|BCJS|BLJS|PLJS|PLJM|PCJS|ELJS|ELJM)[-_]?\d{4,5}", RegexOptions.IgnoreCase);
+            if (psSerialMatch.Success)
             {
-                serial = serialMatch.Value.Replace("-", "").ToUpper();
+                serial = psSerialMatch.Value.ToUpper().Replace("-", "").Replace("_", "");
+                // Remove the serial from working title so it doesn't pollute name
+                workingTitle = workingTitle.Replace(psSerialMatch.Value, " ", StringComparison.OrdinalIgnoreCase);
             }
 
-            // 0.1 PRE-SPLIT CLEANING (v0.4.9): Strip complex version markers before tokenization
-            // Handles: v1.2.3, v.1.2.3, v 1.2.3, build.123, build 123
-            title = Regex.Replace(title, @"[vV][\.\s]?\d+(\.\d+)*\b", "", RegexOptions.IgnoreCase);
-            title = Regex.Replace(title, @"build[\.\s]?\d+\b", "", RegexOptions.IgnoreCase);
+            // 0b. Try to find Switch Serial (16-char hex)
+            if (string.IsNullOrEmpty(serial))
+            {
+                var hexMatch = Regex.Match(originalTitle, @"[0-9a-fA-F]{16}"); 
+                if (hexMatch.Success) serial = hexMatch.Value.ToUpper();
+            }
 
-            // 4. Word-by-Word Filtering (Universal Separators)
-            var separators = new[] { ' ', '.', '_', '-', '[', ']', '(', ')' };
-            var words = title.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+            // 0c. Strip common PS4 content ID prefixes and artifacts
+            // EP9000-CUSA..., UP9000-CUSA...
+            workingTitle = Regex.Replace(workingTitle, @"[EU]P\d{4}-", " ", RegexOptions.IgnoreCase);
             
-            // Refined Filtering:
-            // - Stop at common site extensions (com, net, etc)
-            // - Skip noise words
-            // - Keep numbers that look like sequels (single digits)
+            // Strip standard version patterns v1.00, v1.0, v1
+            // Strip standard version patterns v1.00, v1.0, v1, v05g
+            workingTitle = Regex.Replace(workingTitle, @"v\d+([a-zA-Z0-9._-]+)*", " ", RegexOptions.IgnoreCase);
+            
+            // Strip PS4 specific codes like A0100 (App), V0100 (Version)
+            workingTitle = Regex.Replace(workingTitle, @"\b[AV]\d{4}\b", " ", RegexOptions.IgnoreCase);
+
+            // 2. Split and filter words
+            var separators = new[] { ' ', '.', '[', ']', '(', ')', '{', '}', '［', '］', '+', ',', '!', '?', '#', '&', ';' };
+            var words = workingTitle.Split(separators, StringSplitOptions.RemoveEmptyEntries);
             var cleanWords = new List<string>();
+
             foreach (var word in words)
             {
                 if (_noiseWords.Contains(word)) continue;
                 
-                // version codes: v1, v05g, r10978, (39928)
-                // PRESERVE single digits (1-9) as sequels unless they have a 'v' prefix
-                if (Regex.IsMatch(word, @"^v\d+[a-z]?$", RegexOptions.IgnoreCase)) continue; 
-                if (Regex.IsMatch(word, @"^r\d+$", RegexOptions.IgnoreCase)) continue;
-                if (Regex.IsMatch(word, @"^\d{2,6}$")) continue; // Multi-digit versions/builds (10, 2024, 39928)
+                // Explicitly kill "00", "01" artifacts mostly left over from versions
+                if (word == "00" || word == "01") continue;
+
+                // Explicit check for common 2-letter codes that might have been missed by noise list
+                if (word.Length == 2 && (word.Equals("US", StringComparison.OrdinalIgnoreCase) || 
+                                       word.Equals("EU", StringComparison.OrdinalIgnoreCase) || 
+                                       word.Equals("JP", StringComparison.OrdinalIgnoreCase) ||
+                                       word.Equals("UK", StringComparison.OrdinalIgnoreCase))) continue;
+
+                // NUCLEAR RULE: Skip any word that has 4 or more digits (Versions, TitleIDs, Years)
+                int digitCount = word.Count(char.IsDigit);
+                if (digitCount >= 4) continue;
+                
+                // Relaxed: Allow short numbers (e.g. "4" for Streets of Rage 4, "2" for Frostpunk 2)
+                // if (word.Length <= 2 && int.TryParse(word, out _)) continue;
 
                 cleanWords.Add(word);
             }
+
+            string title = string.Join(" ", cleanWords).Trim();
             
-            title = string.Join(" ", cleanWords);
-
-            // 5. Global Regex Pass (Architectures, years, metadata)
-            title = Regex.Replace(title, @"\b(64bit|32bit|x64|x86|build|v|ver|version)\b", "", RegexOptions.IgnoreCase);
-            title = Regex.Replace(title, @"(?<=\w\s)(19|20)\d{2}", ""); // Year check
-
-            // Cleanup
-            title = Regex.Replace(title, @"\s+", " ").Trim();
-
-            // Final Validation: 
-    // If the title is too short (1 char) or just a number (e.g. "0", "1"), it's likely noise
-    if (title.Length <= 1 || Regex.IsMatch(title, @"^\d+$"))
-    {
-        return (string.Empty, serial);
-    }
-
-    Log($"[Scanner] Cleaning Title: '{originalTitle}' -> '{title}'");
+            // Remove lingering noise
+            title = Regex.Replace(title, @"\s+", " ");
             
+            Log($"[Scanner-Debug] Cleaned: '{originalTitle}' -> '{title}' (Serial: {serial})");
             return (title, serial);
         }
 
@@ -1127,22 +1401,28 @@ namespace Playerr.Core.Games
             if (string.IsNullOrEmpty(serial)) return "default";
             
             // PlayStation 4 / 5
-            if (serial.StartsWith("CUSA") || serial.StartsWith("PLAS")) return "ps4";
-            if (serial.StartsWith("PPSA")) return "ps5";
+            if (serial.StartsWith("CUSA") || serial.StartsWith("PLAS") || serial.StartsWith("PLJS") || serial.StartsWith("PLJM") || serial.StartsWith("PCJS")) return "ps4";
+            if (serial.StartsWith("PPSA") || serial.StartsWith("ELJS") || serial.StartsWith("ELJM")) return "ps5";
 
             // PlayStation 3
             if (serial.StartsWith("BLES") || serial.StartsWith("BLUS") || 
                 serial.StartsWith("BCES") || serial.StartsWith("BCUS") ||
                 serial.StartsWith("NPEB") || serial.StartsWith("NPUB") ||
-                serial.StartsWith("NPEA") || serial.StartsWith("NPUA")) return "ps3";
+                serial.StartsWith("NPEA") || serial.StartsWith("NPUA") ||
+                serial.StartsWith("BCAS") || serial.StartsWith("BLAS") ||
+                serial.StartsWith("BCJM") || serial.StartsWith("BLJM") ||
+                serial.StartsWith("BCJS") || serial.StartsWith("BLJS")) return "ps3";
             
-            // PlayStation 2 / 1 (SLES/SLUS/SCES/SCUS)
-            // Typically 5 digits. PS1 also uses these. 
-            // Since User asked for "PS1/2", lets look at ID pattern or just map to 'ps2' as default retro target
+            // PlayStation 2 / 1 (SLES/SLUS/SCES/SCUS/SLPS/SLPM/SCCS/SLKA)
             if (serial.StartsWith("SLES") || serial.StartsWith("SLUS") || 
-                serial.StartsWith("SCES") || serial.StartsWith("SCUS"))
+                serial.StartsWith("SCES") || serial.StartsWith("SCUS") ||
+                serial.StartsWith("SLPS") || serial.StartsWith("SLPM") ||
+                serial.StartsWith("SCCS") || serial.StartsWith("SLKA"))
             {
-               // Just map to PS2 for now, logic can be improved later
+               // Default to PS2 for SLES/SLUS/SCES/SCUS as they are ambiguous without lookup
+               // SLPS/SLPM can be PS1 or PS2. 
+               // This logic could be improved with an IDDB, but 'ps2' is a safe modern fallback 
+               // allowing scanning. ideally we'd differ based on file type if possible.
                return "ps2"; 
             }
             
@@ -1165,7 +1445,7 @@ namespace Playerr.Core.Games
                 {
                     case "pc_windows": dbSlug = "pc"; defaultId = 6; break;
                     case "linux": dbSlug = "linux"; defaultId = 3; break;
-                    case "macos": dbSlug = "mac"; defaultId = 14; break; // Note: Scanner uses "macos", DB uses "mac"
+                    case "macos": dbSlug = "mac"; defaultId = 14; break;
                     case "ps4": dbSlug = "ps4"; defaultId = 48; break;
                     case "nintendo_switch": dbSlug = "switch"; defaultId = 130; break;
                     case "ps5": dbSlug = "ps5"; defaultId = 167; break;
@@ -1174,6 +1454,13 @@ namespace Playerr.Core.Games
                     case "ps2": dbSlug = "ps2"; defaultId = 8; break;
                     case "ps1": dbSlug = "ps1"; defaultId = 7; break;
                     case "psp": dbSlug = "psp"; defaultId = 38; break;
+                    case "nintendo_64": dbSlug = "n64"; defaultId = 4; break;
+                    case "snes": dbSlug = "snes"; defaultId = 19; break;
+                    case "nes": dbSlug = "nes"; defaultId = 18; break;
+                    case "gameboy_advance": dbSlug = "gba"; defaultId = 24; break;
+                    case "sega_genesis": dbSlug = "genesis"; defaultId = 29; break;
+                    case "pc_engine": dbSlug = "pc-engine"; defaultId = 86; break;
+                    case "retro_emulation": dbSlug = "pc"; defaultId = 6; break;
                     default: dbSlug = "pc"; defaultId = 6; break;
                 }
             }
@@ -1209,6 +1496,34 @@ namespace Playerr.Core.Games
             // If we are here, DB is likely empty or broken.
             Log($"[Platform] CRITICAL: Could not find '{dbSlug}' OR 'pc' in DB. Using hardcoded fallback ID {defaultId} (Risk of FK error).");
             return defaultId;
+        }
+        private bool IsExecutableBinary(string filePath)
+        {
+            try
+            {
+                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    if (fs.Length < 4) return false;
+
+                    byte[] buffer = new byte[4];
+                    fs.Read(buffer, 0, 4);
+
+                    // Check for ELF Header (0x7F, 'E', 'L', 'F')
+                    if (buffer[0] == 0x7F && buffer[1] == 0x45 && buffer[2] == 0x4C && buffer[3] == 0x46)
+                        return true;
+
+                    // Check for Shebang '#!' (0x23, 0x21) - Common for shell scripts wrapper
+                    if (buffer[0] == 0x23 && buffer[1] == 0x21)
+                        return true;
+                }
+            }
+            catch 
+            {
+                // If we can't read it (permissions, etc.), assume false to remain safe.
+                return false;
+            }
+
+            return false;
         }
     }
 }

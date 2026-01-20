@@ -429,6 +429,13 @@ namespace Playerr.Api.V3.Games
                 }
             }
 
+            // 0.3 Manual Installer Override (Set via UI)
+            if (!string.IsNullOrEmpty(game.InstallPath) && System.IO.File.Exists(game.InstallPath))
+            {
+                System.Console.WriteLine($"[Install] Using Manual Installer Override: {game.InstallPath}");
+                return LaunchInstaller(game.InstallPath);
+            }
+
             // Common Installer Discovery (Fuzzy + Depth 1)
             var installerPath = FindInstaller(targetPath, game.Title);
             if (installerPath != null)
@@ -550,15 +557,19 @@ namespace Playerr.Api.V3.Games
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 {
                     // macOS -> Use 'open' command which delegates to system association (Crossover, Wine, etc.)
-                    System.Console.WriteLine($"[Install] macOS detected. Delegating to 'open': {path}");
+                    System.Console.WriteLine($"[Install-Debug] macOS detected. Delegating to system 'open' for: {path}");
+                    System.Console.WriteLine($"[Install-Debug] Command: /usr/bin/open \"{path}\"");
+                    
                     startInfo.FileName = "open";
                     startInfo.WorkingDirectory = System.IO.Path.GetDirectoryName(path);
                     
                     // Arguments for open: just the file path.
-                    // Note: 'open' doesn't easily accept args for the target executable unless using --args (and complex escaping)
-                    // For now, we launch the installer. Silent flags might propagate if configured in 'open', but standard 'open file.exe' is safest.
                     startInfo.Arguments = $"\"{path}\"";
                     startInfo.UseShellExecute = false;
+                    
+                    // Capture output to log potential OS errors
+                    startInfo.RedirectStandardError = true;
+                    startInfo.RedirectStandardOutput = true;
                 }
                 else
                 {

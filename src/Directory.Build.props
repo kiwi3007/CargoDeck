@@ -68,7 +68,7 @@
     <Copyright>Copyright 2025-$([System.DateTime]::Now.ToString('yyyy')) playerr.app</Copyright>
     
     <!-- Should be replaced by CI -->
-    <AssemblyVersion>0.4.3</AssemblyVersion>
+    <AssemblyVersion>0.4.4</AssemblyVersion>
     <AssemblyConfiguration>$(Configuration)-dev</AssemblyConfiguration>
     <NeutralLanguage>en</NeutralLanguage>
 

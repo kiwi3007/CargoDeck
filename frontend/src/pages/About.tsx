@@ -4,6 +4,10 @@ import './Settings.css'; // Reuse settings styles for consistency
 import appLogo from '../assets/app_logo.png';
 import { useUI } from '../context/UIContext';
 
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faGithub } from '@fortawesome/free-brands-svg-icons';
+import { faHeart } from '@fortawesome/free-solid-svg-icons';
+
 const About: React.FC = () => {
     const { toggleKofi } = useUI();
 
@@ -61,7 +65,7 @@ const About: React.FC = () => {
                     <div onClick={toggleKofi} style={{ cursor: 'pointer', display: 'inline-block' }}>
                         <img src={appLogo} alt="Playerr" style={{ width: '100px', height: 'auto', marginBottom: '0.75rem' }} />
                     </div>
-                    <h3>Playerr v0.4.3</h3>
+                    <h3>Playerr v0.4.4</h3>
                 </div>
 
                 <div className="settings-section" style={{ border: 'none', padding: 0, backgroundColor: 'transparent' }}>
@@ -98,11 +102,23 @@ const About: React.FC = () => {
                         </p>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.75rem' }}>
-                            <a href="https://github.com/Maikboarder" target="_blank" rel="noopener noreferrer" style={{ opacity: 0.8, transition: 'opacity 0.2s' }}>
-                                <img src="https://img.shields.io/github/followers/Maikboarder?label=Follow&style=social" alt="GitHub Follow" />
+                            <a
+                                href="https://github.com/Maikboarder"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="social-btn github"
+                            >
+                                <FontAwesomeIcon icon={faGithub} />
+                                GitHub
                             </a>
-                            <a href="https://github.com/sponsors/Maikboarder" target="_blank" rel="noopener noreferrer" style={{ opacity: 0.8, transition: 'opacity 0.2s' }}>
-                                <img src="https://img.shields.io/github/sponsors/Maikboarder?label=Sponsor&style=social&logo=github" alt="GitHub Sponsor" />
+                            <a
+                                href="https://github.com/sponsors/Maikboarder"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="social-btn sponsor"
+                            >
+                                <FontAwesomeIcon icon={faHeart} style={{ color: '#ffffff' }} />
+                                Sponsor
                             </a>
                         </div>
                         <p className="settings-description" style={{ fontSize: '0.8rem', opacity: 0.5, marginBottom: 0 }}>

@@ -370,14 +370,15 @@ const Settings: React.FC = () => {
     saveMediaConfig();
   };
 
-  const handleScanNow = async () => {
+  const handleScanNow = async (specificPath?: string) => {
     // 1. Set loading state immediately
     setScanning(true);
 
     try {
       // 2. Trigger start
+      // If specificPath is provided (e.g. Wine), use it. Otherwise use main folderPath.
       await axios.post('/api/v3/media/scan', {
-        folderPath: folderPath,
+        folderPath: specificPath || folderPath,
         platform: 'default'
       });
       // Do NOT setScanning(false) here, relying on the poller below to detect when it finishes.
@@ -757,7 +758,7 @@ const Settings: React.FC = () => {
                   <button
                     type="button"
                     className="btn-secondary"
-                    onClick={handleScanNow}
+                    onClick={() => handleScanNow()}
                     disabled={scanning || !folderPath}
                     title={t('scanNow')}
                   >
@@ -865,6 +866,15 @@ const Settings: React.FC = () => {
                     placeholder="/Users/name/Library/Containers/com.isaacmarovitz.Whisky/Bottles/..."
                     style={{ flex: 1 }}
                   />
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => handleScanNow(winePrefixPath)}
+                    disabled={scanning || !winePrefixPath}
+                    title={t('scanNow')}
+                  >
+                    <FontAwesomeIcon icon={faSync} spin={scanning} />
+                  </button>
                   <button
                     type="button"
                     className="btn-secondary"
