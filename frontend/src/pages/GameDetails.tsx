@@ -4,8 +4,9 @@ import axios from 'axios';
 import { t, getLanguage, useTranslation } from '../i18n/translations';
 import GameCorrectionModal from '../components/GameCorrectionModal';
 import UninstallModal from '../components/UninstallModal';
+import SwitchInstallerModal from '../components/SwitchInstallerModal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faPen, faFolderOpen, faDownload, faGamepad, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faSearch, faPen, faFolderOpen, faDownload, faGamepad, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown, faTrash, faMicrochip } from '@fortawesome/free-solid-svg-icons';
 import './GameDetails.css';
 
 interface Game {
@@ -85,6 +86,7 @@ const GameDetails: React.FC = () => {
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [showUninstallModal, setShowUninstallModal] = useState(false);
   const [showInstallWarning, setShowInstallWarning] = useState(false);
+  const [showSwitchModal, setShowSwitchModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'search' | 'files' | 'none'>('search'); // 'search' by default to keep existing behavior? Or none? User said "Search Game" is one function. Let's make it toggleable.
   // Actually, standard behavior was "Search Torrents" always visible at bottom. 
   // User wants a MENU. 
@@ -541,6 +543,29 @@ const GameDetails: React.FC = () => {
               <FontAwesomeIcon icon={faDownload} />
               <span>{t('install')}</span>
             </button>
+
+            {(() => {
+              if (!game.path) return null;
+              const pathLower = game.path.toLowerCase();
+              const isSwitchFile = pathLower.endsWith('.nsp') || pathLower.endsWith('.xci') || pathLower.endsWith('.nsz') || pathLower.endsWith('.xcz');
+              const isSwitchPlatform = game.platform?.name.includes('Switch');
+
+              if (isSwitchFile || isSwitchPlatform) {
+                return (
+                  <button
+                    className="action-btn switch-usb"
+                    onClick={() => setShowSwitchModal(true)}
+                    title="Install to Switch via USB"
+                    style={{ background: '#e60012', color: 'white' }}
+                  >
+                    <FontAwesomeIcon icon={faMicrochip} />
+                    <span>USB Install</span>
+                  </button>
+                );
+              }
+              return null;
+            })()}
+
             <button
               className={`action-btn ${game.canPlay ? 'play-ready' : ''}`}
               onClick={handlePlay}
@@ -584,244 +609,263 @@ const GameDetails: React.FC = () => {
         </div>
       </div>
 
-      {game && (
-        <UninstallModal
-          isOpen={showUninstallModal}
-          onClose={() => setShowUninstallModal(false)}
-          onRunUninstaller={handleRunUninstaller}
-          onDelete={handleDeleteGame}
-          gameTitle={game.title}
-          gamePath={game.path}
-          uninstallerPath={game.uninstallerPath}
-          downloadPath={game.downloadPath}
-        />
-      )}
+      {
+        game && (
+          <UninstallModal
+            isOpen={showUninstallModal}
+            onClose={() => setShowUninstallModal(false)}
+            onRunUninstaller={handleRunUninstaller}
+            onDelete={handleDeleteGame}
+            gameTitle={game.title}
+            gamePath={game.path}
+            uninstallerPath={game.uninstallerPath}
+            downloadPath={game.downloadPath}
+          />
+        )
+      }
 
-      {activeTab === 'search' && (results.length > 0 || error || searching) && (
-        <div className="torrent-search">
+      {
+        game && game.path && (
+          <SwitchInstallerModal
+            isOpen={showSwitchModal}
+            onClose={() => setShowSwitchModal(false)}
+            filePath={game.path}
+            fileName={game.title} // Or get filename from path
+          />
+        )
+      }
+
+      {
+        activeTab === 'search' && (results.length > 0 || error || searching) && (
+          <div className="torrent-search">
 
 
 
-          {searching && (
-            <div className="search-loading">
-              <FontAwesomeIcon icon={faSearch} spin />
-              <p>{t('searching') || 'Buscando...'}</p>
-            </div>
-          )}
-
-          {error && <p className="error">{error}</p>}
-
-
-          {results.length > 0 && (
-            <div className="results-container">
-              {notification && (
-                <div className={`download-notification ${notification.type}`}>
-                  {notification.message}
-                </div>
-              )}
-              <div className="results-header">
-                <h4>{t('searchResults')} ({results.length} {t('resultsFound')})</h4>
+            {searching && (
+              <div className="search-loading">
+                <FontAwesomeIcon icon={faSearch} spin />
+                <p>{t('searching') || 'Buscando...'}</p>
               </div>
+            )}
 
-              <div className="results-table">
-                <div className="results-header-row">
-                  <div className="col-protocol sortable" onClick={() => handleSort('protocol')}>{t('protocol')} {getSortIcon('protocol')}</div>
-                  <div className="col-title sortable" onClick={() => handleSort('title')}>{t('title')} {getSortIcon('title')}</div>
-                  <div className="col-indexer sortable" onClick={() => handleSort('indexer')}>{t('indexer')} {getSortIcon('indexer')}</div>
-                  <div className="col-platform">{t('platform')}</div>
-                  <div className="col-size sortable" onClick={() => handleSort('size')}>{t('size')} {getSortIcon('size')}</div>
-                  <div className="col-peers sortable" onClick={() => handleSort('seeders')}>{t('peers')} {getSortIcon('seeders')}</div>
-                  <div className="col-actions">{t('download')}</div>
+            {error && <p className="error">{error}</p>}
+
+
+            {results.length > 0 && (
+              <div className="results-container">
+                {notification && (
+                  <div className={`download-notification ${notification.type}`}>
+                    {notification.message}
+                  </div>
+                )}
+                <div className="results-header">
+                  <h4>{t('searchResults')} ({results.length} {t('resultsFound')})</h4>
                 </div>
 
-                {sortedResults.map((result, index) => {
-                  const analysis = analyzeTorrent(result.title);
-                  const platformStyle = PLATFORM_CONFIG[analysis.detectedPlatform]?.color || '#45475a';
+                <div className="results-table">
+                  <div className="results-header-row">
+                    <div className="col-protocol sortable" onClick={() => handleSort('protocol')}>{t('protocol')} {getSortIcon('protocol')}</div>
+                    <div className="col-title sortable" onClick={() => handleSort('title')}>{t('title')} {getSortIcon('title')}</div>
+                    <div className="col-indexer sortable" onClick={() => handleSort('indexer')}>{t('indexer')} {getSortIcon('indexer')}</div>
+                    <div className="col-platform">{t('platform')}</div>
+                    <div className="col-size sortable" onClick={() => handleSort('size')}>{t('size')} {getSortIcon('size')}</div>
+                    <div className="col-peers sortable" onClick={() => handleSort('seeders')}>{t('peers')} {getSortIcon('seeders')}</div>
+                    <div className="col-actions">{t('download')}</div>
+                  </div>
 
-                  // Try to resolve explicit category name
-                  let explicitPlatform = '';
-                  let explicitPlatformType: PlatformType | null = null;
+                  {sortedResults.map((result, index) => {
+                    const analysis = analyzeTorrent(result.title);
+                    const platformStyle = PLATFORM_CONFIG[analysis.detectedPlatform]?.color || '#45475a';
 
-                  if (result.category) {
-                    const catIds = result.category.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-                    // Prioritize finding a detailed match (skipping general ones if detailed exists)
-                    // But our GetPlatformInfo returns generic names for 1000/4000 too.
-                    // Let's iterate and find the "best" one. 
+                    // Try to resolve explicit category name
+                    let explicitPlatform = '';
+                    let explicitPlatformType: PlatformType | null = null;
 
-                    // Sort IDs? Or just take first valid? Usually only 1 category per item.
-                    // Sometimes multiple: 1000, 1010. We want 1010.
+                    if (result.category) {
+                      const catIds = result.category.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                      // Prioritize finding a detailed match (skipping general ones if detailed exists)
+                      // But our GetPlatformInfo returns generic names for 1000/4000 too.
+                      // Let's iterate and find the "best" one. 
 
-                    // Let's assume the highest ID often carries the most specific info in Newznab (e.g. 1010 > 1000)
-                    // Or use the one that returns a name != "Console" and != "PC" and != "Unknown"
+                      // Sort IDs? Or just take first valid? Usually only 1 category per item.
+                      // Sometimes multiple: 1000, 1010. We want 1010.
 
-                    for (const cid of catIds) {
-                      const info = GetPlatformInfo(cid);
-                      if (info.name !== "Console" && info.name !== "Unknown") {
-                        explicitPlatform = info.name;
-                        explicitPlatformType = info.type;
-                        break; // Found a specific one
-                      }
+                      // Let's assume the highest ID often carries the most specific info in Newznab (e.g. 1010 > 1000)
+                      // Or use the one that returns a name != "Console" and != "PC" and != "Unknown"
 
-                      // Only set generic if we haven't found anything yet AND it's not Unknown
-                      if (!explicitPlatform && info.name !== "Unknown") {
-                        explicitPlatform = info.name;
-                        explicitPlatformType = info.type;
+                      for (const cid of catIds) {
+                        const info = GetPlatformInfo(cid);
+                        if (info.name !== "Console" && info.name !== "Unknown") {
+                          explicitPlatform = info.name;
+                          explicitPlatformType = info.type;
+                          break; // Found a specific one
+                        }
+
+                        // Only set generic if we haven't found anything yet AND it's not Unknown
+                        if (!explicitPlatform && info.name !== "Unknown") {
+                          explicitPlatform = info.name;
+                          explicitPlatformType = info.type;
+                        }
                       }
                     }
-                  }
 
-                  // Final display platform: Explicit Category > Detected Title Analysis
-                  // If explicit is empty (because all were Unknown), it falls back to detected.
-                  const displayPlatform = explicitPlatform || analysis.detectedPlatform;
+                    // Final display platform: Explicit Category > Detected Title Analysis
+                    // If explicit is empty (because all were Unknown), it falls back to detected.
+                    const displayPlatform = explicitPlatform || analysis.detectedPlatform;
 
-                  // Adjust color using Type
-                  let finalColor = platformStyle;
-                  if (explicitPlatformType) {
-                    switch (explicitPlatformType) {
-                      case 'Nintendo': finalColor = PLATFORM_CONFIG['Nintendo Switch'].color; break;
-                      case 'PlayStation': finalColor = PLATFORM_CONFIG['PlayStation 5'].color; break;
-                      case 'Xbox': finalColor = PLATFORM_CONFIG['Xbox Series'].color; break;
-                      case 'PC': finalColor = PLATFORM_CONFIG['PC'].color; break;
-                      default: finalColor = '#45475a'; break;
+                    // Adjust color using Type
+                    let finalColor = platformStyle;
+                    if (explicitPlatformType) {
+                      switch (explicitPlatformType) {
+                        case 'Nintendo': finalColor = PLATFORM_CONFIG['Nintendo Switch'].color; break;
+                        case 'PlayStation': finalColor = PLATFORM_CONFIG['PlayStation 5'].color; break;
+                        case 'Xbox': finalColor = PLATFORM_CONFIG['Xbox Series'].color; break;
+                        case 'PC': finalColor = PLATFORM_CONFIG['PC'].color; break;
+                        default: finalColor = '#45475a'; break;
+                      }
                     }
-                  }
 
-                  return (
-                    <div key={index} className={`results-row ${analysis.confidence}`}>
-                      <div className="col-protocol">
-                        <span className={`protocol-badge ${(result.protocol || 'torrent').toLowerCase()}`}>
-                          {(result.protocol || 'TORRENT').toUpperCase()}
-                        </span>
-                      </div>
-
+                    return (
+                      <div key={index} className={`results-row ${analysis.confidence}`}>
+                        <div className="col-protocol">
+                          <span className={`protocol-badge ${(result.protocol || 'torrent').toLowerCase()}`}>
+                            {(result.protocol || 'TORRENT').toUpperCase()}
+                          </span>
+                        </div>
 
 
-                      <div className="col-title">
-                        <div className="title-content">
-                          {result.infoUrl ? (
-                            <a href={result.infoUrl} target="_blank" rel="noopener noreferrer" className="title-link">
-                              {result.title}
-                            </a>
-                          ) : (
-                            <span className="title-text">{result.title}</span>
-                          )}
-                          <div className="title-meta">
-                            {result.releaseGroup && (
-                              <span className="release-group">{result.releaseGroup}</span>
+
+                        <div className="col-title">
+                          <div className="title-content">
+                            {result.infoUrl ? (
+                              <a href={result.infoUrl} target="_blank" rel="noopener noreferrer" className="title-link">
+                                {result.title}
+                              </a>
+                            ) : (
+                              <span className="title-text">{result.title}</span>
                             )}
-                            {analysis.tags.map((tag, i) => (
-                              <span key={i} className={`title-tag ${tag.toLowerCase()}`}>[{tag}]</span>
-                            ))}
+                            <div className="title-meta">
+                              {result.releaseGroup && (
+                                <span className="release-group">{result.releaseGroup}</span>
+                              )}
+                              {analysis.tags.map((tag, i) => (
+                                <span key={i} className={`title-tag ${tag.toLowerCase()}`}>[{tag}]</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="col-indexer">
+                          <span className="indexer-name">{result.indexer || result.indexerName}</span>
+                        </div>
+
+                        <div className="col-platform">
+                          <span className="platform-tag" style={{ backgroundColor: finalColor }} title={`Category IDs: ${result.category || 'None'}`}>
+                            {displayPlatform}
+                          </span>
+                        </div>
+
+                        <div className="col-size">
+                          <span className="size">{result.formattedSize || `${(result.size / (1024 * 1024 * 1024)).toFixed(2)} GB`}</span>
+                        </div>
+
+                        <div className="col-peers">
+                          {result.protocol?.toLowerCase() === 'usenet' || result.protocol?.toLowerCase() === 'nzb' ? (
+                            <span className="peers-info">-</span>
+                          ) : (
+                            <div className="peers-info">
+                              <span className={`seeders ${getSeedersClass(result.seeders)}`}>
+                                <FontAwesomeIcon icon={faArrowUp} /> {result.seeders ?? 0}
+                              </span>
+                              <span className="separator">/</span>
+                              <span className="leechers">
+                                <FontAwesomeIcon icon={faArrowDown} /> {result.leechers ?? 0}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+
+
+                        <div className="col-actions">
+                          <div className="download-buttons">
+                            {result.magnetUrl && (
+                              <button
+                                className={`download-btn magnet ${downloadingUrl === result.magnetUrl ? 'loading' : ''}`}
+                                title="Send to Download Client"
+                                onClick={() => handleDownload(result.magnetUrl, result.protocol)}
+                                disabled={!!downloadingUrl}
+                              >
+                                {downloadingUrl === result.magnetUrl ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faMagnet} />}
+                              </button>
+                            )}
+                            {result.downloadUrl && (
+                              <button
+                                className={`download-btn direct ${downloadingUrl === result.downloadUrl ? 'loading' : ''}`}
+                                title="Send to Download Client"
+                                onClick={() => handleDownload(result.downloadUrl, result.protocol)}
+                                disabled={!!downloadingUrl}
+                              >
+                                {downloadingUrl === result.downloadUrl ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faDownload} />}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
-
-                      <div className="col-indexer">
-                        <span className="indexer-name">{result.indexer || result.indexerName}</span>
-                      </div>
-
-                      <div className="col-platform">
-                        <span className="platform-tag" style={{ backgroundColor: finalColor }} title={`Category IDs: ${result.category || 'None'}`}>
-                          {displayPlatform}
-                        </span>
-                      </div>
-
-                      <div className="col-size">
-                        <span className="size">{result.formattedSize || `${(result.size / (1024 * 1024 * 1024)).toFixed(2)} GB`}</span>
-                      </div>
-
-                      <div className="col-peers">
-                        {result.protocol?.toLowerCase() === 'usenet' || result.protocol?.toLowerCase() === 'nzb' ? (
-                          <span className="peers-info">-</span>
-                        ) : (
-                          <div className="peers-info">
-                            <span className={`seeders ${getSeedersClass(result.seeders)}`}>
-                              <FontAwesomeIcon icon={faArrowUp} /> {result.seeders ?? 0}
-                            </span>
-                            <span className="separator">/</span>
-                            <span className="leechers">
-                              <FontAwesomeIcon icon={faArrowDown} /> {result.leechers ?? 0}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-
-
-                      <div className="col-actions">
-                        <div className="download-buttons">
-                          {result.magnetUrl && (
-                            <button
-                              className={`download-btn magnet ${downloadingUrl === result.magnetUrl ? 'loading' : ''}`}
-                              title="Send to Download Client"
-                              onClick={() => handleDownload(result.magnetUrl, result.protocol)}
-                              disabled={!!downloadingUrl}
-                            >
-                              {downloadingUrl === result.magnetUrl ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faMagnet} />}
-                            </button>
-                          )}
-                          {result.downloadUrl && (
-                            <button
-                              className={`download-btn direct ${downloadingUrl === result.downloadUrl ? 'loading' : ''}`}
-                              title="Send to Download Client"
-                              onClick={() => handleDownload(result.downloadUrl, result.protocol)}
-                              disabled={!!downloadingUrl}
-                            >
-                              {downloadingUrl === result.downloadUrl ? <FontAwesomeIcon icon={faSpinner} spin /> : <FontAwesomeIcon icon={faDownload} />}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )
+      }
 
       <div className="back-link">
         <Link to="/library">{t('backToLibrary')}</Link>
       </div>
 
-      {showCorrectionModal && game && (
-        <GameCorrectionModal
-          game={game}
-          language={language}
-          onClose={() => setShowCorrectionModal(false)}
-          onSave={handleCorrectionSave}
-        />
-      )}
+      {
+        showCorrectionModal && game && (
+          <GameCorrectionModal
+            game={game}
+            language={language}
+            onClose={() => setShowCorrectionModal(false)}
+            onSave={handleCorrectionSave}
+          />
+        )
+      }
 
-      {showInstallWarning && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h3>{t('installWarningTitle')}</h3>
-              <button className="modal-close" onClick={() => setShowInstallWarning(false)}>×</button>
-            </div>
-            <div className="modal-content">
-              <p style={{ color: '#cdd6f4', lineHeight: '1.6', marginBottom: '1.5rem' }}>{t('installWarningBody')}</p>
-              <div className="modal-actions">
-                <button
-                  className="btn-secondary"
-                  onClick={() => setShowInstallWarning(false)}
-                >
-                  {t('cancel')}
-                </button>
-                <button
-                  className="btn-danger"
-                  onClick={confirmInstall}
-                >
-                  {t('confirmInstall')}
-                </button>
+      {
+        showInstallWarning && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-header">
+                <h3>{t('installWarningTitle')}</h3>
+                <button className="modal-close" onClick={() => setShowInstallWarning(false)}>×</button>
+              </div>
+              <div className="modal-content">
+                <p style={{ color: '#cdd6f4', lineHeight: '1.6', marginBottom: '1.5rem' }}>{t('installWarningBody')}</p>
+                <div className="modal-actions">
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setShowInstallWarning(false)}
+                  >
+                    {t('cancel')}
+                  </button>
+                  <button
+                    className="btn-danger"
+                    onClick={confirmInstall}
+                  >
+                    {t('confirmInstall')}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 

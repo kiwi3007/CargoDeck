@@ -69,6 +69,52 @@ namespace Playerr.Host
                 _logPath = Path.Combine(Path.GetTempPath(), "playerr_startup.log");
                 Log("=== Playerr Startup Started ===");
 
+                // macOS libusb resolver
+                var libusbResolver = new System.Runtime.InteropServices.DllImportResolver((libraryName, assembly, searchPath) =>
+                {
+                    if (libraryName == "libusb-1.0" || libraryName == "liblibusb-1.0")
+                    {
+                        var paths = new[] 
+                        { 
+                            "/opt/homebrew/lib/libusb-1.0.dylib",
+                            "/usr/local/lib/libusb-1.0.dylib",
+                            Path.Combine(AppContext.BaseDirectory, "libusb-1.0.dylib")
+                        };
+                        foreach (var path in paths)
+                        {
+                            if (File.Exists(path))
+                            {
+                                try {
+                                    var handle = System.Runtime.InteropServices.NativeLibrary.Load(path);
+                                    Log($"[NativeLib] SUCCESS: Loaded {libraryName} from {path} (Handle: {handle})");
+                                    return handle;
+                                } catch (Exception ex) {
+                                    Log($"[NativeLib] ERROR loading {path}: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+                    return IntPtr.Zero;
+                });
+
+                // FORCE load LibUsbDotNet assembly
+                var dummy = typeof(LibUsbDotNet.UsbDevice).Assembly;
+                
+                // Apply to all currently loaded assemblies
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    var name = asm.FullName ?? "";
+                    if (name.Contains("LibUsb", StringComparison.OrdinalIgnoreCase))
+                    {
+                         try {
+                             System.Runtime.InteropServices.NativeLibrary.SetDllImportResolver(asm, libusbResolver);
+                             Log($"[NativeLib] Attached resolver to assembly: {name}");
+                         } catch (Exception ex) {
+                             Log($"[NativeLib] Failed to attach resolver to {name}: {ex.Message}");
+                         }
+                    }
+                }
+
                 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
                 {
                     Args = args,
@@ -78,8 +124,19 @@ namespace Playerr.Host
             System.Console.WriteLine("DEBUG: Registering Services...");
             builder.Services.AddControllers()
                 .AddApplicationPart(typeof(Playerr.Api.V3.Games.GameController).Assembly)
-                .AddApplicationPart(typeof(Playerr.Api.V3.Settings.MediaController).Assembly)
-                .AddApplicationPart(typeof(Playerr.Api.V3.Settings.HydraController).Assembly);
+                .AddNewtonsoftJson(options => {
+                     options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+                     options.SerializerSettings.NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore;
+                });
+
+            // DEBUG: Print all discovered controllers to console
+            var feature = new Microsoft.AspNetCore.Mvc.Controllers.ControllerFeature();
+            builder.Services.AddMvc().PartManager.PopulateFeature(feature);
+            Console.WriteLine($"[Startup-Debug] Discovered {feature.Controllers.Count} controllers:");
+            foreach (var c in feature.Controllers)
+            {
+                Console.WriteLine($"[Startup-Debug] Controller: {c.Name} ({c.Namespace})");
+            }
             
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
@@ -166,6 +223,9 @@ namespace Playerr.Host
             builder.Services.AddSingleton<Playerr.Core.Download.DownloadMonitorService>();
             builder.Services.AddHostedService(sp => sp.GetRequiredService<Playerr.Core.Download.DownloadMonitorService>());
             builder.Services.AddSingleton<Playerr.Core.Download.ImportStatusService>();
+
+            // Switch USB
+            builder.Services.AddSingleton<Playerr.Core.Switch.ISwitchUsbService, Playerr.Core.Switch.SwitchUsbService>();
 
             // Launch Services
             builder.Services.AddSingleton<Playerr.Core.Launcher.ILaunchStrategy, Playerr.Core.Launcher.SteamLaunchStrategy>();
@@ -491,6 +551,13 @@ namespace Playerr.Host
             
             app.UseRouting();
             app.UseAuthorization();
+
+            app.Use(async (context, next) =>
+            {
+                Log($"[HTTP] {context.Request.Method} {context.Request.Path}");
+                await next();
+            });
+
             app.MapControllers();
 
             // Serve frontend - fallback to index.html for SPA routing
@@ -600,6 +667,19 @@ namespace Playerr.Host
                 // This blocks until the window is closed
                 try 
                 {
+                   // DEBUG: List all endpoints
+                   var dataSources = app.Services.GetServices<Microsoft.AspNetCore.Routing.EndpointDataSource>();
+                   foreach (var dataSource in dataSources)
+                   {
+                       foreach (var endpoint in dataSource.Endpoints)
+                       {
+                           if (endpoint is Microsoft.AspNetCore.Routing.RouteEndpoint routeEndpoint)
+                           {
+                               Log($"[Route] {routeEndpoint.RoutePattern.RawText} -> {routeEndpoint.DisplayName}");
+                           }
+                       }
+                   }
+
                    Log("[UI] Initializing Photino Window...");
                    var window = new Photino.NET.PhotinoWindow()
                        .SetTitle("Playerr")

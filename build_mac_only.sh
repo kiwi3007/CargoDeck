@@ -34,6 +34,13 @@ cp -a build_artifacts/osx-arm64/* "${APP_NAME}.app/Contents/MacOS/"
 mkdir -p "${APP_NAME}.app/Contents/MacOS/_output/UI"
 cp -a _output/UI/* "${APP_NAME}.app/Contents/MacOS/_output/UI/" 2>/dev/null || true
 
+# Copy LibUsb for macOS
+if [ -f "/opt/homebrew/lib/libusb-1.0.dylib" ]; then
+    echo "Copying libusb from /opt/homebrew/lib..."
+    cp "/opt/homebrew/lib/libusb-1.0.dylib" "${APP_NAME}.app/Contents/MacOS/libusb-1.0.dylib"
+    cp "/opt/homebrew/lib/libusb-1.0.dylib" "${APP_NAME}.app/Contents/MacOS/liblibusb-1.0.dylib"
+fi
+
 # --- ICON GENERATION ---
 ICON_SRC="frontend/src/assets/app_logo.png"
 if [ -f "$ICON_SRC" ]; then
