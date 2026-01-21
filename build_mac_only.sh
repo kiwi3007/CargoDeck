@@ -12,6 +12,7 @@ echo "[1/3] Building Frontend..."
 npm run build
 
 # 2. Publish Backend for macOS (ARM64 default for this user)
+# 2. Publish Backend for macOS (ARM64 default for this user)
 echo "[2/3] Publishing Backend (OSX-ARM64)..."
 dotnet publish src/Playerr.Host/Playerr.Host.csproj \
     -c Release \
@@ -19,6 +20,18 @@ dotnet publish src/Playerr.Host/Playerr.Host.csproj \
     --self-contained true \
     -p:PublishSingleFile=false \
     -o build_artifacts/osx-arm64
+
+echo "       Publishing UsbHelper..."
+dotnet publish src/Playerr.UsbHelper/Playerr.UsbHelper.csproj \
+    -c Release \
+    -r osx-arm64 \
+    --self-contained true \
+    -p:PublishSingleFile=false \
+    -o build_artifacts/osx-arm64
+
+echo "       Copying Python Helper..."
+cp src/Playerr.Core/Switch/SwitchUsbHelper.py build_artifacts/osx-arm64/
+
 
 # 3. Create .app Bundle
 echo "[3/3] Packaging .app (with Icon & Launcher)..."

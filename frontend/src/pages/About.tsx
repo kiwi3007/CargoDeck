@@ -65,7 +65,7 @@ const About: React.FC = () => {
                     <div onClick={toggleKofi} style={{ cursor: 'pointer', display: 'inline-block' }}>
                         <img src={appLogo} alt="Playerr" style={{ width: '100px', height: 'auto', marginBottom: '0.75rem' }} />
                     </div>
-                    <h3>Playerr v0.4.4</h3>
+                    <h3>Playerr v0.4.5</h3>
                 </div>
 
                 <div className="settings-section" style={{ border: 'none', padding: 0, backgroundColor: 'transparent' }}>
@@ -79,6 +79,7 @@ const About: React.FC = () => {
                         <ul style={{ listStyleType: 'none', padding: 0, color: '#a6adc8', lineHeight: '1.6', fontSize: '0.9rem' }}>
                             <li>• {t('featureScanning')}</li>
                             <li>• {t('featureIntegration')}</li>
+                            <li>• {t('featureUsb')}</li>
                             <li>• {t('featureCrossPlatform')}</li>
                         </ul>
                     </div>
@@ -87,7 +88,7 @@ const About: React.FC = () => {
                         <h4 style={{ color: '#cdd6f4', fontSize: '1rem', marginBottom: '0.75rem', fontWeight: 600 }}>{t('roadmapTitle')}</h4>
                         <ul style={{ listStyleType: 'none', padding: 0, color: '#a6adc8', lineHeight: '1.6', fontSize: '0.9rem' }}>
                             <li>• {t('roadmapBazzite')}</li>
-                            <li>• {t('roadmapUsb')}</li>
+                            {/* <li>• {t('roadmapUsb')} (Completed v0.4.5)</li> */}
                             <li>• {t('roadmapAppStores')}</li>
                             <li>• {t('roadmapExtensibility')}</li>
                         </ul>

@@ -542,10 +542,11 @@ export const translations = {
         plat_macos: 'macOS',
         plat_retro: 'Retro / Emulation',
         // About Content
-        aboutMainDesc: 'Playerr is an open-source media manager designed to centralize, organize, and automate your video game collection on any platform.',
+        aboutMainDesc: 'Playerr is an open-source media manager designed to centralize, organize, and automate your video game collection on any platform. Special thanks to rashevskyv/dbi for the USB transfer protocols.',
         featuresTitle: 'Features',
         featureScanning: 'Library scanning engine',
         featureIntegration: 'Native integration with Steam, IGDB, qBittorrent, and Prowlarr',
+        featureUsb: 'Advanced USB file transfer and management (DBI Protocol)',
         featureCrossPlatform: 'Project in development for Linux, Windows, macOS, and Docker',
         roadmapTitle: 'In Development',
         roadmapBazzite: 'In Progress: Studying compatibility with Lutris and Proton on Bazzite.',

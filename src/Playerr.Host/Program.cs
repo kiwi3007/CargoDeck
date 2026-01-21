@@ -69,51 +69,7 @@ namespace Playerr.Host
                 _logPath = Path.Combine(Path.GetTempPath(), "playerr_startup.log");
                 Log("=== Playerr Startup Started ===");
 
-                // macOS libusb resolver
-                var libusbResolver = new System.Runtime.InteropServices.DllImportResolver((libraryName, assembly, searchPath) =>
-                {
-                    if (libraryName == "libusb-1.0" || libraryName == "liblibusb-1.0")
-                    {
-                        var paths = new[] 
-                        { 
-                            "/opt/homebrew/lib/libusb-1.0.dylib",
-                            "/usr/local/lib/libusb-1.0.dylib",
-                            Path.Combine(AppContext.BaseDirectory, "libusb-1.0.dylib")
-                        };
-                        foreach (var path in paths)
-                        {
-                            if (File.Exists(path))
-                            {
-                                try {
-                                    var handle = System.Runtime.InteropServices.NativeLibrary.Load(path);
-                                    Log($"[NativeLib] SUCCESS: Loaded {libraryName} from {path} (Handle: {handle})");
-                                    return handle;
-                                } catch (Exception ex) {
-                                    Log($"[NativeLib] ERROR loading {path}: {ex.Message}");
-                                }
-                            }
-                        }
-                    }
-                    return IntPtr.Zero;
-                });
-
-                // FORCE load LibUsbDotNet assembly
-                var dummy = typeof(LibUsbDotNet.UsbDevice).Assembly;
-                
-                // Apply to all currently loaded assemblies
-                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                {
-                    var name = asm.FullName ?? "";
-                    if (name.Contains("LibUsb", StringComparison.OrdinalIgnoreCase))
-                    {
-                         try {
-                             System.Runtime.InteropServices.NativeLibrary.SetDllImportResolver(asm, libusbResolver);
-                             Log($"[NativeLib] Attached resolver to assembly: {name}");
-                         } catch (Exception ex) {
-                             Log($"[NativeLib] Failed to attach resolver to {name}: {ex.Message}");
-                         }
-                    }
-                }
+                // LibUsb logic removed (Moved to Playerr.UsbHelper)
 
                 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
                 {

@@ -1,3 +1,16 @@
+# Playerr v0.4.5 - The Connected Update 🔌
+This release introduces advanced hardware connectivity features and expands platform support.
+
+### ⚡ Advanced USB Protocol
+*   **Direct Hardware Transfer**: Implemented a robust USB transfer system allowing direct installation to connected devices.
+*   **Smart Permissions**: Improved USB handling on macOS to gracefully handle permission denied errors without requiring root access.
+*   **Protocol Integrity**: Enhanced handshake and error handling to ensure data integrity during transfers.
+*   **Credits**: Implementation based on the excellent work by `rashevskyv/dbi`.
+
+### 🛠️ Improvements
+*   **UI/UX**: Added "Close Anyway" option for modal dialogs to prevent UI lockups.
+*   **Platform Detection**: Refined logic for hiding irrelevant actions (Play/Install) on specific platforms.
+
 # Playerr v0.4.4 - The Cleanup & Scanner Update 🧹
 This release focuses on scanning accuracy, Wine/Whisky integration, and security improvements for Linux.
 

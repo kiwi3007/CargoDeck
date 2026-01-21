@@ -30,13 +30,6 @@ const SwitchInstallerModal: React.FC<SwitchInstallerModalProps> = ({ isOpen, onC
     }, [isOpen]);
 
     const handleClose = async () => {
-        if (isInstalling) {
-            try {
-                await axios.post('/api/v3/nsw/cancel');
-            } catch (e) {
-                console.error('Cancel error:', e);
-            }
-        }
         onClose();
     };
 

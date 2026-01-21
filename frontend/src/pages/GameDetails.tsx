@@ -490,6 +490,14 @@ const GameDetails: React.FC = () => {
     );
   }
 
+  const isSwitchGame = (() => {
+    if (!game) return false;
+    const pathLower = game.path?.toLowerCase() || '';
+    const isSwitchFile = pathLower.endsWith('.nsp') || pathLower.endsWith('.xci') || pathLower.endsWith('.nsz') || pathLower.endsWith('.xcz');
+    const isSwitchPlatform = game.platform?.name?.toLowerCase().includes('switch') || false;
+    return isSwitchFile || isSwitchPlatform;
+  })();
+
   return (
     <div className="game-details">
       <div className="game-details-header">
@@ -535,45 +543,39 @@ const GameDetails: React.FC = () => {
               <span>{t('remove')}</span>
             </button>
 
-            <button
-              className={`action-btn ${game.isInstallable && !game.canPlay ? 'install-ready' : ''}`}
-              onClick={handleInstallClick}
-              title={t('install')}
-            >
-              <FontAwesomeIcon icon={faDownload} />
-              <span>{t('install')}</span>
-            </button>
+            {(!isSwitchGame) && (
+              <button
+                className={`action-btn ${game.isInstallable && !game.canPlay ? 'install-ready' : ''}`}
+                onClick={handleInstallClick}
+                title={t('install')}
+              >
+                <FontAwesomeIcon icon={faDownload} />
+                <span>{t('install')}</span>
+              </button>
+            )}
 
-            {(() => {
-              if (!game.path) return null;
-              const pathLower = game.path.toLowerCase();
-              const isSwitchFile = pathLower.endsWith('.nsp') || pathLower.endsWith('.xci') || pathLower.endsWith('.nsz') || pathLower.endsWith('.xcz');
-              const isSwitchPlatform = game.platform?.name.includes('Switch');
+            {isSwitchGame && (
+              <button
+                className="action-btn switch-usb"
+                onClick={() => setShowSwitchModal(true)}
+                title="Install to Switch via USB"
+                style={{ background: '#e60012', color: 'white' }}
+              >
+                <FontAwesomeIcon icon={faMicrochip} />
+                <span>USB Install</span>
+              </button>
+            )}
 
-              if (isSwitchFile || isSwitchPlatform) {
-                return (
-                  <button
-                    className="action-btn switch-usb"
-                    onClick={() => setShowSwitchModal(true)}
-                    title="Install to Switch via USB"
-                    style={{ background: '#e60012', color: 'white' }}
-                  >
-                    <FontAwesomeIcon icon={faMicrochip} />
-                    <span>USB Install</span>
-                  </button>
-                );
-              }
-              return null;
-            })()}
-
-            <button
-              className={`action-btn ${game.canPlay ? 'play-ready' : ''}`}
-              onClick={handlePlay}
-              title={t('play')}
-            >
-              <FontAwesomeIcon icon={faGamepad} />
-              <span>{t('play')}</span>
-            </button>
+            {(!isSwitchGame) && (
+              <button
+                className={`action-btn ${game.canPlay ? 'play-ready' : ''}`}
+                onClick={handlePlay}
+                title={t('play')}
+              >
+                <FontAwesomeIcon icon={faGamepad} />
+                <span>{t('play')}</span>
+              </button>
+            )}
           </div>
           <div className="meta">
             <span>{game.year}</span>
