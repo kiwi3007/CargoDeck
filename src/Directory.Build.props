@@ -10,7 +10,8 @@
     <TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
     <RuntimeIdentifiers Condition="'$(RuntimeIdentifiers)' == ''">win-x64;win-x86;osx-x64;osx-arm64;linux-x64;linux-musl-x64;linux-arm;linux-musl-arm;linux-arm64;linux-musl-arm64</RuntimeIdentifiers>
 
-    <PlayerrRootDir>$(MSBuildThisFileDirectory)../</PlayerrRootDir>
+    <PlayerrRootDir Condition="'$(DOTNET_RUNNING_IN_CONTAINER)' != 'true'">$(MSBuildThisFileDirectory)../</PlayerrRootDir>
+    <PlayerrRootDir Condition="'$(DOTNET_RUNNING_IN_CONTAINER)' == 'true'">$(MSBuildThisFileDirectory)</PlayerrRootDir>
 
     <!-- Specifies the type of output -->
     <PlayerrOutputType>Library</PlayerrOutputType>
