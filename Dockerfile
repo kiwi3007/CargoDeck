@@ -10,31 +10,31 @@ RUN npm run build
 
 # Stage 2: Build the Backend (.NET)
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend
-WORKDIR /app
+WORKDIR /src
 
-# Copy solution and build configuration files (preserving directory structure)
-COPY src/*.sln src/
-COPY src/Directory.Build.props src/
-COPY src/Directory.Build.targets src/
-COPY src/NuGet.config src/
+# Copy solution and build configuration files
+COPY src/Playerr.sln ./
+COPY src/Directory.Build.props ./
+COPY src/Directory.Build.targets ./
+COPY src/NuGet.config ./
 
 # Copy each project file explicitly (best for layer caching and path integrity)
-COPY src/Playerr.Api.V3/*.csproj src/Playerr.Api.V3/
-COPY src/Playerr.Common/*.csproj src/Playerr.Common/
-COPY src/Playerr.Console/*.csproj src/Playerr.Console/
-COPY src/Playerr.Core/*.csproj src/Playerr.Core/
-COPY src/Playerr.Host/*.csproj src/Playerr.Host/
-COPY src/Playerr.Http/*.csproj src/Playerr.Http/
-COPY src/Playerr.SignalR/*.csproj src/Playerr.SignalR/
-COPY src/Playerr.UsbHelper/*.csproj src/Playerr.UsbHelper/
+COPY src/Playerr.Api.V3/*.csproj Playerr.Api.V3/
+COPY src/Playerr.Common/*.csproj Playerr.Common/
+COPY src/Playerr.Console/*.csproj Playerr.Console/
+COPY src/Playerr.Core/*.csproj Playerr.Core/
+COPY src/Playerr.Host/*.csproj Playerr.Host/
+COPY src/Playerr.Http/*.csproj Playerr.Http/
+COPY src/Playerr.SignalR/*.csproj Playerr.SignalR/
+COPY src/Playerr.UsbHelper/*.csproj Playerr.UsbHelper/
 
 # Restore dependencies
-RUN dotnet restore src/Playerr.sln
+RUN dotnet restore Playerr.sln
 
 # Copy everything else and build
-COPY src/ src/
-COPY frontend/src/assets/app_logo.ico frontend/src/assets/
-RUN dotnet publish src/Playerr.Host/Playerr.Host.csproj -c Release -o /app/publish
+COPY src/ ./
+COPY frontend/src/assets/app_logo.ico ../frontend/src/assets/
+RUN dotnet publish Playerr.Host/Playerr.Host.csproj -c Release -o /app/publish
 
 # Stage 3: Final Runtime Image
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
