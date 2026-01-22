@@ -8,9 +8,9 @@
 
     <PlatformTarget>AnyCPU</PlatformTarget>
     <TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
-    <RuntimeIdentifiers>win-x64;win-x86;osx-x64;osx-arm64;linux-x64;linux-musl-x64;linux-arm;linux-musl-arm;linux-arm64;linux-musl-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifiers Condition="'$(RuntimeIdentifiers)' == ''">win-x64;win-x86;osx-x64;osx-arm64;linux-x64;linux-musl-x64;linux-arm;linux-musl-arm;linux-arm64;linux-musl-arm64</RuntimeIdentifiers>
 
-    <PlayerrRootDir>$(MSBuildThisFileDirectory)..\</PlayerrRootDir>
+    <PlayerrRootDir>$(MSBuildThisFileDirectory)../</PlayerrRootDir>
 
     <!-- Specifies the type of output -->
     <PlayerrOutputType>Library</PlayerrOutputType>
@@ -37,13 +37,13 @@
   <PropertyGroup>
     <Configuration Condition="'$(Configuration)'==''">Release</Configuration>
     <!-- Centralize intermediate and default outputs -->
-    <BaseIntermediateOutputPath>$(PlayerrRootDir)_temp\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-    <IntermediateOutputPath>$(PlayerrRootDir)_temp\obj\$(MSBuildProjectName)\$(Configuration)\</IntermediateOutputPath>
-    <OutputPath>$(PlayerrRootDir)_temp\bin\$(Configuration)\$(MSBuildProjectName)\</OutputPath>
+    <BaseIntermediateOutputPath>$(PlayerrRootDir)_temp/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <IntermediateOutputPath>$(PlayerrRootDir)_temp/obj/$(MSBuildProjectName)/$(Configuration)/</IntermediateOutputPath>
+    <OutputPath>$(PlayerrRootDir)_temp/bin/$(Configuration)/$(MSBuildProjectName)/</OutputPath>
 
     <!-- Output to _output and _tests respectively -->
-    <OutputPath Condition="'$(PlayerrProject)'=='true'">$(PlayerrRootDir)_output\</OutputPath>
-    <OutputPath Condition="'$(PlayerrOutputType)'=='Test'">$(PlayerrRootDir)_tests\</OutputPath>
+    <OutputPath Condition="'$(PlayerrProject)'=='true'">$(PlayerrRootDir)_output/</OutputPath>
+    <OutputPath Condition="'$(PlayerrOutputType)'=='Test'">$(PlayerrRootDir)_tests/</OutputPath>
 
     <!-- Paths relative to project file for better readability -->
     <EnableBaseIntermediateOutputPathMismatchWarning>false</EnableBaseIntermediateOutputPathMismatchWarning>

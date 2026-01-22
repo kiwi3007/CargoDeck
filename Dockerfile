@@ -12,13 +12,23 @@ RUN npm run build
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend
 WORKDIR /src
 
-# Copy csproj and restore as distinct layers
-COPY src/*/*.csproj ./
-RUN for file in $(ls *.csproj); do mkdir -p ${file%.*}/ && mv $file ${file%.*}/; done
+# Copy solution and build configuration files
 COPY src/*.sln ./
 COPY src/Directory.Build.props ./
 COPY src/Directory.Build.targets ./
 COPY src/NuGet.config ./
+
+# Copy each project file explicitly to its folder (best for layer caching)
+COPY src/Playerr.Api.V3/Playerr.Api.V3.csproj Playerr.Api.V3/
+COPY src/Playerr.Common/Playerr.Common.csproj Playerr.Common/
+COPY src/Playerr.Console/Playerr.Console.csproj Playerr.Console/
+COPY src/Playerr.Core/Playerr.Core.csproj Playerr.Core/
+COPY src/Playerr.Host/Playerr.Host.csproj Playerr.Host/
+COPY src/Playerr.Http/Playerr.Http.csproj Playerr.Http/
+COPY src/Playerr.SignalR/Playerr.SignalR.csproj Playerr.SignalR/
+COPY src/Playerr.UsbHelper/Playerr.UsbHelper.csproj Playerr.UsbHelper/
+
+# Restore dependencies
 RUN dotnet restore
 
 # Copy everything else and build
