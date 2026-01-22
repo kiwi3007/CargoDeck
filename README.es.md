@@ -159,7 +159,7 @@ Si quieres modificar el código o construir la imagen localmente en lugar de des
 
 ### Fase 3: Ecosistema y Visión de Futuro
 - [ ] **Bazzite y Gaming en Linux:** Hooks de compatibilidad especializados para Lutris, Proton y Steam Deck.
-- [ ] **Protocolo DBI:** Transferencia avanzada de archivos por USB para la gestión de dispositivos de hardware portátiles.
+- [x] **Protocolo DBI:** Transferencia avanzada de archivos por USB para la gestión de dispositivos de hardware portátiles.
 - [ ] **Tiendas Oficiales:** Integración en los catálogos oficiales de aplicaciones de Unraid, CasaOS y Synology.
 - [ ] **Motor de Extensibilidad:** Soporte para scripts de la comunidad y plugins de metadatos.
 

@@ -159,7 +159,7 @@ If you want to modify the code or build the image locally instead of pulling it 
 
 ### Phase 3: Ecosystem & Future Vision
 - [ ] **Bazzite & Linux Gaming:** Specialized compatibility hooks for Lutris, Proton, and Steam Deck.
-- [ ] **DBI Protocol Support:** Advanced USB file transfer and management for handheld hardware devices.
+- [x] **DBI Protocol Support:** Advanced USB file transfer and management for handheld hardware devices.
 - [ ] **Official App Stores:** Integration into official Unraid, CasaOS, and Synology app manifests.
 - [ ] **Extensibility Engine:** Support for community-driven scripts and metadata plugins.
 
