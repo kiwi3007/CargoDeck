@@ -39,6 +39,17 @@ RUN dotnet publish Playerr.Host/Playerr.Host.csproj -c Release -o /app/publish
 # Stage 3: Final Runtime Image
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
+
+# Install runtime dependencies for Switch USB support (Python + libusb)
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    libusb-1.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pyusb
+RUN pip3 install --break-system-packages pyusb
+
 COPY --from=backend /app/publish .
 
 # Ensure no personal configs are included in the image
