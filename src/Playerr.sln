@@ -23,7 +23,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Host", "Playerr.Hos
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.SignalR", "Playerr.SignalR\Playerr.SignalR.csproj", "{B30BE76E-4D20-47AA-9E03-E32613D888CC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Playerr.UsbHelper", "Playerr.UsbHelper\Playerr.UsbHelper.csproj", "{77119E56-27CD-421E-A7F2-F876B9717CB1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.UsbHelper", "Playerr.UsbHelper\Playerr.UsbHelper.csproj", "{77119E56-27CD-421E-A7F2-F876B9717CB1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
