@@ -11,6 +11,7 @@ RUN npm run build
 # Stage 2: Build the Backend (.NET)
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend
 WORKDIR /source
+ENV DOTNET_RUNNING_IN_CONTAINER=true
 
 # Copy solution and build configuration files to root of source
 COPY src/Playerr.sln ./
