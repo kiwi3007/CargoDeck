@@ -10,31 +10,30 @@ RUN npm run build
 
 # Stage 2: Build the Backend (.NET)
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend
-WORKDIR /src
+WORKDIR /app
 
-# Copy solution and build configuration files
-COPY src/*.sln ./
-COPY src/Directory.Build.props ./
-COPY src/Directory.Build.targets ./
-COPY src/NuGet.config ./
+# Copy solution and build configuration files (preserving directory structure)
+COPY src/*.sln src/
+COPY src/Directory.Build.props src/
+COPY src/Directory.Build.targets src/
+COPY src/NuGet.config src/
 
-# Copy each project file explicitly to its folder (best for layer caching)
-COPY src/Playerr.Api.V3/Playerr.Api.V3.csproj Playerr.Api.V3/
-COPY src/Playerr.Common/Playerr.Common.csproj Playerr.Common/
-COPY src/Playerr.Console/Playerr.Console.csproj Playerr.Console/
-COPY src/Playerr.Core/Playerr.Core.csproj Playerr.Core/
-COPY src/Playerr.Host/Playerr.Host.csproj Playerr.Host/
-COPY src/Playerr.Http/Playerr.Http.csproj Playerr.Http/
-COPY src/Playerr.SignalR/Playerr.SignalR.csproj Playerr.SignalR/
-COPY src/Playerr.UsbHelper/Playerr.UsbHelper.csproj Playerr.UsbHelper/
+# Copy each project file explicitly (best for layer caching and path integrity)
+COPY src/Playerr.Api.V3/*.csproj src/Playerr.Api.V3/
+COPY src/Playerr.Common/*.csproj src/Playerr.Common/
+COPY src/Playerr.Console/*.csproj src/Playerr.Console/
+COPY src/Playerr.Core/*.csproj src/Playerr.Core/
+COPY src/Playerr.Host/*.csproj src/Playerr.Host/
+COPY src/Playerr.Http/*.csproj src/Playerr.Http/
+COPY src/Playerr.SignalR/*.csproj src/Playerr.SignalR/
+COPY src/Playerr.UsbHelper/*.csproj src/Playerr.UsbHelper/
 
 # Restore dependencies
-RUN dotnet restore
+RUN dotnet restore src/Playerr.sln
 
 # Copy everything else and build
-COPY src/ ./src/
-# Copy the icon file so that the relative path in .csproj (../../frontend/...) resolves correctly
-COPY frontend/src/assets/app_logo.ico ./frontend/src/assets/
+COPY src/ src/
+COPY frontend/src/assets/app_logo.ico frontend/src/assets/
 RUN dotnet publish src/Playerr.Host/Playerr.Host.csproj -c Release -o /app/publish
 
 # Stage 3: Final Runtime Image
@@ -44,8 +43,8 @@ COPY --from=backend /app/publish .
 
 # Ensure no personal configs are included in the image
 RUN rm -f /app/config/*.json && rm -f /app/settings/*.json && rm -f /app/appsettings.Development.json
+
 # Copy frontend artifacts to where the backend expects them
-# Ensure this matches the static file path in Program.cs (usually _output or similar)
 COPY --from=frontend /src/_output/UI ./_output/UI
 
 # Create config and media directories

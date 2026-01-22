@@ -9,21 +9,21 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test.Common", "Test.Common"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Host", "Host", "{486ADF86-DD89-4E19-B805-9D94F19800D9}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Api.V3", "Playerr.Api.V3\Playerr.Api.V3.csproj", "{D1D48E1D-9EEB-470B-992C-3954F90FB014}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Api.V3", "Playerr.Api.V3/Playerr.Api.V3.csproj", "{D1D48E1D-9EEB-470B-992C-3954F90FB014}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Http", "Playerr.Http\Playerr.Http.csproj", "{F8A02FD4-A7A4-40D0-BB81-6319105A3302}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Http", "Playerr.Http/Playerr.Http.csproj", "{F8A02FD4-A7A4-40D0-BB81-6319105A3302}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Common", "Playerr.Common\Playerr.Common.csproj", "{74BF1D46-710C-42C1-82DD-34B42C58F843}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Common", "Playerr.Common/Playerr.Common.csproj", "{74BF1D46-710C-42C1-82DD-34B42C58F843}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Console", "Playerr.Console\Playerr.Console.csproj", "{AEA9EE9A-19BF-45CB-93D9-52CA443FD313}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Console", "Playerr.Console/Playerr.Console.csproj", "{AEA9EE9A-19BF-45CB-93D9-52CA443FD313}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Core", "Playerr.Core\Playerr.Core.csproj", "{82EBE37B-E3A7-4365-9B06-FA647BCC7AF0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Core", "Playerr.Core/Playerr.Core.csproj", "{82EBE37B-E3A7-4365-9B06-FA647BCC7AF0}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Host", "Playerr.Host\Playerr.Host.csproj", "{B6913970-FB88-4F6F-83F9-00728218E3FD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.Host", "Playerr.Host/Playerr.Host.csproj", "{B6913970-FB88-4F6F-83F9-00728218E3FD}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.SignalR", "Playerr.SignalR\Playerr.SignalR.csproj", "{B30BE76E-4D20-47AA-9E03-E32613D888CC}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.SignalR", "Playerr.SignalR/Playerr.SignalR.csproj", "{B30BE76E-4D20-47AA-9E03-E32613D888CC}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.UsbHelper", "Playerr.UsbHelper\Playerr.UsbHelper.csproj", "{77119E56-27CD-421E-A7F2-F876B9717CB1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Playerr.UsbHelper", "Playerr.UsbHelper/Playerr.UsbHelper.csproj", "{77119E56-27CD-421E-A7F2-F876B9717CB1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
