@@ -1115,10 +1115,10 @@ const Settings: React.FC = () => {
         <>
           <div className="settings-section" id="indexers">
             <div className="section-header-with-logo">
-              <h3>INDEXERS</h3>
+              <h3>{t('indexersTitle')}</h3>
             </div>
             <p className="settings-description">
-              Manage your indexers (Prowlarr, Jackett, and External JSON Sources).
+              {t('indexersDesc')}
             </p>
 
             <div className="clients-list">
@@ -1198,7 +1198,7 @@ const Settings: React.FC = () => {
             </div>
 
             <button className="btn-secondary" onClick={handleOpenAddHydra} style={{ marginTop: '15px' }}>
-              <FontAwesomeIcon icon={faPlus} /> Add JSON Source
+              <FontAwesomeIcon icon={faPlus} /> {t('addSource')}
             </button>
           </div>
 
@@ -1502,7 +1502,7 @@ const Settings: React.FC = () => {
           <div className="modal-overlay" onClick={() => setShowProwlarrModal(false)}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
-                <h3>Configure Prowlarr</h3>
+                <h3>{t('prowlarrTitle')}</h3>
                 <button className="modal-close" onClick={() => setShowProwlarrModal(false)}>×</button>
               </div>
               <form onSubmit={handleSaveProwlarr}>
@@ -1513,7 +1513,7 @@ const Settings: React.FC = () => {
                       checked={prowlarrEnabled}
                       onChange={(e) => setProwlarrEnabled(e.target.checked)}
                     />
-                    Enable Prowlarr
+                    {t('enable')} Prowlarr
                   </label>
                 </div>
                 <div className="form-group">
