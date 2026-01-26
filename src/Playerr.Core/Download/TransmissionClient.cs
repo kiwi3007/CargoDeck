@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
+using System.Collections.Concurrent; // Added for session cache
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -23,11 +25,13 @@ namespace Playerr.Core.Download
         private readonly string _rpcUrl;
         private readonly string _username;
         private readonly string _password;
+        private static readonly ConcurrentDictionary<string, string> _sessionCache = new ConcurrentDictionary<string, string>();
         private string? _sessionId;
 
         public TransmissionClient(string host, int port, string username, string password)
         {
             _httpClient = new HttpClient();
+            _httpClient.Timeout = TimeSpan.FromSeconds(15); // Set timeout to avoid infinite hangs
             
             string cleanHost = host.Trim();
             if (!cleanHost.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && 
@@ -47,6 +51,12 @@ namespace Playerr.Core.Download
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
                 "Basic", 
                 Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_username}:{_password}")));
+
+            // Try to get session from cache if not set locally
+            if (string.IsNullOrEmpty(_sessionId))
+            {
+                _sessionCache.TryGetValue(_rpcUrl, out _sessionId);
+            }
 
             if (!string.IsNullOrEmpty(_sessionId))
             {
@@ -71,26 +81,38 @@ namespace Playerr.Core.Download
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync(_rpcUrl, content);
-
-            if (response.StatusCode == System.Net.HttpStatusCode.Conflict) // 409
+            try 
             {
-                if (response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
-                {
-                    foreach (var value in values)
-                    {
-                        _sessionId = value;
-                        break;
-                    }
-                    
-                    // Retry with new session ID
-                    SetupHeaders();
-                    var retryContent = new StringContent(json, Encoding.UTF8, "application/json");
-                    response = await _httpClient.PostAsync(_rpcUrl, retryContent);
-                }
-            }
+                var response = await _httpClient.PostAsync(_rpcUrl, content);
 
-            return response;
+                if (response.StatusCode == System.Net.HttpStatusCode.Conflict) // 409
+                {
+                    if (response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
+                    {
+                        foreach (var value in values)
+                        {
+                            _sessionId = value;
+                            _sessionCache[_rpcUrl] = _sessionId; // Update cache
+                            break;
+                        }
+                        
+                        // Retry with new session ID
+                        SetupHeaders();
+                        var retryContent = new StringContent(json, Encoding.UTF8, "application/json");
+                        response = await _httpClient.PostAsync(_rpcUrl, retryContent);
+                    }
+                }
+
+                return response;
+            }
+            catch (TaskCanceledException)
+            {
+                throw new TimeoutException($"Transmission RPC {method} timed out.");
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
         }
 
         public async Task<bool> TestConnectionAsync()
@@ -102,7 +124,6 @@ namespace Playerr.Core.Download
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Transmission] Test connection exception: {ex.Message}");
                 return false;
             }
         }
@@ -134,31 +155,85 @@ namespace Playerr.Core.Download
             }
             else
             {
-                // Download the torrent file manually to handle redirects (e.g. from Prowlarr)
-                // because Transmission often struggles with 301/302 redirects when fetching by URL.
-                try 
+                // Prowlarr often redirects to magnet links with HTTP 301
+                // We need to follow the redirect and extract the magnet link
+                try
                 {
                     var cleanUrl = url.Trim();
-                    Console.WriteLine($"[Transmission] Manually downloading torrent from: {cleanUrl}");
                     
-                    // Use a fresh client to avoid sending Transmission headers (Auth, SessionId) to Prowlarr
-                    using var downloadClient = new HttpClient();
-                    var torrentBytes = await downloadClient.GetByteArrayAsync(cleanUrl);
-                    Console.WriteLine($"[Transmission] Manual download successful. Bytes: {torrentBytes.Length}");
+                    using var httpClient = new HttpClient(new HttpClientHandler 
+                    { 
+                        AllowAutoRedirect = false // We'll handle redirects manually
+                    });
+                    httpClient.DefaultRequestHeaders.Add("User-Agent", "Playerr/0.1");
+                    httpClient.Timeout = TimeSpan.FromSeconds(10);
                     
-                    var base64 = Convert.ToBase64String(torrentBytes);
-                    args["metainfo"] = base64;
+                    var httpResponse = await httpClient.GetAsync(cleanUrl);
+                    
+                    // Check if it's a redirect
+                    if (httpResponse.StatusCode == System.Net.HttpStatusCode.MovedPermanently ||
+                        httpResponse.StatusCode == System.Net.HttpStatusCode.Found ||
+                        httpResponse.StatusCode == System.Net.HttpStatusCode.SeeOther)
+                    {
+                        var location = httpResponse.Headers.Location?.ToString();
+                        if (!string.IsNullOrEmpty(location))
+                        {
+                            
+                            // Check if it's a magnet link
+                            if (location.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Extract filename from original URL (e.g., file=Name+Of+Game)
+                                var magnetLink = location;
+                                if (magnetLink.Contains("&dn=&") || magnetLink.Contains("&dn=%20&") || magnetLink.EndsWith("&dn="))
+                                {
+                                    // dn parameter is empty, try to extract from original URL
+                                    var uri = new Uri(cleanUrl);
+                                    var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+                                    var fileName = query["file"];
+                                    
+                                    if (!string.IsNullOrEmpty(fileName))
+                                    {
+                                        // URL encode the filename for the magnet link
+                                        var encodedName = Uri.EscapeDataString(fileName);
+                                        
+                                        // Replace empty dn= with the actual filename
+                                        if (magnetLink.Contains("&dn=&"))
+                                        {
+                                            magnetLink = magnetLink.Replace("&dn=&", $"&dn={encodedName}&");
+                                        }
+                                        else if (magnetLink.EndsWith("&dn="))
+                                        {
+                                            magnetLink = magnetLink.Replace("&dn=", $"&dn={encodedName}");
+                                        }
+                                        
+                                    }
+                                }
+                                
+                                args["filename"] = magnetLink;
+                                goto skipDownload;
+                            }
+                            
+                            // Otherwise, try to download from the redirect location
+                            cleanUrl = location;
+                            var redirectResponse = await httpClient.GetAsync(cleanUrl);
+                            redirectResponse.EnsureSuccessStatusCode();
+                            var torrentBytes = await redirectResponse.Content.ReadAsByteArrayAsync();
+                            
+                            var base64 = Convert.ToBase64String(torrentBytes);
+                            args["metainfo"] = base64;
+                        }
+                    }
+                    
+                    skipDownload:;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Transmission] Failed to download torrent file content: {ex.Message}");
-                    Console.WriteLine($"[Transmission] Stack Trace: {ex.StackTrace}");
-                    // Fallback to URL if download fails
-                    args["filename"] = url; 
+                    
+                    // Fallback: send URL directly to Transmission
+                    args["filename"] = url;
                 }
             }
 
-            Console.WriteLine($"[Transmission] Sending arguments: {string.Join(", ", args.Keys)}");
 
             // Transmission doesn't support categories natively in the same way qBittorrent does
             // Usually path is used, but for now we will just add the torrent.
@@ -167,8 +242,6 @@ namespace Playerr.Core.Download
             var response = await SendRequestAsync("torrent-add", args);
             
             var json = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"[Transmission] AddTorrent Response Code: {response.StatusCode}");
-            Console.WriteLine($"[Transmission] AddTorrent Response Body: {json}");
 
             if (response.IsSuccessStatusCode)
             {
@@ -176,17 +249,19 @@ namespace Playerr.Core.Download
                 if (doc.RootElement.TryGetProperty("result", out var result))
                 {
                     var resultStr = result.GetString();
-                    Console.WriteLine($"[Transmission] RPC Result: {resultStr}");
-                    return resultStr == "success";
+                    if (resultStr == "success") return true;
+                    throw new Exception($"Transmission RPC Returned: {resultStr}");
                 }
             }
             else
             {
-                Console.WriteLine($"[Transmission] Error adding torrent. Status: {response.StatusCode}");
+                throw new HttpRequestException($"Transmission returned {response.StatusCode}: {json}");
             }
 
             return false;
         }
+
+
 
         public Task<bool> AddNzbAsync(string url, string? category = null)
         {
@@ -195,9 +270,10 @@ namespace Playerr.Core.Download
 
         public async Task<bool> RemoveDownloadAsync(string id)
         {
+            
             var args = new Dictionary<string, object>
             {
-                { "ids", new[] { id } },
+                { "ids", new[] { int.Parse(id) } },
                 { "delete-local-data", true }
             };
 
@@ -207,15 +283,19 @@ namespace Playerr.Core.Download
 
         public async Task<bool> PauseDownloadAsync(string id)
         {
-            var args = new Dictionary<string, object> { { "ids", new[] { id } } };
+            
+            var args = new Dictionary<string, object> { { "ids", new[] { int.Parse(id) } } };
             var response = await SendRequestAsync("torrent-stop", args);
+            
             return response.IsSuccessStatusCode;
         }
 
         public async Task<bool> ResumeDownloadAsync(string id)
         {
-            var args = new Dictionary<string, object> { { "ids", new[] { id } } };
+            
+            var args = new Dictionary<string, object> { { "ids", new[] { int.Parse(id) } } };
             var response = await SendRequestAsync("torrent-start", args);
+            
             return response.IsSuccessStatusCode;
         }
 
@@ -227,7 +307,10 @@ namespace Playerr.Core.Download
             };
 
             var response = await SendRequestAsync("torrent-get", args);
-            if (!response.IsSuccessStatusCode) return new List<DownloadStatus>();
+            if (!response.IsSuccessStatusCode) 
+            {
+                 throw new HttpRequestException($"Transmission Queue Error: {response.StatusCode}");
+            }
 
             var json = await response.Content.ReadAsStringAsync();
             var statusList = new List<DownloadStatus>();

@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Playerr.Core.Download;
 using Playerr.Core.Configuration;
+using System.IO;
+using System.Text; // Added for logging
 using System.Diagnostics.CodeAnalysis;
 
 namespace Playerr.Api.V3.DownloadClients
@@ -151,6 +153,17 @@ namespace Playerr.Api.V3.DownloadClients
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error fetching downloads for client {config.Name}: {ex.Message}");
+                    allDownloads.Add(new DownloadStatus
+                    {
+                        ClientId = config.Id,
+                        ClientName = config.Name,
+                        Id = $"error-{config.Id}",
+                        Name = $"Connection Error: {ex.Message}",
+                        State = DownloadState.Error,
+                        Size = 0,
+                        Progress = 0,
+                        DownloadPath = string.Empty
+                    });
                 }
             }
 
@@ -447,6 +460,7 @@ namespace Playerr.Api.V3.DownloadClients
                 }
                 else if (client.Implementation.Equals("Transmission", StringComparison.OrdinalIgnoreCase))
                 {
+
                     var transmissionClient = new TransmissionClient(
                         client.Host,
                         client.Port,
@@ -537,6 +551,8 @@ namespace Playerr.Api.V3.DownloadClients
                 return StatusCode(500, new { message = $"Error adding torrent: {ex.Message}" });
             }
         }
+
+
     }
 
     [SuppressMessage("Microsoft.Design", "CA1056:UriPropertiesShouldNotBeStrings")]
