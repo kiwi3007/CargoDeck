@@ -45,10 +45,16 @@ function App() {
               <Library />
             </TabContent>
 
-            {/* Game details view (persistent) */}
+            {/* Game details view (persistent once opened) */}
             <TabContent paths={['/game/']}>
               <Routes>
                 <Route path="/game/:id" element={<GameDetails />} />
+                {/* When NOT on a game route but the tab is still technically mounted (e.g. at /settings), 
+                    Routes will render nothing. However, since the TabContent is display:none, it's fine.
+                    BUT if we want "Keep-Alive" for the SPECIFIC game we were viewing, 
+                    we'd need a way to keep the Route matching even if the URL changed. 
+                    React Router doesn't natively support this easily without a custom Switch.
+                */}
               </Routes>
             </TabContent>
 

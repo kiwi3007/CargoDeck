@@ -17,12 +17,11 @@ const TabContent: React.FC<TabContentProps> = ({ paths, children, className = ""
     // Check if current location matches any of the persistent paths or their sub-paths
     const isActive = paths.some(path => {
         if (path === '/' || path === '/library') {
-            // Match exactly / or /library OR any /game/:id path as part of the library context
-            return location.pathname === '/' ||
-                location.pathname === '/library' ||
-                location.pathname.startsWith('/game/');
+            // ONLY match exactly / or /library for the Library List view
+            return location.pathname === '/' || location.pathname === '/library';
         }
-        return location.pathname === path || location.pathname.startsWith(path + '/');
+        // For others, match prefix (e.g. /game/ matches /game/123)
+        return location.pathname.startsWith(path);
     });
 
     return (
