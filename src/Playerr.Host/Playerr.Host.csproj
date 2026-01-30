@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType Condition="'$(Configuration)'=='Debug'">Exe</OutputType>
+    <OutputType Condition="'$(Configuration)'=='Release'">WinExe</OutputType>
     <Version>0.4.7</Version>
     <ApplicationIcon Condition="Exists('../../frontend/src/assets/app_logo.ico')">../../frontend/src/assets/app_logo.ico</ApplicationIcon>
   </PropertyGroup>
