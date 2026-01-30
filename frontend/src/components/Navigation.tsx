@@ -9,7 +9,7 @@ import { useUI } from '../context/UIContext';
 
 const Navigation: React.FC = () => {
   const { t } = useTranslation();
-  const { toggleKofi } = useUI();
+  const { toggleKofi, lastLibraryPath } = useUI();
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const location = useLocation();
 
@@ -27,7 +27,7 @@ const Navigation: React.FC = () => {
         </div>
       </div>
       <ul className="nav-links">
-        <li><NavLink to="/library">{t('library')}</NavLink></li>
+        <li><NavLink to={lastLibraryPath}>{t('library')}</NavLink></li>
         <li><NavLink to="/status">{t('status')}</NavLink></li>
         <li><NavLink to="/user">{t('user')}</NavLink></li>
         <li

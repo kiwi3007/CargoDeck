@@ -13,9 +13,16 @@ interface TabContentProps {
  */
 const TabContent: React.FC<TabContentProps> = ({ paths, children, className = "" }) => {
     const location = useLocation();
+
+    // Check if current location matches any of the persistent paths or their sub-paths
     const isActive = paths.some(path => {
-        if (path === '/') return location.pathname === '/' || location.pathname === '/library';
-        return location.pathname === path;
+        if (path === '/' || path === '/library') {
+            // Match exactly / or /library OR any /game/:id path as part of the library context
+            return location.pathname === '/' ||
+                location.pathname === '/library' ||
+                location.pathname.startsWith('/game/');
+        }
+        return location.pathname === path || location.pathname.startsWith(path + '/');
     });
 
     return (

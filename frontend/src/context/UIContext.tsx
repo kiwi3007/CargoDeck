@@ -5,19 +5,25 @@ interface UIContextType {
     toggleKofi: () => void;
     closeKofi: () => void;
     openKofi: () => void;
+    lastLibraryPath: string;
+    setLastLibraryPath: (path: string) => void;
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
 
 export const UIProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [isKofiOpen, setIsKofiOpen] = useState(false);
+    const [lastLibraryPath, setLastLibraryPath] = useState('/library');
 
     const toggleKofi = () => setIsKofiOpen(prev => !prev);
     const closeKofi = () => setIsKofiOpen(false);
     const openKofi = () => setIsKofiOpen(true);
 
     return (
-        <UIContext.Provider value={{ isKofiOpen, toggleKofi, closeKofi, openKofi }}>
+        <UIContext.Provider value={{
+            isKofiOpen, toggleKofi, closeKofi, openKofi,
+            lastLibraryPath, setLastLibraryPath
+        }}>
             {children}
         </UIContext.Provider>
     );
