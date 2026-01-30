@@ -9,7 +9,7 @@ import { useUI } from '../context/UIContext';
 
 const Navigation: React.FC = () => {
   const { t } = useTranslation();
-  const { toggleKofi, lastLibraryPath } = useUI();
+  const { toggleKofi, lastLibraryPath, lastSettingsPath } = useUI();
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const location = useLocation();
 
