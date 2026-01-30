@@ -47,7 +47,7 @@ const KofiOverlay: React.FC = () => {
                                 className="support-btn kofi"
                                 style={{
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                                    padding: '1rem', background: '#29abe0', color: 'white',
+                                    padding: '1rem', background: '#fcbf47', color: '#323842',
                                     border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer',
                                     fontSize: '1rem'
                                 }}
