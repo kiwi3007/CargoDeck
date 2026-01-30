@@ -250,6 +250,21 @@ namespace Playerr.Api.V3.Settings
             {
                 return BadRequest(new { success = false, message = ex.Message });
             }
+            }
+
+
+        // START SERVER SETTINGS API
+        [HttpPost("server")]
+        public IActionResult SaveServerSettings([FromBody] ServerSettings request)
+        {
+            _configService.SaveServerSettings(request);
+            return Ok(new { success = true, message = "Pro Server settings saved. Restart required." });
+        }
+
+        [HttpGet("server")]
+        public ActionResult<ServerSettings> GetServerSettings()
+        {
+            return Ok(_configService.LoadServerSettings());
         }
     }
 }

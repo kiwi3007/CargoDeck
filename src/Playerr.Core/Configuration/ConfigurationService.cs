@@ -257,6 +257,28 @@ namespace Playerr.Core.Configuration
             try { File.WriteAllText(_hydraConfigFile, JsonSerializer.Serialize(indexers, new JsonSerializerOptions { WriteIndented = true })); }
             catch (Exception ex) { Console.WriteLine($"Error saving Hydra indexers: {ex.Message}"); }
         }
+
+        public ServerSettings LoadServerSettings()
+        {
+            var serverConfig = Path.Combine(_configDirectory, "server.json");
+            if (File.Exists(serverConfig))
+            {
+                try
+                {
+                    var json = File.ReadAllText(serverConfig);
+                    return JsonSerializer.Deserialize<ServerSettings>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new ServerSettings();
+                }
+                catch { }
+            }
+            return new ServerSettings();
+        }
+
+        public void SaveServerSettings(ServerSettings settings)
+        {
+            var serverConfig = Path.Combine(_configDirectory, "server.json");
+            try { File.WriteAllText(serverConfig, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true })); }
+            catch { }
+        }
     }
 
     public class IgdbSettings
@@ -281,5 +303,11 @@ namespace Playerr.Core.Configuration
         public bool EnableAutoRename { get; set; } = true;
         public int MonitorIntervalSeconds { get; set; } = 60;
         public List<string> UnwantedExtensions { get; set; } = new List<string> { ".txt", ".nfo", ".url" };
+    }
+
+    public class ServerSettings
+    {
+        public int Port { get; set; } = 5002;
+        public bool UseAllInterfaces { get; set; } = false; // True = 0.0.0.0, False = 127.0.0.1
     }
 }

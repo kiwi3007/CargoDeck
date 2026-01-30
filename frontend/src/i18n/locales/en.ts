@@ -5,6 +5,7 @@ export const en = {
     settingsConnections: 'Connections',
     settingsIndexers: 'Indexers',
     settingsLanguage: 'Language',
+    settingsAdvanced: 'Advanced',
     indexersTitle: 'Indexers',
     indexersDesc: 'Manage your indexers (Prowlarr, Jackett, and External JSON Sources).',
     addSource: 'Add Source',

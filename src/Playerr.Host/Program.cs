@@ -223,23 +223,68 @@ namespace Playerr.Host
 
             if (!isHeadless)
             {
+                // LOAD PERSISTENT SERVER SETTINGS
+                var serverSettings = configService.LoadServerSettings();
+
+                // Check for IP/Port overrides (Env Vars or Args)
+                // Order: Args > Env Vars > Config > Defaults
+                string? envIp = Environment.GetEnvironmentVariable("PLAYERR_IP");
+                string? envPort = Environment.GetEnvironmentVariable("PLAYERR_PORT");
+                
+                string? argIp = null;
+                string? argPort = null;
+                
+                for (int i = 0; i < args.Length; i++)
+                {
+                    if (args[i] == "--ip" && i + 1 < args.Length) argIp = args[i+1];
+                    if (args[i] == "--port" && i + 1 < args.Length) argPort = args[i+1];
+                }
+                
+                // Priority: Args > Env > Config > Default(127.0.0.1)
+                string targetIpStr = argIp ?? envIp;
+                if (targetIpStr == null)
+                {
+                     // Fallback to Config
+                     targetIpStr = serverSettings.UseAllInterfaces ? "0.0.0.0" : "127.0.0.1";
+                }
+                
+                System.Net.IPAddress targetIp = targetIpStr == "0.0.0.0" ? System.Net.IPAddress.Any : 
+                                               (System.Net.IPAddress.TryParse(targetIpStr, out var ip) ? ip : System.Net.IPAddress.Loopback);
+
+                // Priority: Args > Env > Config (if changed from default 5002) > Default (Null -> Auto)
+                int? targetPort = null;
+                if (!string.IsNullOrEmpty(argPort) && int.TryParse(argPort, out int p1)) targetPort = p1;
+                else if (!string.IsNullOrEmpty(envPort) && int.TryParse(envPort, out int p2)) targetPort = p2;
+                else if (serverSettings.Port != 5002) targetPort = serverSettings.Port; // Only override if user changed it from default
+
                 builder.WebHost.ConfigureKestrel(serverOptions =>
                 {
-                    // PROFESSIONAL: Try a fixed range of ports first, then fallback to dynamic
-                    // This is more professional than total randomness as it helps with firewall rules.
-                    int[] preferredPorts = { 5002, 5003, 5004, 5005 };
-                    bool bound = false;
-                    foreach (var port in preferredPorts)
+                    if (targetPort.HasValue)
                     {
-                        try {
-                            serverOptions.Listen(System.Net.IPAddress.Loopback, port);
-                            bound = true;
-                            break;
-                        } catch { }
+                        // STRICT MODE: User specified a port. Bind only to it. Fail if busy.
+                        serverOptions.Listen(targetIp, targetPort.Value);
+                        Console.WriteLine($"[Startup] Bound to {targetIp}:{targetPort.Value} (Strict)");
                     }
-                    
-                    if (!bound) {
-                        serverOptions.Listen(System.Net.IPAddress.Loopback, 0); // Total fallback
+                    else
+                    {
+                        // AUTO MODE (Default): Try preferred ports, fallback to dynamic
+                        int[] preferredPorts = { 5002, 5003, 5004, 5005 };
+                        bool bound = false;
+                        
+                        foreach (var port in preferredPorts)
+                        {
+                            try {
+                                serverOptions.Listen(targetIp, port);
+                                bound = true;
+                                Console.WriteLine($"[Startup] Bound to {targetIp}:{port}");
+                                break;
+                            } catch { }
+                        }
+                        
+                        if (!bound) {
+                            serverOptions.Listen(targetIp, 0); // Total fallback
+                            Console.WriteLine($"[Startup] Bound to {targetIp}:Dynamic (Fallback)");
+                        }
                     }
                 });
             }
@@ -584,6 +629,7 @@ namespace Playerr.Host
             string address = rawAddress;
             if (address.Contains("127.0.0.1")) address = address.Replace("127.0.0.1", "localhost");
             if (address.Contains("[::1]")) address = address.Replace("[::1]", "localhost");
+            if (address.Contains("0.0.0.0")) address = address.Replace("0.0.0.0", "localhost");
 
             // PRO-CHECK: Wait for the server to actually be ALIVE and serving content
             Log($"[Startup] Waiting for backend at {internalAddress}...");

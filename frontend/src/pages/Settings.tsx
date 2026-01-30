@@ -230,8 +230,30 @@ const Settings: React.FC = () => {
 
       const postDownloadResponse = await axios.get('/api/v3/postdownload');
       setPostDownloadSettings(postDownloadResponse.data);
+
+      const serverResponse = await axios.get('/api/v3/settings/server');
+      setServerSettings(serverResponse.data);
     } catch (error) {
       console.error('Error loading settings:', error);
+    }
+  };
+
+  const [serverSettings, setServerSettings] = useState({
+    port: 5002,
+    useAllInterfaces: false
+  });
+
+  const handleSaveServerSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (serverSettings.port < 1024 || serverSettings.port > 65535) {
+        alert("Port must be between 1024 and 65535");
+        return;
+      }
+      await axios.post('/api/v3/settings/server', serverSettings);
+      alert("Server settings saved. PLEASE RESTART PLAYERR FOR CHANGES TO TAKE EFFECT.");
+    } catch (error: any) {
+      alert("Error saving settings: " + error.message);
     }
   };
 
@@ -1251,6 +1273,8 @@ const Settings: React.FC = () => {
               {t('addClientButton')}
             </button>
           </div>
+
+
         </>
       )}
 
@@ -1494,6 +1518,66 @@ const Settings: React.FC = () => {
         )
       }
 
+
+      {currentTab === 'advanced' && (
+        <div className="settings-section" id="advanced">
+          <div className="section-header-with-logo">
+
+            <h3>Advanced Settings</h3>
+          </div>
+
+          <div className="settings-card warning-card">
+            <h4>⚠️ Network Configuration</h4>
+            <p>
+              Changing these settings requires a restart of the application.
+              <br />Ensure you know what you are doing before exposing the server to the Network.
+            </p>
+          </div>
+
+          <form onSubmit={handleSaveServerSettings} style={{ marginTop: '20px' }}>
+            <div className="form-group">
+              <label>HTTP Port</label>
+              <input
+                type="number"
+                className="form-control"
+                value={serverSettings.port}
+                onChange={(e) => setServerSettings({ ...serverSettings, port: parseInt(e.target.value) })}
+                min="1024"
+                max="65535"
+              />
+              <small className="form-text text-muted">Default: 5002</small>
+            </div>
+
+            <div className="form-group">
+              <div className="checkbox-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={serverSettings.useAllInterfaces}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        if (confirm("Security Warning: Allowing remote access (0.0.0.0) exposes your server to the local network.\n\nAre you sure you want to proceed?")) {
+                          setServerSettings({ ...serverSettings, useAllInterfaces: true });
+                        }
+                      } else {
+                        setServerSettings({ ...serverSettings, useAllInterfaces: false });
+                      }
+                    }}
+                  />
+                  Allow Remote Control (Web UI)
+                </label>
+              </div>
+              <small className="form-text text-muted">
+                Binds the server to 0.0.0.0, allowing access from other devices on the LAN.
+              </small>
+            </div>
+
+            <div className="form-actions">
+              <button type="submit" className="btn-primary">Save & Restart Later</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Modals */}
       <HydraSourceModal
