@@ -473,7 +473,7 @@ const Library: React.FC = () => {
           </div>
         ) : viewMode === 'grid' ? (
           <VirtuosoGrid
-            style={{ height: 'calc(100vh - 180px)', width: '100%', padding: '2rem' }}
+            style={{ height: 'calc(100vh - 160px)' }}
             totalCount={filteredGames.length}
             listClassName="game-grid"
             itemContent={(index) => {
@@ -494,61 +494,61 @@ const Library: React.FC = () => {
           />
         ) : (
           <Virtuoso
-            style={{ height: 'calc(100vh - 180px)', width: '100%', padding: '2rem' }}
+            style={{ height: 'calc(100vh - 160px)' }}
             totalCount={filteredGames.length}
-            itemContent={(index) => {
-              const game = filteredGames[index];
-              return (
-                <div
-                  key={game.id}
-                  className="game-list-item"
-                  onClick={() => navigate(`/game/${game.id}`)}
-                  onContextMenu={(e) => handleContextMenu(e, game)}
-                  style={{ marginBottom: '0.75rem' }}
-                >
-                  {game.images?.coverUrl ? (
-                    <img src={game.images.coverUrl} alt={game.title} className="list-cover" />
-                  ) : (
-                    <div className="list-cover-placeholder">?</div>
-                  )}
-                  <div className="list-info">
-                    <h3>{game.title || 'Untitled'}</h3>
-                    <div className="list-meta">
-                      <span>{game.year || 'N/A'}</span>
-                      {game.platform?.name && <span>{game.platform.name}</span>}
-                      <span
-                        className="list-status-badge"
-                        style={{
-                          backgroundColor: getStatusColor(game.status),
-                          color: ['Missing', 'Downloading', 'Downloaded'].includes(game.status) ? '#11111b' : '#cdd6f4'
-                        }}
-                      >
-                        {translateStatus(game.status)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="list-rating">
-                    {typeof game.rating === 'number' && game.rating > 0 ? (
-                      <span>{Math.round(game.rating)}%</span>
-                    ) : (
-                      <span className="no-rating">N/A</span>
-                    )}
-                    <button
-                      className="list-delete-btn"
-                      title={t('deleteFromLibrary')}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteGame(game);
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              );
+            className="game-list"
+            const game= filteredGames[index];
+      return (
+      <div
+        key={game.id}
+        className="game-list-item"
+        onClick={() => navigate(`/game/${game.id}`)}
+        onContextMenu={(e) => handleContextMenu(e, game)}
+        style={{ marginBottom: '0.75rem' }}
+      >
+        {game.images?.coverUrl ? (
+          <img src={game.images.coverUrl} alt={game.title} className="list-cover" />
+        ) : (
+          <div className="list-cover-placeholder">?</div>
+        )}
+        <div className="list-info">
+          <h3>{game.title || 'Untitled'}</h3>
+          <div className="list-meta">
+            <span>{game.year || 'N/A'}</span>
+            {game.platform?.name && <span>{game.platform.name}</span>}
+            <span
+              className="list-status-badge"
+              style={{
+                backgroundColor: getStatusColor(game.status),
+                color: ['Missing', 'Downloading', 'Downloaded'].includes(game.status) ? '#11111b' : '#cdd6f4'
+              }}
+            >
+              {translateStatus(game.status)}
+            </span>
+          </div>
+        </div>
+        <div className="list-rating">
+          {typeof game.rating === 'number' && game.rating > 0 ? (
+            <span>{Math.round(game.rating)}%</span>
+          ) : (
+            <span className="no-rating">N/A</span>
+          )}
+          <button
+            className="list-delete-btn"
+            title={t('deleteFromLibrary')}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteGame(game);
+            }}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+      );
             }}
           />
-        )
+      )
       }
 
       <ContextMenu
