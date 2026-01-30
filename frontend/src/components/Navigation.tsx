@@ -35,7 +35,7 @@ const Navigation: React.FC = () => {
           onMouseEnter={() => setShowSettingsDropdown(true)}
           onMouseLeave={() => setShowSettingsDropdown(false)}
         >
-          <NavLink to="/settings" className="nav-link-with-arrow">
+          <NavLink to={lastSettingsPath} className="nav-link-with-arrow">
             {t('settings')} <span className={`dropdown-arrow ${showSettingsDropdown ? 'open' : ''}`}>▾</span>
           </NavLink>
           <div className={`dropdown-menu ${showSettingsDropdown ? 'show' : ''}`}>

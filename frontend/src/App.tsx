@@ -19,13 +19,17 @@ import TabContent from './components/TabContent';
  */
 function NavigationTracker() {
   const location = useLocation();
-  const { setLastLibraryPath } = useUI();
+  const { setLastLibraryPath, setLastSettingsPath } = useUI();
 
   useEffect(() => {
     if (location.pathname === '/library' || location.pathname.startsWith('/game/')) {
       setLastLibraryPath(location.pathname);
     }
-  }, [location, setLastLibraryPath]);
+    if (location.pathname === '/settings') {
+      const fullPath = location.pathname + location.hash;
+      setLastSettingsPath(fullPath);
+    }
+  }, [location, setLastLibraryPath, setLastSettingsPath]);
 
   return null;
 }
