@@ -117,7 +117,7 @@ const FolderExplorerModal: React.FC<FolderExplorerModalProps> = ({ initialPath, 
                         title="Ir a esta ruta"
                         style={{ marginLeft: '5px', padding: '0 10px', background: 'var(--primary-color)', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer' }}
                     >
-                        Go
+                        {t('go')}
                     </button>
                 </div>
 
@@ -152,10 +152,10 @@ const FolderExplorerModal: React.FC<FolderExplorerModalProps> = ({ initialPath, 
                 </div>
 
                 <div className="explorer-footer">
-                    <p className="hint">{t('doubleClickToOpen') || 'Doble clic para abrir carpeta'}</p>
+                    <p className="hint">{t('doubleClickToOpen')}</p>
                     <div className="actions">
                         <button className="btn-secondary" onClick={onClose}>{t('cancel')}</button>
-                        <button className="btn-primary" onClick={handleSelect}>{t('selectCurrent') || 'Seleccionar Actual'}</button>
+                        <button className="btn-primary" onClick={handleSelect}>{t('selectCurrent')}</button>
                     </div>
                 </div>
             </div>

@@ -1282,7 +1282,8 @@ const Settings: React.FC = () => {
                     className="form-control"
                     value={clientForm.name}
                     onChange={(e) => setClientForm({ ...clientForm, name: e.target.value })}
-                    placeholder="e.g. Deluge"
+                    placeholder={t('clientNamePlaceholder')}
+                    required
                   />
                 </div>
 
@@ -1308,7 +1309,8 @@ const Settings: React.FC = () => {
                     className="form-control"
                     value={clientForm.host}
                     onChange={(e) => setClientForm({ ...clientForm, host: e.target.value })}
-                    placeholder="localhost"
+                    placeholder={t('hostPlaceholder')}
+                    required
                   />
                 </div>
 
@@ -1319,6 +1321,8 @@ const Settings: React.FC = () => {
                     className="form-control"
                     value={clientForm.port}
                     onChange={(e) => setClientForm({ ...clientForm, port: parseInt(e.target.value) })}
+                    placeholder={t('portPlaceholder')}
+                    required
                   />
                 </div>
 
@@ -1344,7 +1348,7 @@ const Settings: React.FC = () => {
                         className="form-control"
                         value={clientForm.username || ''}
                         onChange={(e) => setClientForm({ ...clientForm, username: e.target.value })}
-                        placeholder={clientForm.implementation === 'Deluge' ? 'Optional (WebUI usually only needs pass)' : ''}
+                        placeholder={clientForm.implementation === 'Deluge' ? 'Optional (WebUI usually only needs pass)' : t('usernamePlaceholder')}
                       />
                     </div>
                     <div className="form-group">
@@ -1354,6 +1358,7 @@ const Settings: React.FC = () => {
                         className="form-control"
                         value={clientForm.password || ''}
                         onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
+                        placeholder={t('passwordPlaceholder')}
                       />
                     </div>
                   </>
@@ -1378,33 +1383,34 @@ const Settings: React.FC = () => {
                     className="form-control"
                     value={clientForm.category || ''}
                     onChange={(e) => setClientForm({ ...clientForm, category: e.target.value })}
-                    placeholder="playerr"
+                    placeholder={t('categoryPlaceholder')}
                   />
-                  <small className="form-text text-muted">Optional, but recommended.</small>
+                  <small className="form-text text-muted">{t('torrentsCategoryHint')}</small>
                 </div>
 
                 {clientForm.implementation !== 'Deluge' && (
                   <div className="form-group">
-                    <label>URL Base</label>
+                    <label>{t('urlBase')}</label>
                     <input
                       type="text"
                       className="form-control"
                       value={clientForm.urlBase || ''}
                       onChange={(e) => setClientForm({ ...clientForm, urlBase: e.target.value })}
-                      placeholder="e.g. /qbittorrent"
+                      placeholder={t('urlBasePlaceholder')}
                     />
+                    <small>{t('optionalRecommended')}</small>
                   </div>
                 )}
 
                 <div className="form-group">
-                  <label>Priority</label>
+                  <label>{t('priority')}</label>
                   <select
                     className="form-control"
                     value={clientForm.priority}
                     onChange={(e) => setClientForm({ ...clientForm, priority: parseInt(e.target.value) })}
                   >
-                    <option value={1}>High (Primary)</option>
-                    <option value={50}>Last (Fallback)</option>
+                    <option value={1}>{t('priorityHigh')}</option>
+                    <option value={50}>{t('priorityLow')}</option>
                   </select>
                 </div>
 

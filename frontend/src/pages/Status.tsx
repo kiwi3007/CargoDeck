@@ -127,12 +127,12 @@ const Status: React.FC = () => {
                 <table className="downloads-table">
                     <thead>
                         <tr>
-                            <th>Client</th>
-                            <th>Name</th>
-                            <th>Size</th>
-                            <th>Progress</th>
-                            <th>State</th>
-                            <th style={{ width: '120px', textAlign: 'right' }}>Actions</th>
+                            <th>{t('client')}</th>
+                            <th>{t('name')}</th>
+                            <th>{t('size')}</th>
+                            <th>{t('progress')}</th>
+                            <th>{t('state')}</th>
+                            <th style={{ width: '120px', textAlign: 'right' }}>{t('actions')}</th>
                         </tr>
                     </thead>
                     <tbody>

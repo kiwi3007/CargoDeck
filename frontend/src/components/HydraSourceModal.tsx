@@ -3,6 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSave } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import '../pages/Settings.css';
+import { useTranslation } from '../i18n/translations';
 
 interface HydraSourceModalProps {
     isOpen: boolean;
@@ -12,6 +13,7 @@ interface HydraSourceModalProps {
 }
 
 const HydraSourceModal: React.FC<HydraSourceModalProps> = ({ isOpen, onClose, onSave, source }) => {
+    const { t } = useTranslation();
     const [name, setName] = useState('');
     const [url, setUrl] = useState('');
     const [enabled, setEnabled] = useState(true);
@@ -51,41 +53,39 @@ const HydraSourceModal: React.FC<HydraSourceModalProps> = ({ isOpen, onClose, on
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
-                    <h3>{source ? 'Edit Hydra Source' : 'Add Hydra Source'}</h3>
+                    <h3>{source ? t('editHydraSource') : t('addHydraSource')}</h3>
                     <button className="modal-close" onClick={onClose}>×</button>
                 </div>
                 <form onSubmit={handleSave}>
                     <div className="form-group">
-                        <label>Name</label>
+                        <label>{t('name')}</label>
                         <input
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder="e.g. FitGirl Repacks"
+                            placeholder={t('clientNamePlaceholder')}
                             className="form-control"
                             required
                         />
                     </div>
 
                     <div className="form-group">
-                        <label>Source URL (JSON)</label>
+                        <label>{t('sourceUrl')}</label>
                         <input
                             type="url"
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
-                            placeholder="https://example.com/sources.json"
+                            placeholder={t('sourceUrlPlaceholder')}
                             className="form-control"
                             required
                         />
-                        <small>Must be a valid Hydra-compatible JSON URL.</small>
+                        <small>{t('hydraJsonHelp')}</small>
                     </div>
 
-
-
                     <div className="modal-actions">
-                        <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="button" className="btn-secondary" onClick={onClose}>{t('cancel')}</button>
                         <button type="submit" className="btn-primary">
-                            Save
+                            {t('save')}
                         </button>
                     </div>
                 </form>
