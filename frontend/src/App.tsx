@@ -12,6 +12,8 @@ import ScannerStatus from './components/ScannerStatus';
 import { UIProvider } from './context/UIContext';
 import KofiOverlay from './components/KofiOverlay';
 
+import TabContent from './components/TabContent';
+
 function App() {
   return (
     <UIProvider>
@@ -21,14 +23,30 @@ function App() {
           <ScannerStatus />
           <Navigation />
           <main className="main-content">
+            <TabContent paths={['/', '/library']} className="no-padding">
+              <Library />
+            </TabContent>
+            <TabContent paths={['/status']}>
+              <Status />
+            </TabContent>
+            <TabContent paths={['/user']}>
+              <User />
+            </TabContent>
+            <TabContent paths={['/settings']}>
+              <Settings />
+            </TabContent>
+            <TabContent paths={['/about']}>
+              <About />
+            </TabContent>
+
             <Routes>
-              <Route path="/" element={<Library />} />
-              <Route path="/library" element={<Library />} />
-              <Route path="/status" element={<Status />} />
-              <Route path="/user" element={<User />} />
-              <Route path="/game/:id" element={<GameDetails />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/about" element={<About />} />
+              {/* Dynamic routes that should NOT be kept alive (e.g. GameDetails) */}
+              <Route path="/game/:id" element={
+                <div className="tab-container">
+                  <GameDetails />
+                </div>
+              } />
+              <Route path="*" element={null} />
             </Routes>
           </main>
         </div>
