@@ -559,3 +559,12 @@
 .social-btn.sponsor:hover {
   background-color: #e37cb1;
 }
+
+.social-btn.kofi {
+  background-color: #fcbf47;
+  color: #323842 !important;
+}
+
+.social-btn.kofi:hover {
+  background-color: #ffd270;
+}
