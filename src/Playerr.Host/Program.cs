@@ -692,6 +692,19 @@ namespace Playerr.Host
                        .SetDevToolsEnabled(true);
                    
                    bool isClosing = false;
+
+#if WINDOWS
+                   try
+                   {
+                       var trayHelper = new Playerr.Host.Platform.WindowsTrayHelper(window);
+                       trayHelper.Initialize();
+                       Log("[Startup] Windows System Tray helper initialized.");
+                   }
+                   catch (Exception ex)
+                   {
+                       Log($"[Startup] Warning: Failed to initialize System Tray: {ex.Message}");
+                   }
+#endif
                    window.WindowClosing += (s, e) => { 
                        isClosing = true; 
                        Log("[UI] Window is closing...");

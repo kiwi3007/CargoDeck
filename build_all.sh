@@ -2,7 +2,7 @@
 set -e
 
 # Define version
-VERSION="0.4.6"
+VERSION="0.4.7"
 OUTPUT_DIR="build_artifacts"
 
 echo "=================================="
@@ -31,10 +31,13 @@ rm -f $OUTPUT_DIR/win-x64/config/*.json
 rm -f $OUTPUT_DIR/win-x64/settings/*.json
 
 
-echo "    Packaging Windows..."
+echo "    Packaging Windows Zip..."
 cd $OUTPUT_DIR
 zip -r -q "Playerr-Windows-x64.zip" "win-x64"
 cd ..
+
+echo "    Generating Windows Installer (NSIS)..."
+makensis installer.nsi
 
 # Linux x64
 echo " -> Building for Linux (x64)..."

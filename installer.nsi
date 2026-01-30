@@ -7,14 +7,14 @@
 !define DESCRIPTION "Self-Hosted Game Library Manager & PVR"
 !define VERSIONmajor 0
 !define VERSIONminor 4
-!define VERSIONbuild 0
+!define VERSIONbuild 7
 !define HELPURL "https://playerr.app"
 !define UPDATEURL "https://github.com/Maikboarder/Playerr/releases"
 !define ABOUTURL "https://playerr.app"
 !define INSTALLSIZE 125000 
 
 Name "${APPNAME}"
-OutFile "build_artifacts\Playerr-Windows-Setup-x64.exe"
+OutFile "build_artifacts/Playerr-Windows-Setup-x64.exe"
 InstallDir "$PROGRAMFILES64\${APPNAME}"
 InstallDirRegKey HKLM "Software\${APPNAME}" "Install_Dir"
 
@@ -22,8 +22,8 @@ BrandingText "${APPNAME} v${VERSIONmajor}.${VERSIONminor}.${VERSIONbuild}"
 
 ; Interface settings
 !define MUI_ABORTWARNING
-!define MUI_ICON "frontend\src\assets\app_logo.ico"
-!define MUI_UNICON "frontend\src\assets\app_logo.ico"
+!define MUI_ICON "frontend/src/assets/app_logo.ico"
+!define MUI_UNICON "frontend/src/assets/app_logo.ico"
 
 ; Pages
 !insertmacro MUI_PAGE_WELCOME
@@ -45,7 +45,7 @@ Section "Playerr (required)" SecDummy
     SetOutPath "$INSTDIR"
     
     ; Copy files from build output (assumes build_all.sh has run)
-    File /r "build_artifacts\win-x64\*.*"
+    File /r "build_artifacts/win-x64/*.*"
     
     ; Write Uninstaller
     WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -66,7 +66,7 @@ Section "Playerr (required)" SecDummy
     WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "EstimatedSize" ${INSTALLSIZE}
 
     ; Explicitly copy the icon file
-    File "frontend\src\assets\app_logo.ico"
+    File "frontend/src/assets/app_logo.ico"
 
     ; Create Start Menu Shortcuts
     CreateDirectory "$SMPROGRAMS\${APPNAME}"

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <Version>0.4.6</Version>
+    <Version>0.4.7</Version>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <NoWarn>$(NoWarn);CA1062;CA1031;CA2007;CA1303</NoWarn>
   </PropertyGroup>

@@ -156,6 +156,9 @@ If you want to modify the code or build the image locally instead of pulling it 
   - [x] **Smart API Handling:** Advanced rate-limiting and batching for metadata providers.
 - [x] **One-Click Launch Integration:** Direct execution support for **Steam** and initial implementation for **Installed Local Games**.
 - [x] **UI/UX Refinement:** Premium iconography (FontAwesome) and consistent Nord-themed design.
+- [x] **Advanced Configuration:**
+  - [x] **Custom IP/Port Binding:** Flexible network settings.
+  - [x] **System Tray Support:** Minimize to Tray for Windows.
 
 ### Phase 3: Ecosystem & Future Vision
 - [ ] **Bazzite & Linux Gaming:** Specialized compatibility hooks for Lutris, Proton, and Steam Deck.

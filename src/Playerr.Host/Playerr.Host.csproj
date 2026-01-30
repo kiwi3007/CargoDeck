@@ -1,8 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <Version>0.4.6</Version>
+    <Version>0.4.7</Version>
     <ApplicationIcon Condition="Exists('../../frontend/src/assets/app_logo.ico')">../../frontend/src/assets/app_logo.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,4 +19,8 @@
     <PackageReference Include="Photino.NET" Version="4.0.16" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+  </ItemGroup>
+
 </Project>

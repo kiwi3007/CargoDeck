@@ -156,6 +156,9 @@ Si quieres modificar el código o construir la imagen localmente en lugar de des
   - [x] **Gestión Inteligente de API:** Control de límites y procesamiento por lotes para proveedores de metadatos.
 - [x] **Integración "One-Click Launch":** Soporte de ejecución directa para **Steam** e implementación inicial para **Juegos Locales Instalados**.
 - [x] **Refinamiento de UI/UX:** Iconografía premium (FontAwesome) y diseño consistente basado en el tema Nord.
+- [x] **Configuración Avanzada:**
+  - [x] **IP/Puerto Personalizado:** Configuración de red flexible.
+  - [x] **Soporte System Tray:** Minimizar a la bandeja del sistema (Windows).
 
 ### Fase 3: Ecosistema y Visión de Futuro
 - [ ] **Bazzite y Gaming en Linux:** Hooks de compatibilidad especializados para Lutris, Proton y Steam Deck.
