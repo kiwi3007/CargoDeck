@@ -102,5 +102,20 @@ namespace Playerr.Core.Games
                 .ToListAsync();
             return new HashSet<int>(ids);
         }
+
+        public async Task AddGameFileAsync(GameFile gameFile)
+        {
+            using var context = await _contextFactory.CreateDbContextAsync();
+            // Assuming GameFiles corresponds to the DbSet, or generic Set method
+            context.Set<GameFile>().Add(gameFile);
+            await context.SaveChangesAsync();
+        }
+
+        public async Task UpdateGameFileAsync(GameFile gameFile)
+        {
+            using var context = await _contextFactory.CreateDbContextAsync();
+            context.Set<GameFile>().Update(gameFile);
+            await context.SaveChangesAsync();
+        }
     }
 }

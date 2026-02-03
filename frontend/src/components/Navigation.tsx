@@ -42,6 +42,7 @@ const Navigation: React.FC = () => {
             <Link to="/settings#media" onClick={() => handleDropdownItemClick('media')}>{t('settingsMedia')}</Link>
             <Link to="/settings#connections" onClick={() => handleDropdownItemClick('connections')}>{t('settingsConnections')}</Link>
             <Link to="/settings#indexers" onClick={() => handleDropdownItemClick('indexers')}>{t('settingsIndexers')}</Link>
+            <Link to="/settings#clients" onClick={() => handleDropdownItemClick('clients')}>{t('settingsClients')}</Link>
             <Link to="/settings#language" onClick={() => handleDropdownItemClick('language')}>{t('settingsLanguage')}</Link>
             <Link to="/settings#advanced" onClick={() => handleDropdownItemClick('advanced')}>{t('settingsAdvanced') || 'Advanced'}</Link>
           </div>

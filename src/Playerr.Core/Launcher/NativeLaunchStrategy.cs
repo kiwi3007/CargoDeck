@@ -15,14 +15,15 @@ namespace Playerr.Core.Launcher
             return !string.IsNullOrEmpty(game.ExecutablePath) && File.Exists(game.ExecutablePath);
         }
 
-        public Task LaunchAsync(Game game)
+        public Task LaunchAsync(Game game, string? overridePath = null)
         {
             if (string.IsNullOrEmpty(game.ExecutablePath))
             {
                 throw new InvalidOperationException("Game executable path is not set.");
             }
 
-            var path = game.ExecutablePath;
+            var path = !string.IsNullOrEmpty(overridePath) ? overridePath : game.ExecutablePath;
+            if (string.IsNullOrEmpty(path)) throw new InvalidOperationException("No executable path provided.");
             var directory = Path.GetDirectoryName(path);
             
             System.Console.WriteLine($"[NativeLaunchStrategy] Launching: {path}");

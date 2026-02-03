@@ -13,7 +13,7 @@ namespace Playerr.Core.Launcher
             return game.SteamId.HasValue && game.SteamId.Value > 0;
         }
 
-        public Task LaunchAsync(Game game)
+        public Task LaunchAsync(Game game, string? overridePath = null)
         {
             if (!game.SteamId.HasValue)
             {

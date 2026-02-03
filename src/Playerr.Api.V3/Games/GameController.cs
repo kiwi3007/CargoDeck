@@ -134,7 +134,8 @@ namespace Playerr.Api.V3.Games
                 game.IsExternal,
                 uninstallerPath,
                 downloadPath = downloadPathHint,
-                canPlay = canPlay // Explicit property name
+                canPlay = canPlay, // Explicit property name
+                game.GameFiles 
             });
         }
 
@@ -365,15 +366,16 @@ namespace Playerr.Api.V3.Games
 
 
         [HttpPost("{id}/install")]
-        public async Task<ActionResult> Install(int id)
+        public async Task<ActionResult> Install(int id, [FromQuery] string? path = null)
         {
             var game = await _repository.GetByIdAsync(id);
             if (game == null) return NotFound("Game not found in repository");
 
-            if (string.IsNullOrEmpty(game.Path)) return BadRequest("Game path is not set.");
+            string? targetPath = !string.IsNullOrEmpty(path) ? path : game.Path;
+
+            if (string.IsNullOrEmpty(targetPath)) return BadRequest("Game path is not set.");
             
-            string targetPath = game.Path;
-            System.Console.WriteLine($"[Install] Target Path: {targetPath}");
+            System.Console.WriteLine($"[Install] Target Path: {targetPath} (Override: {!string.IsNullOrEmpty(path)})");
 
             // Case 0.1: Archive (Zip, Rar, 7z)
             if (_archiveService.IsArchive(targetPath))
@@ -447,7 +449,7 @@ namespace Playerr.Api.V3.Games
         }
 
         [HttpPost("{id}/play")]
-        public async Task<ActionResult> Play(int id)
+        public async Task<ActionResult> Play(int id, [FromQuery] string? path = null)
         {
             System.Console.WriteLine($"[API] Play Request Received for Game ID: {id}");
             var game = await _repository.GetByIdAsync(id);
@@ -461,7 +463,7 @@ namespace Playerr.Api.V3.Games
 
             try
             {
-                await _launcherService.LaunchGameAsync(game);
+                await _launcherService.LaunchGameAsync(game, path);
                 return Ok(new { message = $"Launching {game.Title}..." });
             }
             catch (System.Exception ex)

@@ -50,11 +50,24 @@ const ScannerStatus: React.FC = () => {
     };
 
     useEffect(() => {
+        // Listen for immediate scan start events
+        const handleScanStarted = () => {
+            console.log("ScannerStatus: Received SCAN_STARTED event");
+            setStatus(prev => ({ ...prev, isScanning: true }));
+            prevIsScanning.current = true;
+            setShowFinished(false);
+        };
+
+        window.addEventListener('SCAN_STARTED', handleScanStarted);
+
         // Poll every 3 seconds
         const interval = setInterval(fetchStatus, 3000);
         fetchStatus(); // Initial fetch
 
-        return () => clearInterval(interval);
+        return () => {
+            window.removeEventListener('SCAN_STARTED', handleScanStarted);
+            clearInterval(interval);
+        };
     }, []);
 
     const handleBannerClick = async () => {

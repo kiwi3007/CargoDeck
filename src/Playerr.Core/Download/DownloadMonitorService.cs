@@ -91,6 +91,18 @@ namespace Playerr.Core.Download
             {
                 client = new DelugeClient(config.Host, config.Port, config.Password ?? "", config.UseSsl);
             }
+            else if (config.Implementation.Equals("rTorrent", StringComparison.OrdinalIgnoreCase))
+            {
+                var rtClient = new RTorrentClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+                rtClient.OnLog = (msg) => _logger.LogInformation(msg);
+                client = rtClient;
+            }
+            else if (config.Implementation.Equals("Flood", StringComparison.OrdinalIgnoreCase))
+            {
+                var fClient = new FloodClient(config.Host, config.Port, config.Username ?? "", config.Password ?? "", config.UrlBase);
+                fClient.OnLog = (msg) => _logger.LogInformation(msg);
+                client = fClient;
+            }
 
             if (client == null) return;
 

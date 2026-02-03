@@ -403,6 +403,9 @@ const Settings: React.FC = () => {
         folderPath: specificPath || folderPath,
         platform: 'default'
       });
+      console.log("Settings: Scan started triggered via API");
+      // Immediate feedback
+      window.dispatchEvent(new Event('SCAN_STARTED'));
       // Do NOT setScanning(false) here, relying on the poller below to detect when it finishes.
     } catch (error: any) {
       console.error('Error scanning media:', error);
@@ -1223,13 +1226,17 @@ const Settings: React.FC = () => {
               <FontAwesomeIcon icon={faPlus} /> {t('addSource')}
             </button>
           </div>
+        </>
+      )}
 
+      {currentTab === 'clients' && (
+        <>
           <div className="settings-section" id="download-clients">
             <div className="section-header-with-logo">
               <img src={torrentNzbIcon} alt="Download Clients" style={{ height: '60px' }} />
             </div>
             <p className="settings-description">
-              {t('downloadClientsDesc')}
+              {t('clientsDesc')}
             </p>
 
             {downloadClients.length > 0 && (
@@ -1273,10 +1280,11 @@ const Settings: React.FC = () => {
               {t('addClientButton')}
             </button>
           </div>
-
-
         </>
       )}
+
+
+
 
       {
         showClientModal && (
@@ -1321,6 +1329,8 @@ const Settings: React.FC = () => {
                     <option value="qBittorrent">qBittorrent</option>
                     <option value="Transmission">Transmission</option>
                     <option value="Deluge">Deluge (WebUI)</option>
+                    <option value="rTorrent">rTorrent</option>
+                    <option value="Flood">Flood</option>
                     <option value="SABnzbd">SABnzbd</option>
                     <option value="NZBGet">NZBGet</option>
                   </select>
@@ -1363,7 +1373,7 @@ const Settings: React.FC = () => {
                   </div>
                 )}
 
-                {(clientForm.implementation === 'qBittorrent' || clientForm.implementation === 'Deluge' || clientForm.implementation === 'Transmission' || clientForm.implementation === 'NZBGet') && (
+                {(clientForm.implementation === 'qBittorrent' || clientForm.implementation === 'Deluge' || clientForm.implementation === 'Transmission' || clientForm.implementation === 'NZBGet' || clientForm.implementation === 'rTorrent') && (
                   <>
                     <div className="form-group">
                       <label>{t('username')}</label>
@@ -1519,65 +1529,67 @@ const Settings: React.FC = () => {
       }
 
 
-      {currentTab === 'advanced' && (
-        <div className="settings-section" id="advanced">
-          <div className="section-header-with-logo">
+      {
+        currentTab === 'advanced' && (
+          <div className="settings-section" id="advanced">
+            <div className="section-header-with-logo">
 
-            <h3>Advanced Settings</h3>
-          </div>
-
-          <div className="settings-card warning-card">
-            <h4>⚠️ Network Configuration</h4>
-            <p>
-              Changing these settings requires a restart of the application.
-              <br />Ensure you know what you are doing before exposing the server to the Network.
-            </p>
-          </div>
-
-          <form onSubmit={handleSaveServerSettings} style={{ marginTop: '20px' }}>
-            <div className="form-group">
-              <label>HTTP Port</label>
-              <input
-                type="number"
-                className="form-control"
-                value={serverSettings.port}
-                onChange={(e) => setServerSettings({ ...serverSettings, port: parseInt(e.target.value) })}
-                min="1024"
-                max="65535"
-              />
-              <small className="form-text text-muted">Default: 5002</small>
+              <h3>Advanced Settings</h3>
             </div>
 
-            <div className="form-group">
-              <div className="checkbox-group">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={serverSettings.useAllInterfaces}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        if (confirm("Security Warning: Allowing remote access (0.0.0.0) exposes your server to the local network.\n\nAre you sure you want to proceed?")) {
-                          setServerSettings({ ...serverSettings, useAllInterfaces: true });
-                        }
-                      } else {
-                        setServerSettings({ ...serverSettings, useAllInterfaces: false });
-                      }
-                    }}
-                  />
-                  Allow Remote Control (Web UI)
-                </label>
+            <div className="settings-card warning-card">
+              <h4>⚠️ Network Configuration</h4>
+              <p>
+                Changing these settings requires a restart of the application.
+                <br />Ensure you know what you are doing before exposing the server to the Network.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveServerSettings} style={{ marginTop: '20px' }}>
+              <div className="form-group">
+                <label>HTTP Port</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={serverSettings.port}
+                  onChange={(e) => setServerSettings({ ...serverSettings, port: parseInt(e.target.value) })}
+                  min="1024"
+                  max="65535"
+                />
+                <small className="form-text text-muted">Default: 5002</small>
               </div>
-              <small className="form-text text-muted">
-                Binds the server to 0.0.0.0, allowing access from other devices on the LAN.
-              </small>
-            </div>
 
-            <div className="form-actions">
-              <button type="submit" className="btn-primary">Save & Restart Later</button>
-            </div>
-          </form>
-        </div>
-      )}
+              <div className="form-group">
+                <div className="checkbox-group">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={serverSettings.useAllInterfaces}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          if (confirm("Security Warning: Allowing remote access (0.0.0.0) exposes your server to the local network.\n\nAre you sure you want to proceed?")) {
+                            setServerSettings({ ...serverSettings, useAllInterfaces: true });
+                          }
+                        } else {
+                          setServerSettings({ ...serverSettings, useAllInterfaces: false });
+                        }
+                      }}
+                    />
+                    Allow Remote Control (Web UI)
+                  </label>
+                </div>
+                <small className="form-text text-muted">
+                  Binds the server to 0.0.0.0, allowing access from other devices on the LAN.
+                </small>
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" className="btn-primary">Save & Restart Later</button>
+              </div>
+            </form>
+          </div>
+        )
+      }
 
       {/* Modals */}
       <HydraSourceModal

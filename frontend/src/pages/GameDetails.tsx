@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { t, getLanguage, useTranslation } from '../i18n/translations';
+import { useSearchCache } from '../context/SearchCacheContext';
 import GameCorrectionModal from '../components/GameCorrectionModal';
 import UninstallModal from '../components/UninstallModal';
 import SwitchInstallerModal from '../components/SwitchInstallerModal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faPen, faFolderOpen, faDownload, faGamepad, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown, faTrash, faMicrochip } from '@fortawesome/free-solid-svg-icons';
 import './GameDetails.css';
+import VersionSelectorModal, { VersionOption } from '../components/VersionSelectorModal';
 
 interface Game {
   id: number;
@@ -33,6 +35,15 @@ interface Game {
   uninstallerPath?: string;
   downloadPath?: string;
   canPlay?: boolean;
+  gameFiles?: GameFile[];
+}
+
+interface GameFile {
+  id: number;
+  relativePath: string;
+  releaseGroup?: string;
+  quality?: string;
+  size: number;
 }
 
 interface TorrentResult {
@@ -74,11 +85,31 @@ interface TorrentResult {
 const GameDetails: React.FC = () => {
   useTranslation(); // Subscribe to language changes
   const { id } = useParams<{ id: string }>();
+  const { getCacheForGame, setCacheForGame } = useSearchCache();
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<TorrentResult[]>([]);
+  // Initialize results from cache if available (for initial render)
+  const [results, setResults] = useState<TorrentResult[]>(() => {
+    if (id) {
+      const cached = getCacheForGame(parseInt(id));
+      return cached || [];
+    }
+    return [];
+  });
+
+  // Update results when id changes (in case component is reused)
+  useEffect(() => {
+    if (id) {
+      const cached = getCacheForGame(parseInt(id));
+      if (cached) {
+        setResults(cached);
+      } else {
+        setResults([]);
+      }
+    }
+  }, [id, getCacheForGame]);
   const [sortField, setSortField] = useState<keyof TorrentResult | null>('seeders');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
@@ -87,7 +118,10 @@ const GameDetails: React.FC = () => {
   const [showUninstallModal, setShowUninstallModal] = useState(false);
   const [showInstallWarning, setShowInstallWarning] = useState(false);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'search' | 'files' | 'none'>('search'); // 'search' by default to keep existing behavior? Or none? User said "Search Game" is one function. Let's make it toggleable.
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [versionOptions, setVersionOptions] = useState<VersionOption[]>([]);
+  const [actionType, setActionType] = useState<'install' | 'play' | null>(null);
+  const [activeTab, setActiveTab] = useState<'search' | 'files' | 'none'>('search');
   // Actually, standard behavior was "Search Torrents" always visible at bottom. 
   // User wants a MENU. 
   // Let's make "Search" show/hide the search section.
@@ -395,6 +429,9 @@ const GameDetails: React.FC = () => {
         params: { query: game.title, categories: cats }
       });
       setResults(response.data);
+      if (id) {
+        setCacheForGame(parseInt(id), response.data);
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || t('error'));
     } finally {
@@ -417,14 +454,97 @@ const GameDetails: React.FC = () => {
     }
   };
   const handleInstallClick = () => {
+    setActionType('install');
     setShowInstallWarning(true);
   };
 
-  const confirmInstall = async () => {
+  const getAvailableVersions = (type: 'install' | 'play'): VersionOption[] => {
+    const options: VersionOption[] = [];
+    if (!game) return [];
+
+    // 1. Primary Version
+    if (game.path) {
+      const primaryTag = game.status === 'InstallerDetected' || (game.isInstallable && !game.canPlay) ? 'Installer' : 'Playable';
+      // Backend status is vague, check our computed logic or trust the tag logic above
+      // Better: check if we are filtering.
+
+      // Let's assume standard logic:
+      let tag = 'Playable';
+      if (game.status === 'InstallerDetected' || (game.isInstallable && !game.canPlay)) tag = 'Installer';
+
+      // Override: If checking specifically for 'play', and this is 'Installer', don't add? 
+      // Actually, let's add all and filter later or handle in filtering.
+      options.push({
+        label: game.title + (tag === 'Installer' ? ' (Installer)' : ''),
+        path: game.path,
+        details: game.path,
+        tag: tag
+      });
+    }
+
+    // 2. Alternate Versions
+    if (game.gameFiles && game.gameFiles.length > 0) {
+      game.gameFiles.forEach(f => {
+        options.push({
+          label: f.releaseGroup || 'Alternate Version',
+          path: f.relativePath,
+          details: f.relativePath,
+          tag: f.quality || 'Playable'
+        });
+      });
+    }
+
+    // Filter based on action
+    if (type === 'install') {
+      return options.filter(o => o.tag === 'Installer');
+    } else {
+      return options.filter(o => o.tag === 'Playable');
+    }
+  };
+
+  const onWarningConfirmed = () => {
     setShowInstallWarning(false);
+
+    // Fallback: If no strict installers found (e.g. status is weird), show all?
+    // User wants strict behavior.
+    let options = getAvailableVersions('install');
+
+    // Safety fallback: if 0 options found but we clicked Install, maybe the logic tagged it wrong. 
+    // Just show everything if filtering yields 0?
+    if (options.length === 0) options = getAvailableVersions('install').length === 0 ? [] : options; // wait logic loop
+    // Let's rely on getAvailableVersions first. If empty, maybe fall back to ALL options just in case?
+    if (options.length === 0) {
+      // If empty, use unfiltered to be safe (maybe tag is missing)
+      const all = [];
+      if (game?.path) all.push({ label: game.title, path: game.path, details: game.path, tag: 'Unknown' });
+      if (game?.gameFiles) game.gameFiles.forEach(f => all.push({ label: f.releaseGroup || 'Alt', path: f.relativePath, details: f.relativePath, tag: f.quality || 'Unknown' }));
+      options = all;
+    }
+
+    if (options.length > 1) {
+      setVersionOptions(options);
+      setShowVersionModal(true);
+    } else {
+      // If only 1 option, just launch it? 
+      // Yes.
+      executeInstall(options.length > 0 ? options[0].path : undefined);
+    }
+  };
+
+  const executeInstall = async (overridePath?: string) => {
+    setShowVersionModal(false);
+
+    // If event object came through (from onClick), ignore it
+    const actualPath = typeof overridePath === 'string' ? overridePath : undefined;
+
     try {
       setNotification({ message: t('searchingInstaller'), type: 'info' });
-      const res = await axios.post(`/api/v3/game/${id}/install`);
+      let url = `/api/v3/game/${id}/install`;
+      if (actualPath && actualPath.length > 0) {
+        url += `?path=${encodeURIComponent(actualPath)}`;
+      }
+
+      const res = await axios.post(url);
       setNotification({ message: `${t('installerLaunched')}: ${res.data.path}`, type: 'success' });
     } catch (err: any) {
       console.error(err);
@@ -433,12 +553,30 @@ const GameDetails: React.FC = () => {
   };
 
   const handlePlay = async () => {
-    // alert(`Debug: Launching game ${id} (Steam ID: ${game?.steamId})`); 
-    console.log('[handlePlay] Clicked. Game:', game);
-    console.log('[handlePlay] SteamId:', game?.steamId);
+    setActionType('play');
+    console.log('[handlePlay] Checking versions...');
+
+    const options = getAvailableVersions('play');
+
+    if (options.length > 1) {
+      setVersionOptions(options);
+      setShowVersionModal(true);
+      return;
+    }
+
+    // If 1 or 0 (default), execute directly
+    await executePlay(options.length === 1 ? options[0].path : undefined);
+  };
+
+  const executePlay = async (path?: string) => {
+    // alert(`Debug: Launching game ${id} (Steam ID: ${game?.steamId})`);
+    console.log('[executePlay] Launching. Path:', path);
     try {
       setNotification({ message: t('launchingGame'), type: 'info' });
-      await axios.post(`/api/v3/game/${id}/play`);
+      let url = `/api/v3/game/${id}/play`;
+      if (path) url += `?path=${encodeURIComponent(path)}`;
+
+      await axios.post(url);
       setNotification({ message: t('gameLaunched'), type: 'success' });
     } catch (err: any) {
       console.error(err);
@@ -500,6 +638,18 @@ const GameDetails: React.FC = () => {
 
   return (
     <div className="game-details">
+      <div className="breadcrumb-nav" style={{ marginBottom: '15px' }}>
+        <Link to="/library" style={{
+          color: '#89b4fa',
+          textDecoration: 'none',
+          fontSize: '0.9rem',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '5px'
+        }}>
+          ← {t('library')}
+        </Link>
+      </div>
       <div className="game-details-header">
         <div className="game-details-poster">
           {game.images.coverUrl ? (
@@ -637,6 +787,10 @@ const GameDetails: React.FC = () => {
         )
       }
 
+      <div className="back-link" style={{ marginTop: '20px', marginBottom: '10px' }}>
+        <Link to="/library">{t('backToLibrary')}</Link>
+      </div>
+
       {
         activeTab === 'search' && (results.length > 0 || error || searching) && (
           <div className="torrent-search">
@@ -687,7 +841,7 @@ const GameDetails: React.FC = () => {
                       const catIds = result.category.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
                       // Prioritize finding a detailed match (skipping general ones if detailed exists)
                       // But our GetPlatformInfo returns generic names for 1000/4000 too.
-                      // Let's iterate and find the "best" one. 
+                      // Let's iterate and find the "best" one.
 
                       // Sort IDs? Or just take first valid? Usually only 1 category per item.
                       // Sometimes multiple: 1000, 1010. We want 1010.
@@ -823,9 +977,7 @@ const GameDetails: React.FC = () => {
         )
       }
 
-      <div className="back-link">
-        <Link to="/library">{t('backToLibrary')}</Link>
-      </div>
+
 
       {
         showCorrectionModal && game && (
@@ -857,7 +1009,7 @@ const GameDetails: React.FC = () => {
                   </button>
                   <button
                     className="btn-danger"
-                    onClick={confirmInstall}
+                    onClick={() => onWarningConfirmed()}
                   >
                     {t('confirmInstall')}
                   </button>
@@ -865,6 +1017,20 @@ const GameDetails: React.FC = () => {
               </div>
             </div>
           </div>
+        )
+      }
+      {
+        showVersionModal && (
+          <VersionSelectorModal
+            isOpen={showVersionModal}
+            onClose={() => setShowVersionModal(false)}
+            onSelect={(path) => {
+              if (actionType === 'install') executeInstall(path);
+              else executePlay(path);
+            }}
+            options={versionOptions}
+            gameTitle={game?.title || 'Game'}
+          />
         )
       }
     </div >

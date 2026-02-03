@@ -6,6 +6,6 @@ namespace Playerr.Core.Launcher
     public interface ILaunchStrategy
     {
         bool IsSupported(Game game);
-        Task LaunchAsync(Game game);
+        Task LaunchAsync(Game game, string? overridePath = null);
     }
 }

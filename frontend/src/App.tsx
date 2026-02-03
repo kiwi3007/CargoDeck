@@ -10,6 +10,7 @@ import Status from './pages/Status';
 import Navigation from './components/Navigation';
 import ScannerStatus from './components/ScannerStatus';
 import { useUI, UIProvider } from './context/UIContext';
+import { SearchCacheProvider } from './context/SearchCacheContext';
 import KofiOverlay from './components/KofiOverlay';
 
 import TabContent from './components/TabContent';
@@ -37,51 +38,53 @@ function NavigationTracker() {
 function App() {
   return (
     <UIProvider>
-      <Router>
-        <NavigationTracker />
-        <div className="app">
-          <KofiOverlay />
-          <ScannerStatus />
-          <Navigation />
-          <main className="main-content">
-            {/* Library list view */}
-            <TabContent paths={['/', '/library']} className="no-padding">
-              <Library />
-            </TabContent>
+      <SearchCacheProvider>
+        <Router>
+          <NavigationTracker />
+          <div className="app">
+            <KofiOverlay />
+            <ScannerStatus />
+            <Navigation />
+            <main className="main-content">
+              {/* Library list view */}
+              <TabContent paths={['/', '/library']} className="no-padding">
+                <Library />
+              </TabContent>
 
-            {/* Game details view (persistent once opened) */}
-            <TabContent paths={['/game/']}>
-              <Routes>
-                <Route path="/game/:id" element={<GameDetails />} />
-                {/* When NOT on a game route but the tab is still technically mounted (e.g. at /settings), 
+              {/* Game details view (persistent once opened) */}
+              <TabContent paths={['/game/']}>
+                <Routes>
+                  <Route path="/game/:id" element={<GameDetails />} />
+                  {/* When NOT on a game route but the tab is still technically mounted (e.g. at /settings), 
                     Routes will render nothing. However, since the TabContent is display:none, it's fine.
                     BUT if we want "Keep-Alive" for the SPECIFIC game we were viewing, 
                     we'd need a way to keep the Route matching even if the URL changed. 
                     React Router doesn't natively support this easily without a custom Switch.
                 */}
+                </Routes>
+              </TabContent>
+
+              <TabContent paths={['/status']}>
+                <Status />
+              </TabContent>
+              <TabContent paths={['/user']}>
+                <User />
+              </TabContent>
+              <TabContent paths={['/settings']}>
+                <Settings />
+              </TabContent>
+              <TabContent paths={['/about']}>
+                <About />
+              </TabContent>
+
+              <Routes>
+                {/* Other dynamic routes could go here */}
+                <Route path="*" element={null} />
               </Routes>
-            </TabContent>
-
-            <TabContent paths={['/status']}>
-              <Status />
-            </TabContent>
-            <TabContent paths={['/user']}>
-              <User />
-            </TabContent>
-            <TabContent paths={['/settings']}>
-              <Settings />
-            </TabContent>
-            <TabContent paths={['/about']}>
-              <About />
-            </TabContent>
-
-            <Routes>
-              {/* Other dynamic routes could go here */}
-              <Route path="*" element={null} />
-            </Routes>
-          </main>
-        </div>
-      </Router>
+            </main>
+          </div>
+        </Router>
+      </SearchCacheProvider>
     </UIProvider>
   );
 }

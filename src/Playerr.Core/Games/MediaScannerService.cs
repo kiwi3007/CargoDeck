@@ -43,15 +43,14 @@ namespace Playerr.Core.Games
             "xatab", "codex", "skidrow", "reloaded", "razor1911", "plaza", "cpy", "dlpsgame",
             "nsw2u", "egold", "quacked", "venom", "inc", "rpgonly", "gamesfull", "bitsearch",
             "www", "app", "com", "net", "org", "iso", "bin", "decepticon", "empress", 
-            "tenoke", "rune", "goldberg", "ali213", "p2p", "fairlight",
+            "tenoke", "rune", "goldberg", "ali213", "p2p", "fairlight", "flt", "prophet", "kaos", "elamigos",
             "xyz", "dot", "v0", "v196608", "v65536", "v131072", "dlc", "update", "upd", "collection", "anniversary", "edition",
-            "us", "eu", "es", "uk", "asia", "cn", "ru", "gb", "mb", "kb", "romslab", "nsw2u", "madloader", "rpgonly", "usa", "eur", "jp", "region",
+            "us", "eu", "es", "uk", "asia", "cn", "ru", "gb", "mb", "kb", "romslab", "madloader", "usa", "eur", "jp", "region",
             "eng", "english", "spa", "spanish", "fra", "french", "ger", "german", "ita", "italian", "kor", "korean", "chi", "chinese", "tw", "hk",
-            "repack", "fitgirl", "dodi", "xatab", "codex", "skidrow", "reloaded", "plaza", "cpy", "dlpsgame", "egold", "quacked", "venom", "inc",
-            "rpgarchive", "gamesmega", "gamesfull", "bitsearch", "nxdump", "nx", "switch", "game",
-            "opoisso893", "cyb1k", "dlpsgame", "pppwn", "pppwngo", "goldhen", "ps4", "ps5", "playstation", "sony",
-            "definitive", "edition", "collection", "remastered", "remake",
-            "nsp", "xci", "nsz", "xcz", "vpk", "pkg", "iso", "bin", "nla", "zip", "rar", "7z"
+            "rpgarchive", "gamesmega", "nxdump", "nx", "switch", "game",
+            "opoisso893", "cyb1k", "pppwn", "pppwngo", "goldhen", "ps4", "ps5", "playstation", "sony",
+            "definitive", "remastered", "remake",
+            "nsp", "xci", "nsz", "xcz", "vpk", "pkg", "nla", "zip", "rar", "7z"
         };
         public event Action<int>? OnScanFinished;
         public event Action? OnBatchFinished;
@@ -61,7 +60,7 @@ namespace Playerr.Core.Games
         {
             ["nintendo_switch"] = new() { Extensions = new[] { ".nsp", ".xci", ".nsz", ".xcz" } },
             ["ps4"] = new() { Extensions = new[] { ".pkg" } }, // Removed .bin to avoid exploits/payloads
-            ["pc_windows"] = new() { Extensions = new[] { ".iso", ".exe", ".zip", ".rar", ".7z", ".setup" }, IsFolderMode = true },
+            ["pc_windows"] = new() { Extensions = new[] { ".iso", ".exe", ".setup" }, IsFolderMode = true },
             ["ps3"] = new() { Extensions = new[] { ".iso", ".pkg", ".bin" }, IsFolderMode = true },
             ["retro_emulation"] = new() { Extensions = new[] { 
                 ".iso", ".bin", ".cue", ".chd", ".rvz", ".wbfs", // Disk based
@@ -82,7 +81,10 @@ namespace Playerr.Core.Games
             .Where(r => r.Extensions != null)
             .SelectMany(r => r.Extensions)
             .Distinct()
-            .Where(ext => !ext.Equals(".bin", StringComparison.OrdinalIgnoreCase)) // Exclude .bin from Auto-Scan (too generic, matches system files)
+            .Where(ext => !ext.Equals(".bin", StringComparison.OrdinalIgnoreCase) && // Exclude .bin
+                          !ext.Equals(".rar", StringComparison.OrdinalIgnoreCase) && // Exclude archives from Auto-Scan (v0.4.7 User Feedback)
+                          !ext.Equals(".zip", StringComparison.OrdinalIgnoreCase) &&
+                          !ext.Equals(".7z", StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
         // 2. Exclusion Rules (Global Blacklist)
@@ -117,7 +119,9 @@ namespace Playerr.Core.Games
             "shadercache", "compatdata", "depotcache", ".steam", ".local", ".cache", "temp", "tmp", "node_modules",
             "windows", "system32", "syswow64", "Microsoft.NET", "Framework", "Framework64", "Internet Explorer", "Accessories", "Windows NT", "INF", "WinSxS", "SysARM32", "Sysnative", "command",
             "retroarch", "autoconfig", "assets", "overlays", "database", "cursors", "cheats", "filters", "libretro", "thumbnails", "config", "remaps", "playlists", "cores", "screenshots",
-            "z:", "d:"
+            "retroarch", "autoconfig", "assets", "overlays", "database", "cursors", "cheats", "filters", "libretro", "thumbnails", "config", "remaps", "playlists", "cores", "screenshots",
+            "z:", "d:",
+            "Bonus", "Extras", "Soundtrack", "Artbook", "Manuals" // Explicit user requested blacklist for extra content
         };
 
         private static readonly HashSet<string> _containerNames = new(StringComparer.OrdinalIgnoreCase)
@@ -389,6 +393,16 @@ namespace Playerr.Core.Games
                     if (allowedExtensions != null && !allowedExtensions.Contains(file.Extension, StringComparer.OrdinalIgnoreCase)) continue;
                     if (_globalBlacklist.Contains(file.Extension)) continue;
 
+                    // SAFETY: Never treat archives as executables in File Mode or FindBestExecutable unless assumed Retro?
+                    // Actually, for Retro, the extension MUST be in allowedExtensions.
+                    // If allowedExtensions is NULL (Default mode), we MUST exclude archives to prevent "bonus.rar" from becoming the game exe.
+                    if (allowedExtensions == null && (file.Extension.Equals(".rar", StringComparison.OrdinalIgnoreCase) || 
+                                                      file.Extension.Equals(".zip", StringComparison.OrdinalIgnoreCase) || 
+                                                      file.Extension.Equals(".7z", StringComparison.OrdinalIgnoreCase)))
+                    {
+                         continue;
+                    }
+
                     int score = 0;
                     bool isInstaller = false;
                     string name = Path.GetFileNameWithoutExtension(file.Name).ToLowerInvariant();
@@ -413,24 +427,58 @@ namespace Playerr.Core.Games
                         score += 50;
                     }
 
-                    // 4. Installer/Config Penalty (-50) (TAREA 3)
+                    // 4. Installer/Config Penalty (-50) OR Bonus (+100) (TAREA 3 refined)
+                    // Check if current folder or parent indicates a Repack/Installer source
+                    bool isInstallerFriendlyContext = rootFolderName.Contains("repack") || 
+                                                      rootFolderName.Contains("installer") || 
+                                                      rootFolderName.Contains("setup") ||
+                                                      rootFolderName.Contains("codex") || 
+                                                      rootFolderName.Contains("plaza") || 
+                                                      rootFolderName.Contains("rune") || 
+                                                      rootFolderName.Contains("kaos") || 
+                                                      rootFolderName.Contains("fitgirl") || 
+                                                      rootFolderName.Contains("dodi") || 
+                                                      rootFolderName.Contains("elamigos") || 
+                                                      rootFolderName.Contains("gog") ||
+                                                      rootFolderName.Contains("flt") ||
+                                                      rootFolderName.Contains("tenoke") ||
+                                                      rootFolderName.Contains("skidrow");
+
                     if (name.Contains("launch") || name.Contains("settings") || name.Contains("server") || 
-                        name.Contains("config") || name.Contains("setup") || name.Contains("install"))
+                        name.Contains("config") || name.Contains("setup") || name.Contains("install") || name.Contains("update"))
                     {
-                        score -= 50;
-                        if (name.Contains("setup") || name.Contains("install")) isInstaller = true;
+                        if ((name.Contains("setup") || name.Contains("install") || name.Contains("update")) && isInstallerFriendlyContext)
+                        {
+                            // In a Repack context, the installer IS the game
+                            score += 100;
+                            isInstaller = true;
+                        }
+                        else
+                        {
+                            score -= 50;
+                            if (name.Contains("setup") || name.Contains("install")) isInstaller = true;
+                        }
                     }
 
                     // 5. Folder Location Bonus
-                    if (folderName == "binaries" || folderName == "win64" || folderName == "release" || folderName == "shipping" || folderName == "retail") score += 25;
-                    
-                    // 6. Native Linux executable bonus (on Linux systems)
-                    if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux) && string.IsNullOrEmpty(file.Extension))
-                    {
-                        score += 10;
-                    }
-                    
-                    candidates.Add((file, score, isInstaller));
+            if (folderName == "binaries" || folderName == "win64" || folderName == "release" || folderName == "shipping" || folderName == "retail") score += 25;
+            
+            // 6. Native Linux executable bonus (on Linux systems)
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux) && string.IsNullOrEmpty(file.Extension))
+            {
+                score += 10;
+            }
+
+            // 7. Archive Penalty (v0.4.7 Fix): Penalize archives massively ALWAYS
+            // This prevents "bonus.rar" from winning against "setup.exe"
+            if (file.Extension.Equals(".rar", StringComparison.OrdinalIgnoreCase) || 
+                file.Extension.Equals(".zip", StringComparison.OrdinalIgnoreCase) || 
+                file.Extension.Equals(".7z", StringComparison.OrdinalIgnoreCase))
+            {
+                score -= 5000; // Nuclear Option: Never select an archive in Folder Mode unless it's the ONLY thing there (and score > 0?? No, score will be negative)
+            }
+            
+            candidates.Add((file, score, isInstaller));
                 }
 
                 if (!candidates.Any()) return (null, false);
@@ -1026,7 +1074,9 @@ namespace Playerr.Core.Games
                         // Check if file is blacklisted in File Mode (re-check with context if needed)
                         if (IsBlacklistedFile(fileName, candidate.IsExternal)) continue;
 
-                        isInstaller = name.StartsWith("setup", StringComparison.OrdinalIgnoreCase) || name.StartsWith("install", StringComparison.OrdinalIgnoreCase);
+                        isInstaller = name.Contains("setup", StringComparison.OrdinalIgnoreCase) || 
+                                      name.Contains("install", StringComparison.OrdinalIgnoreCase) ||
+                                      name.Contains("deploy", StringComparison.OrdinalIgnoreCase);
                     }
 
                     if (await ProcessPotentialGame(candidate.Title, existingGames, metadataService, candidate.Path, candidate.PlatformKey, candidate.Serial, exePath, isInstaller, candidate.IsExternal))
@@ -1053,6 +1103,87 @@ namespace Playerr.Core.Games
             var existingByTitle = existingGames.FirstOrDefault(g => g.Title.Equals(gameTitle, StringComparison.OrdinalIgnoreCase));
             if (existingByTitle != null)
             {
+                if (localPath != null)
+                {
+                     // SAFETY OVERRIDE: If the filename screams "Installer", force the issue.
+                     var fileName = Path.GetFileName(localPath).ToLowerInvariant();
+                     if (fileName.Contains("install") || fileName.Contains("setup") || fileName.Contains("update"))
+                     {
+                          if (!isInstaller) Log($"[ProccessGame] FORCE OVERRIDE: Marking '{fileName}' as Installer due to strong naming match.");
+                          isInstaller = true;
+                     }
+                }
+
+                // VERSION CONTROL: If path is different, treating as Alternate Version (GameFile)
+                if (!string.Equals(existingByTitle.Path, localPath, StringComparison.OrdinalIgnoreCase))
+                {
+                     // Check if we already have this file/version recorded
+                     if (existingByTitle.GameFiles == null) existingByTitle.GameFiles = new List<GameFile>();
+                     
+                     var existingFile = existingByTitle.GameFiles.FirstOrDefault(gf => string.Equals(gf.RelativePath, localPath, StringComparison.OrdinalIgnoreCase));
+             
+             if (existingFile != null)
+             {
+                 Log($"[Scanner] Updating existing version: {localPath}");
+                 // Update properties in case logic changed (e.g. Quality correction)
+                 existingFile.Quality = isInstaller ? "Installer" : "Playable";
+                 existingFile.ReleaseGroup = localPath != null ? new DirectoryInfo(localPath).Name : "Unknown";
+                 // We don't save individually here because GameFiles are owned by Game? 
+                 // Actually they are likely in a separate table. We should save.
+                 // But since we don't have UpdateGameFileAsync, we might need to remove and re-add OR use UpdateAsync on the parent if configured to cascade.
+                 // For safety/speed in this context, let's assume EF Core tracking might not be active if we didn't fetch with tracking in this scope?
+                 // We fetched simple list.
+                 
+                 // Better approach: Since we injected `_gameRepository`, let's rely on it.
+                 // But `IGameRepository` usually doesn't have `UpdateGameFile`.
+                 // Let's defer to a specialized update or just skip for now and tell user to delete?
+                 // No, automatic fix is better.
+                 
+                 // Create a direct update via SQL or just re-add? Re-add duplicates.
+                 // Let's just create a new one and let EF handle it? No.
+                 
+                 // For now, let's just Log. The user might need to remove the game to fix it perfectly if we don't implement full update.
+                 // WAIT: We can use `_gameRepository.UpdateAsync(existingByTitle.Id, existingByTitle)`? 
+                 // If we modified the object in memory, UpdateAsync should persist it if it attaches.
+                 
+                 // Let's try to update the in-memory object and save via specific internal call.
+                 existingFile.Quality = isInstaller ? "Installer" : "Playable";
+                 
+                 try 
+                 {
+                     // OPTIMIZATION: Prevent EF Core from attaching the entire Game graph
+                     existingFile.Game = null; 
+                     
+                     // FIX: Use specific method for GameFile to ensure it saves!
+                     await _gameRepository.UpdateGameFileAsync(existingFile);
+                     // Removed UpdateAsync(parent) to avoid DB locking/redundancy
+                 }
+                 catch (Exception ex)
+                 {
+                     Log($"[Scanner] Error updating GameFile persistence: {ex.Message}");
+                 }
+                 
+                 return true;
+             }
+
+                     Log($"[Scanner] Found Alternate Version for '{gameTitle}': {localPath}");
+                     
+                     // Create GameFile (Version)
+                     var versionFile = new GameFile
+                     {
+                          GameId = existingByTitle.Id,
+                          RelativePath = localPath ?? "", // Storing Absolute Path
+                          DateAdded = DateTime.UtcNow,
+                          ReleaseGroup = localPath != null ? new DirectoryInfo(localPath).Name : "Unknown",
+                          Quality = isInstaller ? "Installer" : "Playable",
+                          Size = (executablePath != null && File.Exists(executablePath)) ? new FileInfo(executablePath).Length : 0
+                     };
+                     
+                     await _gameRepository.AddGameFileAsync(versionFile);
+                     existingByTitle.GameFiles.Add(versionFile); 
+                     return true;
+                }
+
                 // If the existing game has NO metadata (offline fallback), try to search again with the new cleaner title!
                 if (!existingByTitle.IgdbId.HasValue || existingByTitle.IgdbId == 0)
                 {

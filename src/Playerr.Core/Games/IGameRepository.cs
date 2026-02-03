@@ -14,5 +14,7 @@ namespace Playerr.Core.Games
         Task DeleteAllAsync();
         Task<int?> GetPlatformIdBySlugAsync(string slug);
         Task<HashSet<int>> GetIgdbIdsAsync();
+        Task AddGameFileAsync(GameFile gameFile);
+        Task UpdateGameFileAsync(GameFile gameFile);
     }
 }

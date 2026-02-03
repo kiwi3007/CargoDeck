@@ -7,7 +7,7 @@ namespace Playerr.Core.Launcher
 {
     public interface ILauncherService
     {
-        Task LaunchGameAsync(Game game);
+        Task LaunchGameAsync(Game game, string? overridePath = null);
     }
 
     public class LauncherService : ILauncherService
@@ -19,7 +19,7 @@ namespace Playerr.Core.Launcher
             _strategies = strategies;
         }
 
-        public async Task LaunchGameAsync(Game game)
+        public async Task LaunchGameAsync(Game game, string? overridePath = null)
         {
             var strategy = _strategies.FirstOrDefault(s => s.IsSupported(game));
 
@@ -29,8 +29,8 @@ namespace Playerr.Core.Launcher
                 throw new System.Exception("No suitable launch strategy found for this game.");
             }
 
-            System.Console.WriteLine($"[LauncherService] Launching game '{game.Title}' using strategy: {strategy.GetType().Name}");
-            await strategy.LaunchAsync(game);
+            System.Console.WriteLine($"[LauncherService] Launching game '{game.Title}' using strategy: {strategy.GetType().Name} (OverridePath: {overridePath})");
+            await strategy.LaunchAsync(game, overridePath);
         }
     }
 }

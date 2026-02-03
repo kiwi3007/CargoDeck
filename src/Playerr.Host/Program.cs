@@ -23,6 +23,7 @@ using System.Linq;
 using Photino.NET;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Playerr.Host
 {
@@ -78,6 +79,10 @@ namespace Playerr.Host
                 });
             // Add services
             System.Console.WriteLine("DEBUG: Registering Services...");
+            
+            builder.Logging.ClearProviders();
+            builder.Logging.AddProvider(new ProgramLoggerProvider());
+            
             builder.Services.AddControllers()
                 .AddApplicationPart(typeof(Playerr.Api.V3.Games.GameController).Assembly)
                 .AddNewtonsoftJson(options => {
@@ -819,6 +824,25 @@ namespace Playerr.Host
                 // Ensure the console stays open if run manually
                 Console.WriteLine("Press any key to exit...");
                 try { Console.ReadKey(); } catch { }
+            }
+        }
+
+        public class ProgramLoggerProvider : ILoggerProvider
+        {
+            public ILogger CreateLogger(string categoryName) => new ProgramLogger(categoryName);
+            public void Dispose() { }
+        }
+
+        public class ProgramLogger : ILogger
+        {
+            private readonly string _category;
+            public ProgramLogger(string category) => _category = category;
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => true;
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                var msg = formatter(state, exception);
+                Program.Log($"[{_category}] {msg}");
             }
         }
     }
