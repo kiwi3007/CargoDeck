@@ -2,7 +2,7 @@
 set -e
 
 # Define version
-VERSION="0.4.7"
+VERSION="0.4.8"
 OUTPUT_DIR="build_artifacts"
 
 echo "=================================="
@@ -36,8 +36,8 @@ cd $OUTPUT_DIR
 zip -r -q "Playerr-Windows-x64.zip" "win-x64"
 cd ..
 
-echo "    Generating Windows Installer (NSIS)..."
-makensis installer.nsi
+    echo "    Generating Windows Installer (NSIS) via Docker..."
+    docker run --rm -v "$(pwd):/work" -w /work debian:stable-slim bash -c "apt-get update && apt-get install -y nsis && makensis installer.nsi"
 
 # Linux x64
 echo " -> Building for Linux (x64)..."

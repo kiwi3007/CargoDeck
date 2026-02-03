@@ -1432,7 +1432,10 @@ const Settings: React.FC = () => {
                       onChange={(e) => setClientForm({ ...clientForm, urlBase: e.target.value })}
                       placeholder={t('urlBasePlaceholder')}
                     />
-                    <small>{t('optionalRecommended')}</small>
+                    <small>
+                      {t('optionalRecommended')}
+                      {clientForm.implementation === 'rTorrent' && ' (Sugerencia: /plugins/httprpc/action.php)'}
+                    </small>
                   </div>
                 )}
 

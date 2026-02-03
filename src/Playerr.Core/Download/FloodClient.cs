@@ -21,7 +21,7 @@ namespace Playerr.Core.Download
         public FloodClient(string host, int port, string username, string password, string? urlBase = null)
         {
             _httpClient = new HttpClient();
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "Playerr/0.4.7");
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "Playerr/0.4.8");
             
             if (!string.IsNullOrEmpty(username))
             {

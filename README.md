@@ -142,7 +142,7 @@ If you want to modify the code or build the image locally instead of pulling it 
 
 ## Roadmap
 
-### Phase 1: Foundation (v0.1.0 - v0.1.2)
+### Phase 1: Foundation (v0.1.0 - v0.4.7)
 - [x] **Core PVR Functionality:** Automated search and categorization engine.
 - [x] **NZB Protocol Support:** Native integration for SABnzbd and NZBGet.
 - [x] **Multi-Platform Deployment:** Official builds for Windows, macOS (Apple & Intel), and Linux.
