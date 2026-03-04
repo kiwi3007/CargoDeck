@@ -1,0 +1,15 @@
+services:
+  playerr:
+    image: ghcr.io/kiwi3007/playerr:latest
+    container_name: playerr
+    restart: unless-stopped
+    ports:
+      - "2727:2727"
+    volumes:
+      - /mnt/user/appdata/playerr:/config
+      - /mnt/user/Games:/media/games          # adjust to your game library path
+      - /mnt/user/Downloads:/media/downloads  # adjust to your downloads path
+    environment:
+      - PLAYERR_PORT=2727
+      - PLAYERR_IP=0.0.0.0
+      - PLAYERR_CONFIG_DIR=/

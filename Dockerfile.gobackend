@@ -26,8 +26,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 FROM alpine:3.20
 WORKDIR /app
 
-# ca-certificates for HTTPS calls to IGDB/Steam/etc.
-RUN apk add --no-cache ca-certificates
+# ca-certificates for HTTPS, unrar/p7zip for post-processor archive extraction
+RUN apk add --no-cache ca-certificates p7zip
 
 COPY --from=backend /app/playerr /app/playerr
 COPY --from=frontend /src/_output/UI /app/_output/UI
