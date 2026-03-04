@@ -1,0 +1,43 @@
+# Playerr Go backend Dockerfile — ~15MB runtime vs ~200MB .NET aspnet image
+# Stage 1: Build Frontend
+FROM node:18-alpine AS frontend
+WORKDIR /src
+COPY package.json package-lock.json ./
+RUN npm install
+COPY frontend/ ./frontend/
+COPY tsconfig.json ./
+COPY frontend/build/webpack.config.js ./frontend/build/
+RUN npm run build
+
+# Stage 2: Build Go Backend (static binary, no CGo)
+FROM golang:1.24-alpine AS backend
+WORKDIR /src
+# Cache module downloads
+COPY go.mod go.sum ./
+RUN go mod download
+# Build
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w" \
+    -o /app/playerr \
+    .
+
+# Stage 3: Minimal runtime image (~15MB)
+FROM alpine:3.20
+WORKDIR /app
+
+# ca-certificates for HTTPS calls to IGDB/Steam/etc.
+RUN apk add --no-cache ca-certificates
+
+COPY --from=backend /app/playerr /app/playerr
+COPY --from=frontend /src/_output/UI /app/_output/UI
+
+RUN mkdir -p /config /media
+VOLUME /config
+
+EXPOSE 2727
+ENV PLAYERR_PORT=2727
+ENV PLAYERR_IP=0.0.0.0
+ENV PLAYERR_CONFIG_DIR=/
+
+ENTRYPOINT ["/app/playerr"]

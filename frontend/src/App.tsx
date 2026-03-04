@@ -35,7 +35,39 @@ function NavigationTracker() {
   return null;
 }
 
+function useSSE() {
+  useEffect(() => {
+    // Connect to Go backend SSE stream for real-time library updates
+    let es: EventSource | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      try {
+        es = new EventSource('/api/v3/events');
+        es.addEventListener('LIBRARY_UPDATED', () => {
+          window.dispatchEvent(new Event('LIBRARY_UPDATED_EVENT'));
+        });
+        es.onerror = () => {
+          es?.close();
+          // Reconnect after 5 seconds on error
+          reconnectTimeout = setTimeout(connect, 5000);
+        };
+      } catch {
+        // SSE not supported or server not available — fall back to polling
+      }
+    };
+
+    connect();
+
+    return () => {
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      es?.close();
+    };
+  }, []);
+}
+
 function App() {
+  useSSE();
   return (
     <UIProvider>
       <SearchCacheProvider>
