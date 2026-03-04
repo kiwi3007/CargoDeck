@@ -1,9 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Playerr.Host\Playerr.Host.csproj" />
-  </ItemGroup>
-</Project>
