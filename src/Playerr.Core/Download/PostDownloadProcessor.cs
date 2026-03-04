@@ -48,7 +48,7 @@ namespace Playerr.Core.Download
             {
                 if (!File.Exists(download.DownloadPath)) // Check file existence too
                 {
-                    Console.WriteLine($"[PostDownload] Skip: Path not found or empty for {download.Name}");
+                    Console.WriteLine($"[PostDownload] Skip: Path not found or empty for {download.Name}. Tried: '{download.DownloadPath}'");
                     return;
                 }
             }

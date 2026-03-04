@@ -40,7 +40,7 @@ namespace Playerr.Host
         public static void Log(string message)
         {
             var logLine = $"[{DateTime.Now:HH:mm:ss}] {message}";
-            Console.WriteLine(logLine);
+            Console.Error.WriteLine(logLine);
             if (_logPath != null)
             {
                 try 
@@ -220,11 +220,15 @@ namespace Playerr.Host
             // This is crucial for desktop apps where we can't guarantee a specific port is free
             // CHECK IF RUNNING IN CONTAINER OR HEADLESS
             var envVar = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
-            var isHeadless = args.Contains("--headless") || 
-                             envVar == "true" || 
+            var isHeadless = args.Contains("--headless") ||
+                             envVar == "true" ||
                              builder.Configuration.GetValue<bool>("HeadlessMode");
-            
-            Console.WriteLine($"[Startup] Checking Headless Mode: Args={string.Join(",", args)}, Config={builder.Configuration.GetValue<bool>("HeadlessMode")}, EnvVar={envVar}, Result={isHeadless}");
+
+            if (isHeadless)
+            {
+                // Silence raw Console.WriteLine noise from modules; Program.Log uses stderr
+                Console.SetOut(TextWriter.Null);
+            }
 
             if (!isHeadless)
             {
@@ -558,11 +562,6 @@ namespace Playerr.Host
             app.UseRouting();
             app.UseAuthorization();
 
-            app.Use(async (context, next) =>
-            {
-                Log($"[HTTP] {context.Request.Method} {context.Request.Path}");
-                await next();
-            });
 
             app.MapControllers();
 
@@ -836,13 +835,16 @@ namespace Playerr.Host
         public class ProgramLogger : ILogger
         {
             private readonly string _category;
+            private static readonly LogLevel _minLevel = LogLevel.Warning;
+
             public ProgramLogger(string category) => _category = category;
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-            public bool IsEnabled(LogLevel logLevel) => true;
+            public bool IsEnabled(LogLevel logLevel) => logLevel >= _minLevel;
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {
+                if (!IsEnabled(logLevel)) return;
                 var msg = formatter(state, exception);
-                Program.Log($"[{_category}] {msg}");
+                Program.Log($"[{logLevel}] [{_category}] {msg}");
             }
         }
     }

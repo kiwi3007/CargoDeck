@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Playerr.Core.Games;
@@ -11,19 +12,50 @@ namespace Playerr.Core.Launcher
     {
         public bool IsSupported(Game game)
         {
-            // Support if we have an explicit ExecutablePath file
-            return !string.IsNullOrEmpty(game.ExecutablePath) && File.Exists(game.ExecutablePath);
+            if (!string.IsNullOrEmpty(game.ExecutablePath) && File.Exists(game.ExecutablePath))
+                return true;
+
+            var dirPath = !string.IsNullOrEmpty(game.ExecutablePath) ? game.ExecutablePath : game.Path;
+            if (!string.IsNullOrEmpty(dirPath) && Directory.Exists(dirPath))
+                return FindExecutable(dirPath) != null;
+
+            return false;
+        }
+
+        private static string? FindExecutable(string directory)
+        {
+            var skipPatterns = new[] { "redist", "setup", "install", "uninstall", "crash", "dxsetup", "vcredist", "directx" };
+
+            var exes = Directory.GetFiles(directory, "*.exe", SearchOption.TopDirectoryOnly);
+            if (exes.Length == 0)
+                exes = Directory.GetFiles(directory, "*.exe", SearchOption.AllDirectories);
+
+            var filtered = exes.Where(e => !skipPatterns.Any(p =>
+                Path.GetFileNameWithoutExtension(e).Contains(p, StringComparison.OrdinalIgnoreCase))).ToArray();
+
+            if (filtered.Length > 0) exes = filtered;
+
+            return exes.OrderByDescending(f => new FileInfo(f).Length).FirstOrDefault();
         }
 
         public Task LaunchAsync(Game game, string? overridePath = null)
         {
-            if (string.IsNullOrEmpty(game.ExecutablePath))
+            var path = !string.IsNullOrEmpty(overridePath) ? overridePath
+                     : !string.IsNullOrEmpty(game.ExecutablePath) ? game.ExecutablePath
+                     : game.Path;
+
+            if (string.IsNullOrEmpty(path)) throw new InvalidOperationException("No executable path provided.");
+
+            // Resolve directory to actual executable
+            if (Directory.Exists(path) && !File.Exists(path))
             {
-                throw new InvalidOperationException("Game executable path is not set.");
+                var resolved = FindExecutable(path);
+                if (resolved == null)
+                    throw new InvalidOperationException($"Could not find an executable in: {path}");
+                System.Console.WriteLine($"[NativeLaunchStrategy] Resolved directory to executable: {resolved}");
+                path = resolved;
             }
 
-            var path = !string.IsNullOrEmpty(overridePath) ? overridePath : game.ExecutablePath;
-            if (string.IsNullOrEmpty(path)) throw new InvalidOperationException("No executable path provided.");
             var directory = Path.GetDirectoryName(path);
             
             System.Console.WriteLine($"[NativeLaunchStrategy] Launching: {path}");
@@ -53,6 +85,7 @@ namespace Playerr.Core.Launcher
                 {
                     startInfo.FileName = "wine";
                     startInfo.Arguments = $"\"{path}\"";
+                    startInfo.Environment["WINEDEBUG"] = "-all";
                 }
                 else
                 {

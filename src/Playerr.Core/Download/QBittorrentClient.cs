@@ -222,9 +222,9 @@ namespace Playerr.Core.Download
                     Category = torrent.Category,
                     DownloadPath = !string.IsNullOrEmpty(torrent.Content_Path)
                         ? torrent.Content_Path
-                        : (!string.IsNullOrEmpty(torrent.Save_Path) 
-                            ? System.IO.Path.Combine(torrent.Save_Path, torrent.Name) 
-                            : null)
+                        : (!string.IsNullOrEmpty(torrent.Save_Path)
+                            ? System.IO.Path.Combine(torrent.Save_Path, torrent.Name)
+                            : string.Empty)
                 });
             }
 

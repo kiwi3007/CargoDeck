@@ -541,7 +541,7 @@ namespace Playerr.Api.V3.Games
                 
                 // GOG / Inno Setup Detection
                 var fileName = System.IO.Path.GetFileName(path).ToLower();
-                var isGog = fileName.StartsWith("setup_") || fileName.StartsWith("setup.exe");
+                var isGog = fileName.StartsWith("setup_");
                 var silentArgs = "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-";
 
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -580,12 +580,13 @@ namespace Playerr.Api.V3.Games
                     
                     startInfo.FileName = "wine";
                     startInfo.WorkingDirectory = System.IO.Path.GetDirectoryName(path);
-                    
+                    startInfo.Environment["WINEDEBUG"] = "-all";
+
                     var wineArgs = $"\"{path}\"";
                     if (isGog) wineArgs += $" {silentArgs}";
-                    
+
                     startInfo.Arguments = wineArgs;
-                    startInfo.UseShellExecute = false; 
+                    startInfo.UseShellExecute = false;
                 }
 
                 System.Diagnostics.Process.Start(startInfo);

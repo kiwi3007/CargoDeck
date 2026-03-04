@@ -22,7 +22,7 @@ const Status: React.FC = () => {
 
     const fetchQueue = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:5002/api/v3/downloadclient/queue');
+            const response = await fetch('/api/v3/downloadclient/queue');
             if (response.ok) {
                 const data = await response.json();
                 setDownloads(data);
@@ -43,7 +43,7 @@ const Status: React.FC = () => {
     const handlePause = async (clientId: number, downloadId: string, e: React.MouseEvent) => {
         e.stopPropagation();
         try {
-            await fetch(`http://127.0.0.1:5002/api/v3/downloadclient/queue/${clientId}/${encodeURIComponent(downloadId)}/pause`, {
+            await fetch(`/api/v3/downloadclient/queue/${clientId}/${encodeURIComponent(downloadId)}/pause`, {
                 method: 'POST'
             });
             // Optimistic update
@@ -58,7 +58,7 @@ const Status: React.FC = () => {
     const handleResume = async (clientId: number, downloadId: string, e: React.MouseEvent) => {
         e.stopPropagation();
         try {
-            await fetch(`http://127.0.0.1:5002/api/v3/downloadclient/queue/${clientId}/${encodeURIComponent(downloadId)}/resume`, {
+            await fetch(`/api/v3/downloadclient/queue/${clientId}/${encodeURIComponent(downloadId)}/resume`, {
                 method: 'POST'
             });
             // Optimistic update
@@ -79,7 +79,7 @@ const Status: React.FC = () => {
         if (!deleteCandidate) return;
 
         try {
-            const response = await fetch(`http://127.0.0.1:5002/api/v3/downloadclient/queue/${deleteCandidate.clientId}/${encodeURIComponent(deleteCandidate.id)}`, {
+            const response = await fetch(`/api/v3/downloadclient/queue/${deleteCandidate.clientId}/${encodeURIComponent(deleteCandidate.id)}`, {
                 method: 'DELETE'
             });
 

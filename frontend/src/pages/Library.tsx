@@ -107,9 +107,15 @@ const Library: React.FC = () => {
       loadGames();
     };
 
+    const handleSettingsUpdate = () => {
+      checkIgdbConfig();
+    };
+
     window.addEventListener('LIBRARY_UPDATED_EVENT', handleLibraryUpdate);
+    window.addEventListener('SETTINGS_UPDATED_EVENT', handleSettingsUpdate);
     return () => {
       window.removeEventListener('LIBRARY_UPDATED_EVENT', handleLibraryUpdate);
+      window.removeEventListener('SETTINGS_UPDATED_EVENT', handleSettingsUpdate);
     };
   }, []);
 

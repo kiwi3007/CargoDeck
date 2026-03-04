@@ -34,6 +34,7 @@ interface Game {
   path?: string;
   uninstallerPath?: string;
   downloadPath?: string;
+  executablePath?: string;
   canPlay?: boolean;
   gameFiles?: GameFile[];
 }
@@ -454,6 +455,10 @@ const GameDetails: React.FC = () => {
     }
   };
   const handleInstallClick = () => {
+    if (!game?.path && (!game?.gameFiles || game.gameFiles.length === 0) && !game?.downloadPath) {
+      setNotification({ message: t('noGameFilesFound'), type: 'error' });
+      return;
+    }
     setActionType('install');
     setShowInstallWarning(true);
   };
@@ -476,13 +481,23 @@ const GameDetails: React.FC = () => {
       // Actually, let's add all and filter later or handle in filtering.
       options.push({
         label: game.title + (tag === 'Installer' ? ' (Installer)' : ''),
-        path: game.path,
-        details: game.path,
+        path: game.executablePath || game.path,
+        details: game.executablePath || game.path,
         tag: tag
       });
     }
 
-    // 2. Alternate Versions
+    // 2. Download path (incoming, not yet installed)
+    if (!game.path && game.downloadPath) {
+      options.push({
+        label: `${game.title} (Downloaded)`,
+        path: game.downloadPath,
+        details: game.downloadPath,
+        tag: 'Installer'
+      });
+    }
+
+    // 3. Alternate Versions
     if (game.gameFiles && game.gameFiles.length > 0) {
       game.gameFiles.forEach(f => {
         options.push({

@@ -146,7 +146,16 @@ namespace Playerr.Api.V3.DownloadClients
                     if (client != null)
                     {
                         var downloads = await client.GetDownloadsAsync();
-                        foreach (var d in downloads) 
+
+                        // Filter by configured category if one is set
+                        if (!string.IsNullOrWhiteSpace(config.Category))
+                        {
+                            downloads = downloads
+                                .Where(d => string.Equals(d.Category, config.Category, StringComparison.OrdinalIgnoreCase))
+                                .ToList();
+                        }
+
+                        foreach (var d in downloads)
                         {
                             d.ClientId = config.Id;
                             d.ClientName = config.Name;

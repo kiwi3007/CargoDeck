@@ -273,6 +273,7 @@ const Settings: React.FC = () => {
         clientId: igdbClientId,
         clientSecret: igdbClientSecret,
       });
+      window.dispatchEvent(new Event('SETTINGS_UPDATED_EVENT'));
       alert(t('igdbSettingsSaved'));
     } catch (error: any) {
       console.error('Error saving IGDB settings:', error);

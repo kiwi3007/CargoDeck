@@ -109,58 +109,53 @@ namespace Playerr.Core.Download
             try
             {
                 var downloads = await client.GetDownloadsAsync();
-                _logger.LogInformation($"[DownloadMonitor] Client {config.Name} returned {downloads.Count} downloads.");
+                _logger.LogDebug($"[DownloadMonitor] Client {config.Name} returned {downloads.Count} downloads.");
+
+                // Filter by configured category if one is set
+                if (!string.IsNullOrWhiteSpace(config.Category))
+                {
+                    downloads = downloads
+                        .Where(d => string.Equals(d.Category, config.Category, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    _logger.LogDebug($"[DownloadMonitor] After category filter '{config.Category}': {downloads.Count} downloads.");
+                }
+
                 foreach (var download in downloads)
                 {
-                    _logger.LogInformation($"[DownloadMonitor] ID: {download.Id}, Name: {download.Name}, State: {download.State}, Path: {download.DownloadPath}");
-                    if (download.State == DownloadState.Completed)
+                    _logger.LogDebug($"[DownloadMonitor] {download.Name}: {download.State}");
+                    if (download.State == DownloadState.Completed && !_processedDownloadIds.Contains(download.Id))
                     {
-                        if (!_processedDownloadIds.Contains(download.Id))
+                        _logger.LogInformation($"[DownloadMonitor] New completed download: {download.Name}");
+
+                        if (!string.IsNullOrEmpty(config.RemotePathMapping) && !string.IsNullOrEmpty(config.LocalPathMapping))
                         {
-                            _logger.LogInformation($"[DownloadMonitor] Found completed download: {download.Name} at {download.DownloadPath}");
-
-                            if (!string.IsNullOrEmpty(config.RemotePathMapping) && !string.IsNullOrEmpty(config.LocalPathMapping))
+                            if (download.DownloadPath.StartsWith(config.RemotePathMapping))
                             {
-                                var remote = config.RemotePathMapping;
-                                var local = config.LocalPathMapping;
-
-                                _logger.LogInformation($"[DownloadMonitor] Checking mapping: Remote='{remote}', Local='{local}' against Path='{download.DownloadPath}'");
-
-                                if (download.DownloadPath.StartsWith(remote))
-                                {
-                                    var relative = download.DownloadPath.Substring(remote.Length).TrimStart('/', '\\');
-                                    var newPath = System.IO.Path.Combine(local, relative);
-                                    _logger.LogInformation($"[DownloadMonitor] Mapping path: {download.DownloadPath} -> {newPath}");
-                                    download.DownloadPath = newPath;
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"[DownloadMonitor] Download path '{download.DownloadPath}' does not start with remote mapping '{remote}'");
-                                }
+                                var relative = download.DownloadPath.Substring(config.RemotePathMapping.Length).TrimStart('/', '\\');
+                                var newPath = System.IO.Path.Combine(config.LocalPathMapping, relative);
+                                _logger.LogInformation($"[DownloadMonitor] Path mapped: {download.DownloadPath} -> {newPath}");
+                                download.DownloadPath = newPath;
                             }
                             else
                             {
-                                _logger.LogInformation("[DownloadMonitor] No path mapping configured for this client.");
+                                _logger.LogWarning($"[DownloadMonitor] Path '{download.DownloadPath}' does not match remote mapping '{config.RemotePathMapping}'");
                             }
+                        }
 
-                            // Start of user's requested change
-                            _logger.LogInformation($"[DownloadMonitor] Detected completed download: {download.Name}");
-                            try
-                            {
-                                _importStatus.MarkImporting(download.Id);
-                                await _postDownloadProcessor.ProcessCompletedDownloadAsync(download);
-                                _processedDownloadIds.Add(download.Id); // Changed from _processedDownloads.Add(uniqueId) to _processedDownloadIds.Add(download.Id) for correctness
-                                _logger.LogInformation($"[DownloadMonitor] Successfully processed download: {download.Name}");
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, $"[DownloadMonitor] Error processing download {download.Name}: {ex.Message}"); // Changed from Console.WriteLine to _logger.LogError
-                            }
-                            finally
-                            {
-                                _importStatus.MarkFinished(download.Id);
-                            }
-                            // End of user's requested change
+                        try
+                        {
+                            _importStatus.MarkImporting(download.Id);
+                            await _postDownloadProcessor.ProcessCompletedDownloadAsync(download);
+                            _processedDownloadIds.Add(download.Id);
+                            _logger.LogInformation($"[DownloadMonitor] Processed: {download.Name}");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, $"[DownloadMonitor] Error processing {download.Name}: {ex.Message}");
+                        }
+                        finally
+                        {
+                            _importStatus.MarkFinished(download.Id);
                         }
                     }
                 }
