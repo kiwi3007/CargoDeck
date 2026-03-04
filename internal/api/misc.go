@@ -158,6 +158,52 @@ func (h *Handler) SearchTest(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{"connected": connected, "message": msg})
 }
 
+// FilesystemList lists files and folders at the given path, including a ".." parent entry.
+// Returns [{ name, path, type }] where type is "directory", "drive", or "file".
+func (h *Handler) FilesystemList(w http.ResponseWriter, r *http.Request) {
+	root := r.URL.Query().Get("path")
+	if root == "" {
+		root = "/"
+	}
+
+	type fsEntry struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+		Type string `json:"type"`
+	}
+
+	var result []fsEntry
+
+	// Add parent entry unless already at root
+	parent := filepath.Dir(root)
+	if parent != root {
+		result = append(result, fsEntry{Name: "..", Path: parent, Type: "directory"})
+	}
+
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+
+	for _, e := range entries {
+		t := "file"
+		if e.IsDir() {
+			t = "directory"
+		}
+		result = append(result, fsEntry{
+			Name: e.Name(),
+			Path: filepath.Join(root, e.Name()),
+			Type: t,
+		})
+	}
+
+	if result == nil {
+		result = []fsEntry{}
+	}
+	jsonOK(w, result)
+}
+
 // Explore lists folders in a directory.
 func (h *Handler) Explore(w http.ResponseWriter, r *http.Request) {
 	root := r.URL.Query().Get("path")

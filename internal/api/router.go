@@ -136,6 +136,7 @@ func (h *Handler) NewRouter() http.Handler {
 	r.Get("/api/v3/explore", h.Explore)
 
 	// Filesystem
+	r.Get("/api/v3/filesystem", h.FilesystemList)
 	r.Get("/api/v3/filesystem/folder", h.ListFolder)
 
 	return r
