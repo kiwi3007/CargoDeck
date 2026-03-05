@@ -405,7 +405,7 @@ const Settings: React.FC = () => {
   const handleSaveMetadata = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('/api/v3/metadata/igdb', {
+      await axios.post('/api/v3/settings/igdb', {
         clientId: igdbClientId,
         clientSecret: igdbClientSecret,
       });
