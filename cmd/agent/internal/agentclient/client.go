@@ -458,18 +458,44 @@ func createRunScript(gameTitle, gameExe, compatData string) string {
 	return scriptPath
 }
 
-// extractHeadless extracts an archive non-interactively using 7z/7za.
+// extractHeadless extracts an archive non-interactively.
+// Tries 7z/7za first (fast, handles most formats), falls back to unrar for
+// RAR archives that 7z can't handle. Cleans up a partial extractDir on retry.
 // Returns true on success.
 func extractHeadless(archivePath, extractDir string) bool {
+	isRar := strings.HasSuffix(strings.ToLower(archivePath), ".rar")
+
+	// Try 7z/7za first (handles zip, 7z, iso, and most rar variants)
 	for _, bin := range []string{"7z", "7za"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			continue
+		}
+		// Remove partial extractDir from a previous failed attempt
+		_ = os.RemoveAll(extractDir)
 		cmd := exec.Command(bin, "x", archivePath, "-o"+extractDir, "-y", "-bd")
-		cmd.Stdin = nil // explicitly no stdin — prevents interactive prompts
+		cmd.Stdin = nil
 		cmd.Stdout = nil
 		cmd.Stderr = nil
 		if err := cmd.Run(); err == nil {
 			return true
 		}
 	}
+
+	// Fall back to unrar for RAR archives (handles RAR5, multi-part, etc.)
+	if isRar {
+		if unrar, err := exec.LookPath("unrar"); err == nil {
+			_ = os.RemoveAll(extractDir)
+			_ = os.MkdirAll(extractDir, 0755)
+			cmd := exec.Command(unrar, "x", "-y", "-idq", archivePath, extractDir+"/")
+			cmd.Stdin = nil
+			cmd.Stdout = nil
+			cmd.Stderr = nil
+			if err := cmd.Run(); err == nil {
+				return true
+			}
+		}
+	}
+
 	log.Printf("[Agent] Extraction failed for %s", archivePath)
 	return false
 }
