@@ -35,9 +35,16 @@ const Status: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchQueue();
-        const interval = setInterval(fetchQueue, 3000);
-        return () => clearInterval(interval);
+        fetchQueue(); // initial load before first SSE push
+        const handler = (e: Event) => {
+            try {
+                const data = JSON.parse((e as CustomEvent).detail);
+                setDownloads(data || []);
+                setLoading(false);
+            } catch { /* ignore */ }
+        };
+        window.addEventListener('DOWNLOAD_QUEUE_UPDATED_EVENT', handler);
+        return () => window.removeEventListener('DOWNLOAD_QUEUE_UPDATED_EVENT', handler);
     }, []);
 
     const handlePause = async (clientId: number, downloadId: string, e: React.MouseEvent) => {

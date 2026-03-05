@@ -134,20 +134,21 @@ const GameDetails: React.FC = () => {
   const [agentJobProgress, setAgentJobProgress] = useState<{ status: string; message: string; percent: number } | null>(null);
 
   useEffect(() => {
-    const fetchAgents = () =>
-      axios.get('/api/v3/agent').then(r => {
-        const list: AgentInfo[] = r.data || [];
-        setAgents(list);
-        // Restore progress from server state — survives page navigation
-        const withJob = list.find(a => a.currentJob);
-        if (withJob?.currentJob) {
-          const j = withJob.currentJob;
-          setAgentJobProgress({ status: j.status, message: j.message, percent: j.percent });
-        }
-      }).catch(() => {});
-    fetchAgents();
-    const interval = setInterval(fetchAgents, 5000);
-    return () => clearInterval(interval);
+    const applyAgentList = (list: AgentInfo[]) => {
+      setAgents(list);
+      const withJob = list.find(a => a.currentJob);
+      if (withJob?.currentJob) {
+        const j = withJob.currentJob;
+        setAgentJobProgress({ status: j.status, message: j.message, percent: j.percent });
+      }
+    };
+    // Initial fetch before first SSE push
+    axios.get('/api/v3/agent').then(r => applyAgentList(r.data || [])).catch(() => {});
+    const handler = (e: Event) => {
+      try { applyAgentList(JSON.parse((e as CustomEvent).detail) || []); } catch { /* ignore */ }
+    };
+    window.addEventListener('AGENTS_UPDATED_EVENT', handler);
+    return () => window.removeEventListener('AGENTS_UPDATED_EVENT', handler);
   }, []);
 
   useEffect(() => {

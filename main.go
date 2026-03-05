@@ -107,6 +107,7 @@ func main() {
 	defer cancel()
 
 	go dlMonitor.Run(ctx)
+	go handler.RunQueueBroadcaster(ctx)
 
 	// ---- Serve ----
 	log.Printf("[Server] Playerr backend listening on http://%s", addr)

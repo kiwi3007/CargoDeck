@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -45,6 +46,7 @@ func (h *Handler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 	})
 
 	log.Printf("[Agent] Registered: %s (%s) platform=%s paths=%d", req.Name, req.ID, req.Platform, len(req.InstallPaths))
+	h.publishAgentList()
 	jsonOK(w, map[string]string{"agentId": req.ID})
 }
 
@@ -78,6 +80,7 @@ func (h *Handler) AgentEvents(w http.ResponseWriter, r *http.Request) {
 	jobCh := h.agentJobs.GetOrCreate(agentID)
 	h.agentBroker.ServeAgent(agentID, w, r, jobCh, func() {
 		h.agentRegistry.SetOffline(agentID)
+		h.publishAgentList()
 		log.Printf("[Agent] SSE stream closed: %s", agentID)
 	})
 }
@@ -186,6 +189,7 @@ func (h *Handler) AgentProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.agentRegistry.UpdateJobProgress(prog)
+	h.publishAgentList()
 
 	data, _ := json.Marshal(prog)
 	h.broker.Publish("AGENT_PROGRESS", string(data))
@@ -199,6 +203,39 @@ func (h *Handler) AgentProgress(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetAgentSettings(w http.ResponseWriter, r *http.Request) {
 	cfg := h.cfg.LoadAgent()
 	jsonOK(w, map[string]string{"token": cfg.Token})
+}
+
+// ---- Queue broadcaster ----
+
+// RunQueueBroadcaster pushes DOWNLOAD_QUEUE_UPDATED to all browser SSE clients every 3s.
+// Run as a goroutine; stops when ctx is cancelled.
+func (h *Handler) RunQueueBroadcaster(ctx context.Context) {
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			queue := h.collectQueue()
+			if data, err := json.Marshal(queue); err == nil {
+				h.broker.Publish("DOWNLOAD_QUEUE_UPDATED", string(data))
+			}
+		}
+	}
+}
+
+// ---- Helpers ----
+
+// publishAgentList broadcasts the current agent list to all browser SSE clients.
+func (h *Handler) publishAgentList() {
+	agents := h.agentRegistry.List()
+	if agents == nil {
+		agents = []agent.AgentInfo{}
+	}
+	if data, err := json.Marshal(agents); err == nil {
+		h.broker.Publish("AGENTS_UPDATED", string(data))
+	}
 }
 
 // ---- Auth middleware for agent-only endpoints ----

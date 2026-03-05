@@ -54,6 +54,12 @@ function useSSE() {
         es.addEventListener('AGENT_JOB_QUEUED', (e: MessageEvent) => {
           window.dispatchEvent(new CustomEvent('AGENT_PROGRESS_EVENT', { detail: e.data }));
         });
+        es.addEventListener('AGENTS_UPDATED', (e: MessageEvent) => {
+          window.dispatchEvent(new CustomEvent('AGENTS_UPDATED_EVENT', { detail: e.data }));
+        });
+        es.addEventListener('DOWNLOAD_QUEUE_UPDATED', (e: MessageEvent) => {
+          window.dispatchEvent(new CustomEvent('DOWNLOAD_QUEUE_UPDATED_EVENT', { detail: e.data }));
+        });
         es.onerror = () => {
           es?.close();
           // Reconnect after 5 seconds on error

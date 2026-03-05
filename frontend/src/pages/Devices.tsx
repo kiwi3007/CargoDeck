@@ -81,28 +81,20 @@ const Devices: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let alive = true;
-    const fetchAgents = async () => {
+    // Initial fetch before first SSE push
+    axios.get<AgentInfo[]>('/api/v3/agent')
+      .then(r => { setAgents(r.data || []); setLoading(false); })
+      .catch(() => setLoading(false));
+
+    const handler = (e: Event) => {
       try {
-        const res = await axios.get<AgentInfo[]>('/api/v3/agent');
-        if (alive) setAgents(res.data || []);
-      } catch {
-        // ignore
-      } finally {
-        if (alive) setLoading(false);
-      }
+        const list = JSON.parse((e as CustomEvent).detail) as AgentInfo[];
+        setAgents(list || []);
+        setLoading(false);
+      } catch { /* ignore */ }
     };
-
-    fetchAgents();
-    const interval = setInterval(fetchAgents, 5000);
-    const handler = () => fetchAgents();
-    window.addEventListener('AGENT_PROGRESS_EVENT', handler);
-
-    return () => {
-      alive = false;
-      clearInterval(interval);
-      window.removeEventListener('AGENT_PROGRESS_EVENT', handler);
-    };
+    window.addEventListener('AGENTS_UPDATED_EVENT', handler);
+    return () => window.removeEventListener('AGENTS_UPDATED_EVENT', handler);
   }, []);
 
   const sorted = [...agents].sort((a, b) => {

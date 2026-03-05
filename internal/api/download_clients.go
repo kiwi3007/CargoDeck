@@ -90,10 +90,10 @@ func (h *Handler) DeleteDownloadClient(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) GetQueue(w http.ResponseWriter, r *http.Request) {
+// collectQueue fetches the current download queue from all enabled clients.
+func (h *Handler) collectQueue() []domain.DownloadStatus {
 	clients := h.cfg.LoadDownloadClients()
 	var all []domain.DownloadStatus
-
 	for _, cfg := range clients {
 		if !cfg.Enable {
 			continue
@@ -103,7 +103,6 @@ func (h *Handler) GetQueue(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[Queue] Unknown client %s: %v", cfg.Implementation, err)
 			continue
 		}
-
 		downloads, err := client.GetDownloads()
 		if err != nil {
 			log.Printf("[Queue] Error from %s: %v", cfg.Name, err)
@@ -116,8 +115,6 @@ func (h *Handler) GetQueue(w http.ResponseWriter, r *http.Request) {
 			})
 			continue
 		}
-
-		// Category filter
 		if cfg.Category != "" {
 			var filtered []domain.DownloadStatus
 			for _, d := range downloads {
@@ -127,7 +124,6 @@ func (h *Handler) GetQueue(w http.ResponseWriter, r *http.Request) {
 			}
 			downloads = filtered
 		}
-
 		for i := range downloads {
 			downloads[i].ClientID = cfg.ID
 			downloads[i].ClientName = cfg.Name
@@ -137,7 +133,14 @@ func (h *Handler) GetQueue(w http.ResponseWriter, r *http.Request) {
 		}
 		all = append(all, downloads...)
 	}
+	if all == nil {
+		all = []domain.DownloadStatus{}
+	}
+	return all
+}
 
+func (h *Handler) GetQueue(w http.ResponseWriter, r *http.Request) {
+	all := h.collectQueue()
 	if all == nil {
 		all = []domain.DownloadStatus{}
 	}

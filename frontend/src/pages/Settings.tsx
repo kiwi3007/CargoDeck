@@ -58,12 +58,13 @@ const AgentsTab: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const fetchAgents = () =>
-      axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
-    fetchAgents();
+    axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
     axios.get('/api/v3/settings/agent').then(r => setToken(r.data.token || '')).catch(() => {});
-    const interval = setInterval(fetchAgents, 10000);
-    return () => clearInterval(interval);
+    const handler = (e: Event) => {
+      try { setAgents(JSON.parse((e as CustomEvent).detail) || []); } catch { /* ignore */ }
+    };
+    window.addEventListener('AGENTS_UPDATED_EVENT', handler);
+    return () => window.removeEventListener('AGENTS_UPDATED_EVENT', handler);
   }, []);
 
   const tokenInputRef = React.useRef<HTMLInputElement>(null);
@@ -561,33 +562,12 @@ const Settings: React.FC = () => {
     }
   };
 
-  // Monitor Scan Status
+  // Monitor Scan Status via LIBRARY_UPDATED_EVENT (replaces 1s poll)
   useEffect(() => {
-    let intervalId: any;
-
-    if (scanning) {
-      // Poll every 1 second
-      intervalId = setInterval(async () => {
-        try {
-          const response = await axios.get('/api/v3/media/scan/status');
-          const isScanning = response.data.isScanning;
-
-          // If backend says it finished, update UI
-          if (!isScanning) {
-            setScanning(false);
-          }
-        } catch (err) {
-          console.error("Error polling scan status:", err);
-          // If poll fails repeatedly, should we stop? For now, let's keep trying or stop on definitive error?
-          // Stopping to avoid infinite error loops
-          setScanning(false);
-        }
-      }, 1000);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
+    if (!scanning) return;
+    const handler = () => setScanning(false);
+    window.addEventListener('LIBRARY_UPDATED_EVENT', handler);
+    return () => window.removeEventListener('LIBRARY_UPDATED_EVENT', handler);
   }, [scanning]);
 
 
