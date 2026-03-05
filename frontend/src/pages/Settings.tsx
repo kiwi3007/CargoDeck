@@ -62,11 +62,27 @@ const AgentsTab: React.FC = () => {
     axios.get('/api/v3/settings/agent').then(r => setToken(r.data.token || '')).catch(() => {});
   }, []);
 
+  const tokenInputRef = React.useRef<HTMLInputElement>(null);
+
   const copyToken = () => {
-    navigator.clipboard.writeText(token).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(token).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }).catch(() => fallbackCopy());
+    } else {
+      fallbackCopy();
+    }
+  };
+
+  const fallbackCopy = () => {
+    const el = tokenInputRef.current;
+    if (!el) return;
+    el.select();
+    el.setSelectionRange(0, 99999);
+    document.execCommand('copy');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const platform = navigator.platform || '';
@@ -91,6 +107,7 @@ const AgentsTab: React.FC = () => {
         </p>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <input
+            ref={tokenInputRef}
             type="text"
             readOnly
             value={token}

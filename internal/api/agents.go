@@ -172,7 +172,7 @@ func (h *Handler) AgentProgress(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetAgentSettings(w http.ResponseWriter, r *http.Request) {
 	cfg := h.cfg.LoadAgent()
-	jsonOK(w, map[string]string{"token": maskToken(cfg.Token)})
+	jsonOK(w, map[string]string{"token": cfg.Token})
 }
 
 // ---- Auth middleware for agent-only endpoints ----
