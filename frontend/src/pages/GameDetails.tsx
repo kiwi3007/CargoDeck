@@ -127,16 +127,26 @@ const GameDetails: React.FC = () => {
 
   // ---- Remote agent install ----
   interface InstallPath { path: string; label: string; freeBytes: number; }
-  interface AgentInfo { id: string; name: string; platform: string; status: string; installPaths?: InstallPath[]; }
+  interface ActiveJob { jobId: string; gameTitle: string; status: string; message: string; percent: number; }
+  interface AgentInfo { id: string; name: string; platform: string; status: string; installPaths?: InstallPath[]; currentJob?: ActiveJob; }
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [agentJobProgress, setAgentJobProgress] = useState<{ status: string; message: string; percent: number } | null>(null);
 
   useEffect(() => {
     const fetchAgents = () =>
-      axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
+      axios.get('/api/v3/agent').then(r => {
+        const list: AgentInfo[] = r.data || [];
+        setAgents(list);
+        // Restore progress from server state — survives page navigation
+        const withJob = list.find(a => a.currentJob);
+        if (withJob?.currentJob) {
+          const j = withJob.currentJob;
+          setAgentJobProgress({ status: j.status, message: j.message, percent: j.percent });
+        }
+      }).catch(() => {});
     fetchAgents();
-    const interval = setInterval(fetchAgents, 10000);
+    const interval = setInterval(fetchAgents, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -145,9 +155,6 @@ const GameDetails: React.FC = () => {
       try {
         const prog = JSON.parse((e as CustomEvent).detail);
         setAgentJobProgress({ status: prog.status, message: prog.message, percent: prog.percent });
-        if (prog.status === 'done' || prog.status === 'failed') {
-          setTimeout(() => setAgentJobProgress(null), 5000);
-        }
       } catch { /* ignore */ }
     };
     window.addEventListener('AGENT_PROGRESS_EVENT', handler);

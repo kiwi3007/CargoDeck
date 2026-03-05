@@ -202,18 +202,29 @@ func (c *Client) executeJob(job agent.InstallJob) {
 	c.reportProgress(job, agent.JobDownloading, "Downloading files...", 0)
 	total := len(job.Files)
 	for i, relPath := range job.Files {
-		pct := (i * 80) / total
-		c.reportProgress(job, agent.JobDownloading, "Downloading: "+relPath, pct)
+		fileBasePct := (i * 75) / total
+		fileEndPct := ((i + 1) * 75) / total
+		label := fmt.Sprintf("Downloading (%d/%d): %s", i+1, total, filepath.Base(relPath))
+		c.reportProgress(job, agent.JobDownloading, label, fileBasePct)
 
 		destPath := filepath.Join(downloadDir, filepath.FromSlash(relPath))
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-			c.reportProgress(job, agent.JobFailed, "mkdir failed: "+err.Error(), pct)
+			c.reportProgress(job, agent.JobFailed, "mkdir failed: "+err.Error(), fileBasePct)
 			return
 		}
 
 		dlURL := fmt.Sprintf("%s/api/v3/game/%d/file?path=%s", job.ServerURL, job.GameID, url.QueryEscape(relPath))
-		if err := c.downloadFile(dlURL, destPath); err != nil {
-			c.reportProgress(job, agent.JobFailed, "Download failed: "+err.Error(), pct)
+		if err := c.downloadFile(dlURL, destPath, func(bytesRead, totalBytes int64) {
+			var pct int
+			if totalBytes > 0 {
+				filePct := int(bytesRead * 100 / totalBytes)
+				pct = fileBasePct + (filePct*(fileEndPct-fileBasePct))/100
+			} else {
+				pct = fileBasePct + (fileEndPct-fileBasePct)/2
+			}
+			c.reportProgress(job, agent.JobDownloading, label, pct)
+		}); err != nil {
+			c.reportProgress(job, agent.JobFailed, "Download failed: "+err.Error(), fileBasePct)
 			return
 		}
 	}
@@ -541,8 +552,28 @@ func copyFileAtomic(src, dst string) error {
 	return err
 }
 
+// progressReader wraps a reader and calls onProgress at most every 2 seconds.
+type progressReader struct {
+	r          io.Reader
+	read       int64
+	total      int64
+	lastReport time.Time
+	onProgress func(read, total int64)
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.r.Read(p)
+	pr.read += int64(n)
+	if pr.onProgress != nil && time.Since(pr.lastReport) >= 2*time.Second {
+		pr.onProgress(pr.read, pr.total)
+		pr.lastReport = time.Now()
+	}
+	return n, err
+}
+
 // downloadFile downloads a URL to destPath, resuming if the file already exists.
-func (c *Client) downloadFile(url, destPath string) error {
+// onProgress is called periodically with (bytesRead, totalBytes); totalBytes may be -1.
+func (c *Client) downloadFile(rawURL, destPath string, onProgress func(read, total int64)) error {
 	tmpPath := destPath + ".tmp"
 
 	// Check for existing partial download
@@ -551,7 +582,7 @@ func (c *Client) downloadFile(url, destPath string) error {
 		offset = fi.Size()
 	}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
 		return err
 	}
@@ -574,13 +605,30 @@ func (c *Client) downloadFile(url, destPath string) error {
 	flags := os.O_CREATE | os.O_WRONLY
 	if resp.StatusCode == 206 {
 		flags |= os.O_APPEND
+		offset = 0 // already appending; don't add to read count
 	}
 	f, err := os.OpenFile(tmpPath, flags, 0644)
 	if err != nil {
 		return err
 	}
 
-	if _, err := io.Copy(f, resp.Body); err != nil {
+	// Total bytes: Content-Length of this response + already-downloaded offset
+	total := resp.ContentLength
+	if total > 0 && resp.StatusCode == 200 {
+		total += offset
+	}
+
+	var reader io.Reader = resp.Body
+	if onProgress != nil {
+		reader = &progressReader{
+			r:          resp.Body,
+			read:       offset,
+			total:      total,
+			onProgress: onProgress,
+		}
+	}
+
+	if _, err := io.Copy(f, reader); err != nil {
 		f.Close()
 		return err
 	}
