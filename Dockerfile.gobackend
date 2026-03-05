@@ -11,15 +11,16 @@ RUN npm run build
 
 # Stage 2: Build Go Backend (static binary, no CGo)
 FROM golang:1.24-alpine AS backend
-WORKDIR /src
-# Pin toolchain to avoid GOTOOLCHAIN auto-download failing in restricted environments
+WORKDIR /build
 ENV GOTOOLCHAIN=local
+ENV GO111MODULE=on
 # Cache module downloads
 COPY go.mod go.sum ./
 RUN go mod download
 # Build
 COPY . .
 RUN CGO_ENABLED=0 go build \
+    -mod=mod \
     -ldflags="-s -w" \
     -o /app/playerr \
     .
