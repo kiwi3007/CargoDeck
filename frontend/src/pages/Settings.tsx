@@ -364,7 +364,7 @@ const Settings: React.FC = () => {
       setSteamApiKey(steamResponse.data.apiKey);
       setSteamId(steamResponse.data.steamId);
 
-      const postDownloadResponse = await axios.get('/api/v3/postdownload');
+      const postDownloadResponse = await axios.get('/api/v3/settings/postdownload');
       setPostDownloadSettings(postDownloadResponse.data);
 
       const serverResponse = await axios.get('/api/v3/settings/server');
@@ -837,7 +837,7 @@ const Settings: React.FC = () => {
   const handleSavePostDownload = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('/api/v3/postdownload', postDownloadSettings);
+      await axios.post('/api/v3/settings/postdownload', postDownloadSettings);
       alert(t('postDownloadSettingsSaved'));
     } catch (error: any) {
       console.error('Error saving post-download settings:', error);

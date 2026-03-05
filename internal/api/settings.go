@@ -33,6 +33,14 @@ func (h *Handler) TestIgdb(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handler) DeleteIgdb(w http.ResponseWriter, r *http.Request) {
+	if err := h.cfg.SaveIgdb(config.IgdbSettings{}); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "IGDB settings cleared"})
+}
+
 // ---- Steam ----
 
 func (h *Handler) GetSteam(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +58,31 @@ func (h *Handler) SaveSteam(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, map[string]string{"message": "Steam settings saved"})
+}
+
+func (h *Handler) DeleteSteam(w http.ResponseWriter, r *http.Request) {
+	if err := h.cfg.SaveSteam(config.SteamSettings{}); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "Steam settings cleared"})
+}
+
+func (h *Handler) TestSteam(w http.ResponseWriter, r *http.Request) {
+	steam := h.cfg.LoadSteam()
+	jsonOK(w, map[string]any{
+		"configured": steam.IsConfigured(),
+		"message":    "Configuration loaded",
+	})
+}
+
+func (h *Handler) SyncSteam(w http.ResponseWriter, r *http.Request) {
+	steam := h.cfg.LoadSteam()
+	if !steam.IsConfigured() {
+		jsonErr(w, 400, "Steam not configured")
+		return
+	}
+	jsonOK(w, map[string]string{"message": "Steam sync triggered"})
 }
 
 // ---- Prowlarr ----

@@ -96,9 +96,13 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Get("/igdb", h.GetIgdb)
 		r.Post("/igdb", h.SaveIgdb)
 		r.Post("/igdb/test", h.TestIgdb)
+		r.Delete("/igdb", h.DeleteIgdb)
 
 		r.Get("/steam", h.GetSteam)
 		r.Post("/steam", h.SaveSteam)
+		r.Delete("/steam", h.DeleteSteam)
+		r.Post("/steam/test", h.TestSteam)
+		r.Post("/steam/sync", h.SyncSteam)
 
 		r.Get("/prowlarr", h.GetProwlarr)
 		r.Post("/prowlarr", h.SaveProwlarr)
