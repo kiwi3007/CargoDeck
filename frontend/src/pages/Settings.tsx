@@ -42,6 +42,125 @@ interface HydraConfiguration {
   enabled: boolean;
 }
 
+// ---- Agents tab (self-contained) ----
+
+interface AgentRow {
+  id: string;
+  name: string;
+  platform: string;
+  status: string;
+  lastSeen: string;
+}
+
+const AgentsTab: React.FC = () => {
+  const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [token, setToken] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
+    axios.get('/api/v3/settings/agent').then(r => setToken(r.data.token || '')).catch(() => {});
+  }, []);
+
+  const copyToken = () => {
+    navigator.clipboard.writeText(token).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const platform = navigator.platform || '';
+  const agentArch = platform.includes('arm') || platform.includes('aarch') ? 'arm64' : 'amd64';
+  const agentOS = navigator.userAgent.toLowerCase().includes('win') ? 'win-x64'
+    : navigator.userAgent.toLowerCase().includes('mac') ? 'osx-arm64'
+    : `linux-${agentArch}`;
+
+  return (
+    <div className="settings-section" id="agents">
+      <div className="section-header-with-logo">
+        <h3>Remote Agents</h3>
+      </div>
+      <p className="settings-description">
+        Install games to remote devices (e.g. Steam Deck) running the Playerr Agent.
+      </p>
+
+      <div className="settings-card" style={{ marginBottom: '20px' }}>
+        <h4>Agent Token</h4>
+        <p style={{ fontSize: '0.85rem', color: '#a6adc8', marginBottom: '10px' }}>
+          Copy this token and pass it to the agent with <code>--token</code>.
+        </p>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <input
+            type="text"
+            readOnly
+            value={token}
+            style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.9rem' }}
+          />
+          <button className="btn-secondary" onClick={copyToken}>
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-card" style={{ marginBottom: '20px' }}>
+        <h4>Download Agent</h4>
+        <p style={{ fontSize: '0.85rem', color: '#a6adc8', marginBottom: '10px' }}>
+          Run on the target device, then connect it to this server.
+        </p>
+        <a
+          href={`/_output/${agentOS}/playerr-agent`}
+          className="btn-secondary"
+          style={{ display: 'inline-block', textDecoration: 'none' }}
+        >
+          Download playerr-agent ({agentOS})
+        </a>
+        <p style={{ fontSize: '0.8rem', color: '#6c7086', marginTop: '10px' }}>
+          Usage: <code>./playerr-agent --server http://YOUR-SERVER:5002 --token YOUR-TOKEN</code>
+        </p>
+      </div>
+
+      <div className="settings-card">
+        <h4>Connected Agents</h4>
+        {agents.length === 0 ? (
+          <p style={{ color: '#6c7086', fontSize: '0.9rem' }}>No agents registered yet.</p>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+            <thead>
+              <tr style={{ color: '#a6adc8', textAlign: 'left', borderBottom: '1px solid #45475a' }}>
+                <th style={{ padding: '8px 10px' }}>Name</th>
+                <th style={{ padding: '8px 10px' }}>Platform</th>
+                <th style={{ padding: '8px 10px' }}>Status</th>
+                <th style={{ padding: '8px 10px' }}>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agents.map(a => (
+                <tr key={a.id} style={{ borderBottom: '1px solid #313244' }}>
+                  <td style={{ padding: '8px 10px', color: '#cdd6f4' }}>{a.name}</td>
+                  <td style={{ padding: '8px 10px', color: '#a6adc8' }}>{a.platform}</td>
+                  <td style={{ padding: '8px 10px' }}>
+                    <span style={{
+                      color: a.status === 'online' ? '#a6e3a1' : '#f38ba8',
+                      fontWeight: 500
+                    }}>
+                      {a.status}
+                    </span>
+                  </td>
+                  <td style={{ padding: '8px 10px', color: '#6c7086', fontSize: '0.8rem' }}>
+                    {a.lastSeen ? new Date(a.lastSeen).toLocaleString() : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ---- Main Settings component ----
+
 const Settings: React.FC = () => {
   const location = useLocation();
   const currentTab = location.hash.replace('#', '') || 'media';
@@ -1594,6 +1713,8 @@ const Settings: React.FC = () => {
           </div>
         )
       }
+
+      {currentTab === 'agents' && <AgentsTab />}
 
       {/* Modals */}
       <HydraSourceModal

@@ -123,9 +123,41 @@ const GameDetails: React.FC = () => {
   const [versionOptions, setVersionOptions] = useState<VersionOption[]>([]);
   const [actionType, setActionType] = useState<'install' | 'play' | null>(null);
   const [activeTab, setActiveTab] = useState<'search' | 'files' | 'none'>('search');
-  // Actually, standard behavior was "Search Torrents" always visible at bottom. 
-  // User wants a MENU. 
-  // Let's make "Search" show/hide the search section.
+
+  // ---- Remote agent install ----
+  interface AgentInfo { id: string; name: string; platform: string; status: string; }
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
+  const [agentJobProgress, setAgentJobProgress] = useState<{ status: string; message: string; percent: number } | null>(null);
+
+  useEffect(() => {
+    axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const prog = JSON.parse((e as CustomEvent).detail);
+        setAgentJobProgress({ status: prog.status, message: prog.message, percent: prog.percent });
+        if (prog.status === 'done' || prog.status === 'failed') {
+          setTimeout(() => setAgentJobProgress(null), 5000);
+        }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('AGENT_PROGRESS_EVENT', handler);
+    return () => window.removeEventListener('AGENT_PROGRESS_EVENT', handler);
+  }, []);
+
+  const handleRemoteInstall = async (agentId: string) => {
+    setShowAgentDropdown(false);
+    if (!id) return;
+    try {
+      await axios.post(`/api/v3/agent/${agentId}/install`, { gameId: parseInt(id) });
+      setNotification({ message: 'Install job sent to agent', type: 'success' });
+    } catch (err: any) {
+      setNotification({ message: err.response?.data?.message || 'Failed to dispatch install job', type: 'error' });
+    }
+  };
 
   useEffect(() => {
     if (notification) {
@@ -708,16 +740,73 @@ const GameDetails: React.FC = () => {
               <span>{t('remove')}</span>
             </button>
 
-            {(!isSwitchGame) && (
-              <button
-                className={`action-btn ${game.isInstallable && !game.canPlay ? 'install-ready' : ''}`}
-                onClick={handleInstallClick}
-                title={t('install')}
-              >
-                <FontAwesomeIcon icon={faDownload} />
-                <span>{t('install')}</span>
-              </button>
-            )}
+            {(!isSwitchGame) && (() => {
+              const onlineAgents = agents.filter(a => a.status === 'online');
+              if (onlineAgents.length > 0) {
+                return (
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <button
+                      className={`action-btn ${game.isInstallable && !game.canPlay ? 'install-ready' : ''}`}
+                      onClick={() => setShowAgentDropdown(v => !v)}
+                      title="Install to remote device"
+                    >
+                      <FontAwesomeIcon icon={faDownload} />
+                      <span>{t('install')} ▾</span>
+                    </button>
+                    {showAgentDropdown && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, zIndex: 100,
+                        background: '#1e1e2e', border: '1px solid #45475a', borderRadius: '6px',
+                        minWidth: '180px', padding: '4px 0'
+                      }}>
+                        {onlineAgents.map(a => (
+                          <button key={a.id}
+                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', color: '#cdd6f4', cursor: 'pointer', fontSize: '0.9rem' }}
+                            onClick={() => handleRemoteInstall(a.id)}
+                          >
+                            📱 {a.name}
+                          </button>
+                        ))}
+                        <div style={{ borderTop: '1px solid #45475a', margin: '4px 0' }} />
+                        <button
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', color: '#cdd6f4', cursor: 'pointer', fontSize: '0.9rem' }}
+                          onClick={handleInstallClick}
+                        >
+                          🖥️ This server
+                        </button>
+                        <a
+                          href={`/api/v3/game/${id}/install-script`}
+                          download
+                          style={{ display: 'block', padding: '8px 14px', color: '#89b4fa', fontSize: '0.9rem', textDecoration: 'none' }}
+                        >
+                          📄 Download script
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    className={`action-btn ${game.isInstallable && !game.canPlay ? 'install-ready' : ''}`}
+                    onClick={handleInstallClick}
+                    title={t('install')}
+                  >
+                    <FontAwesomeIcon icon={faDownload} />
+                    <span>{t('install')}</span>
+                  </button>
+                  <a
+                    href={`/api/v3/game/${id}/install-script`}
+                    download
+                    title="Download install script"
+                    style={{ color: '#89b4fa', fontSize: '1rem', lineHeight: 1, opacity: 0.7 }}
+                  >
+                    📄
+                  </a>
+                </div>
+              );
+            })()}
 
             {isSwitchGame && (
               <button
@@ -742,6 +831,24 @@ const GameDetails: React.FC = () => {
               </button>
             )}
           </div>
+
+          {agentJobProgress && (
+            <div style={{ marginTop: '10px', padding: '10px 14px', background: 'rgba(137,180,250,0.1)', borderRadius: '8px', border: '1px solid rgba(137,180,250,0.3)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#89b4fa', marginBottom: '6px' }}>
+                <span>{agentJobProgress.message}</span>
+                <span>{agentJobProgress.percent}%</span>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                <div style={{
+                  width: `${agentJobProgress.percent}%`,
+                  height: '100%',
+                  background: agentJobProgress.status === 'done' ? '#a6e3a1' : agentJobProgress.status === 'failed' ? '#f38ba8' : '#89b4fa',
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+            </div>
+          )}
+
           <div className="meta">
             <span>{game.year}</span>
             {game.platform && <span>{game.platform.name}</span>}

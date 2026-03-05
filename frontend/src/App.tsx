@@ -47,6 +47,12 @@ function useSSE() {
         es.addEventListener('LIBRARY_UPDATED', () => {
           window.dispatchEvent(new Event('LIBRARY_UPDATED_EVENT'));
         });
+        es.addEventListener('AGENT_PROGRESS', (e: MessageEvent) => {
+          window.dispatchEvent(new CustomEvent('AGENT_PROGRESS_EVENT', { detail: e.data }));
+        });
+        es.addEventListener('AGENT_JOB_QUEUED', (e: MessageEvent) => {
+          window.dispatchEvent(new CustomEvent('AGENT_PROGRESS_EVENT', { detail: e.data }));
+        });
         es.onerror = () => {
           es?.close();
           // Reconnect after 5 seconds on error

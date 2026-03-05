@@ -26,11 +26,29 @@ build() {
         .
 }
 
+build_agent() {
+    local os="$1" arch="$2" outdir="$3" ext="${4:-}"
+    echo "  Building agent ${os}/${arch}..."
+    GOOS="$os" GOARCH="$arch" go build \
+        -ldflags "$LDFLAGS" \
+        -o "_output/${outdir}/playerr-agent${ext}" \
+        ./cmd/agent/
+}
+
+echo "Building Playerr server..."
 build linux  amd64 linux-x64
 build linux  arm64 linux-arm64
 build windows amd64 win-x64 .exe
 build darwin amd64 osx-x64
 build darwin arm64 osx-arm64
+
+echo ""
+echo "Building Playerr Agent..."
+build_agent linux  amd64 linux-x64
+build_agent linux  arm64 linux-arm64
+build_agent windows amd64 win-x64 .exe
+build_agent darwin amd64 osx-x64
+build_agent darwin arm64 osx-arm64
 
 echo ""
 echo "Build complete. Binary sizes:"

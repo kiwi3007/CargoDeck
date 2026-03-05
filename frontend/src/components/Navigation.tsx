@@ -45,6 +45,7 @@ const Navigation: React.FC = () => {
             <Link to="/settings#clients" onClick={() => handleDropdownItemClick('clients')}>{t('settingsClients')}</Link>
             <Link to="/settings#language" onClick={() => handleDropdownItemClick('language')}>{t('settingsLanguage')}</Link>
             <Link to="/settings#advanced" onClick={() => handleDropdownItemClick('advanced')}>{t('settingsAdvanced') || 'Advanced'}</Link>
+            <Link to="/settings#agents" onClick={() => handleDropdownItemClick('agents')}>Agents</Link>
           </div>
         </li>
         <li><NavLink to="/about">{t('about')}</NavLink></li>

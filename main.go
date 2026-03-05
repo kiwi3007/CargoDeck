@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"playerr/internal/agent"
 	"playerr/internal/api"
 	"playerr/internal/config"
 	dbpkg "playerr/internal/db"
@@ -53,8 +54,16 @@ func main() {
 	processor := monitor.NewProcessor(cfg, repo, broker)
 	dlMonitor := monitor.NewDownloadMonitor(cfg, importStatus, processor)
 
+	// Ensure agent token is generated on first start
+	cfg.LoadAgent()
+
+	// ---- Agent components ----
+	agentRegistry := agent.NewRegistry()
+	agentJobs := agent.NewJobQueue()
+	agentBroker := agent.NewAgentBroker()
+
 	// ---- API ----
-	handler := api.NewHandler(repo, cfg, broker, scan, importStatus)
+	handler := api.NewHandler(repo, cfg, broker, scan, importStatus, agentRegistry, agentJobs, agentBroker)
 	router := handler.NewRouter()
 
 	// ---- Static UI ----

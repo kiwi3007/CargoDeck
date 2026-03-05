@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"playerr/internal/domain"
+	"playerr/internal/launcher"
 )
 
 func (h *Handler) GetAllGames(w http.ResponseWriter, r *http.Request) {
@@ -555,7 +556,7 @@ func launchProcess(path string) error {
 	default:
 		// Linux: for .exe files try Proton, then Wine
 		if strings.HasSuffix(strings.ToLower(path), ".exe") {
-			if protonCmd := tryProton(path); protonCmd != nil {
+			if protonCmd := launcher.TryProton(path, "playerr"); protonCmd != nil {
 				return protonCmd.Start()
 			}
 			cmd = exec.Command("wine", path)
@@ -565,92 +566,6 @@ func launchProcess(path string) error {
 		cmd.Dir = filepath.Dir(path)
 	}
 	return cmd.Start()
-}
-
-// tryProton attempts to build a Proton command for the given exe.
-// Returns nil if no Proton installation is found.
-func tryProton(exePath string) *exec.Cmd {
-	protonBin := findProton()
-	if protonBin == "" {
-		return nil
-	}
-
-	home, _ := os.UserHomeDir()
-	steamRoot := findSteamRoot()
-	compatData := filepath.Join(home, ".steam", "steam", "steamapps", "compatdata", "playerr")
-	_ = os.MkdirAll(compatData, 0755)
-
-	cmd := exec.Command(protonBin, "run", exePath)
-	cmd.Dir = filepath.Dir(exePath)
-	cmd.Env = append(os.Environ(),
-		"STEAM_COMPAT_DATA_PATH="+compatData,
-		"STEAM_COMPAT_CLIENT_INSTALL_PATH="+steamRoot,
-	)
-	log.Printf("[Launcher] Using Proton: %s", protonBin)
-	return cmd
-}
-
-// findProton searches for a Proton binary, preferring GE-Proton.
-func findProton() string {
-	steamRoot := findSteamRoot()
-	if steamRoot == "" {
-		return ""
-	}
-
-	// GE-Proton / custom tools first
-	if p := protonInDir(filepath.Join(steamRoot, "compatibilitytools.d")); p != "" {
-		return p
-	}
-	// Official Proton in steamapps/common
-	if p := protonInDir(filepath.Join(steamRoot, "steamapps", "common")); p != "" {
-		return p
-	}
-	return ""
-}
-
-func protonInDir(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	var candidates []string
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		nameLower := strings.ToLower(e.Name())
-		if strings.HasPrefix(nameLower, "proton") || strings.Contains(nameLower, "ge-proton") {
-			bin := filepath.Join(dir, e.Name(), "proton")
-			if fileExists(bin) {
-				candidates = append(candidates, bin)
-			}
-		}
-	}
-	if len(candidates) == 0 {
-		return ""
-	}
-	// Highest lexicographic name = newest version
-	best := candidates[0]
-	for _, c := range candidates[1:] {
-		if filepath.Dir(c) > filepath.Dir(best) {
-			best = c
-		}
-	}
-	return best
-}
-
-func findSteamRoot() string {
-	home, _ := os.UserHomeDir()
-	candidates := []string{
-		filepath.Join(home, ".local", "share", "Steam"),
-		filepath.Join(home, ".steam", "steam"),
-	}
-	for _, c := range candidates {
-		if fi, err := os.Stat(c); err == nil && fi.IsDir() {
-			return c
-		}
-	}
-	return ""
 }
 
 func openURL(url string) error {

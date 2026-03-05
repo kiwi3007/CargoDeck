@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"playerr/internal/agent"
 	"playerr/internal/config"
 	"playerr/internal/monitor"
 	"playerr/internal/repository"
@@ -15,11 +16,14 @@ import (
 
 // Handler holds all dependencies for the API layer.
 type Handler struct {
-	repo         *repository.GameRepository
-	cfg          *config.Service
-	broker       *sse.Broker
-	scanner      *scanner.Service
-	importStatus *monitor.ImportStatus
+	repo          *repository.GameRepository
+	cfg           *config.Service
+	broker        *sse.Broker
+	scanner       *scanner.Service
+	importStatus  *monitor.ImportStatus
+	agentRegistry *agent.Registry
+	agentJobs     *agent.JobQueue
+	agentBroker   *agent.AgentBroker
 }
 
 func NewHandler(
@@ -28,13 +32,19 @@ func NewHandler(
 	broker *sse.Broker,
 	scanner *scanner.Service,
 	importStatus *monitor.ImportStatus,
+	agentRegistry *agent.Registry,
+	agentJobs *agent.JobQueue,
+	agentBroker *agent.AgentBroker,
 ) *Handler {
 	return &Handler{
-		repo:         repo,
-		cfg:          cfg,
-		broker:       broker,
-		scanner:      scanner,
-		importStatus: importStatus,
+		repo:          repo,
+		cfg:           cfg,
+		broker:        broker,
+		scanner:       scanner,
+		importStatus:  importStatus,
+		agentRegistry: agentRegistry,
+		agentJobs:     agentJobs,
+		agentBroker:   agentBroker,
 	}
 }
 
@@ -49,7 +59,7 @@ func (h *Handler) NewRouter() http.Handler {
 	// Health
 	r.Get("/health", h.Health)
 
-	// SSE
+	// SSE (browser fan-out)
 	r.Get("/api/v3/events", h.broker.ServeHTTP)
 
 	// Games
@@ -69,6 +79,12 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Post("/{id}/install", h.InstallGame)
 		r.Post("/{id}/uninstall", h.UninstallGame)
 		r.Post("/{id}/shortcut", h.AddSteamShortcut)
+
+		// File serving for agent downloads (requires agent auth)
+		r.With(h.agentAuthMiddleware).Get("/{id}/file", h.ServeGameFile)
+
+		// Install script download (browser, no auth needed)
+		r.Get("/{id}/install-script", h.ServeInstallScript)
 	})
 
 	// Platforms
@@ -95,6 +111,9 @@ func (h *Handler) NewRouter() http.Handler {
 
 		r.Get("/server", h.GetServer)
 		r.Post("/server", h.SaveServer)
+
+		// Agent settings (masked token, browser-accessible)
+		r.Get("/agent", h.GetAgentSettings)
 	})
 
 	// Media (scan)
@@ -138,6 +157,20 @@ func (h *Handler) NewRouter() http.Handler {
 	// Filesystem
 	r.Get("/api/v3/filesystem", h.FilesystemList)
 	r.Get("/api/v3/filesystem/folder", h.ListFolder)
+
+	// Agent API
+	r.Route("/api/v3/agent", func(r chi.Router) {
+		// Browser-accessible (no agent auth required)
+		r.Get("/", h.ListAgents)
+
+		// Agent-authenticated endpoints
+		r.With(h.agentAuthMiddleware).Post("/register", h.RegisterAgent)
+		r.With(h.agentAuthMiddleware).Get("/events", h.AgentEvents)
+		r.With(h.agentAuthMiddleware).Post("/progress", h.AgentProgress)
+
+		// Browser dispatches install (no agent auth — same as all other browser endpoints)
+		r.Post("/{agentId}/install", h.DispatchInstall)
+	})
 
 	return r
 }
