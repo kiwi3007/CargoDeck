@@ -8,8 +8,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"playerr/internal/domain"
-	"playerr/internal/download"
+	"github.com/kiwi3007/playerr/internal/domain"
+	"github.com/kiwi3007/playerr/internal/download"
 )
 
 func (h *Handler) GetDownloadClients(w http.ResponseWriter, r *http.Request) {

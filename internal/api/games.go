@@ -10,8 +10,8 @@ import (
 	"runtime"
 	"strings"
 
-	"playerr/internal/domain"
-	"playerr/internal/launcher"
+	"github.com/kiwi3007/playerr/internal/domain"
+	"github.com/kiwi3007/playerr/internal/launcher"
 )
 
 func (h *Handler) GetAllGames(w http.ResponseWriter, r *http.Request) {

@@ -15,7 +15,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"playerr/cmd/agent/internal/agentclient"
+	"github.com/kiwi3007/playerr/cmd/agent/internal/agentclient"
 )
 
 var version = "dev"

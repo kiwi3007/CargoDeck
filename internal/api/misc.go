@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"playerr/internal/indexer"
+	"github.com/kiwi3007/playerr/internal/indexer"
 )
 
 // Search handles GET /api/v3/search?query=&categories=

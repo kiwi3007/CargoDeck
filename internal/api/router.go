@@ -6,12 +6,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"playerr/internal/agent"
-	"playerr/internal/config"
-	"playerr/internal/monitor"
-	"playerr/internal/repository"
-	"playerr/internal/scanner"
-	"playerr/internal/sse"
+	"github.com/kiwi3007/playerr/internal/agent"
+	"github.com/kiwi3007/playerr/internal/config"
+	"github.com/kiwi3007/playerr/internal/monitor"
+	"github.com/kiwi3007/playerr/internal/repository"
+	"github.com/kiwi3007/playerr/internal/scanner"
+	"github.com/kiwi3007/playerr/internal/sse"
 )
 
 // Handler holds all dependencies for the API layer.

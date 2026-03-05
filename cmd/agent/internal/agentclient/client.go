@@ -18,8 +18,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"playerr/internal/agent"
-	"playerr/internal/launcher"
+	"github.com/kiwi3007/playerr/internal/agent"
+	"github.com/kiwi3007/playerr/internal/launcher"
 )
 
 var cryptoRandRead = rand.Read

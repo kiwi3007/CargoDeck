@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"playerr/internal/domain"
+	"github.com/kiwi3007/playerr/internal/domain"
 )
 
 // GameRepository is the SQLite-backed store for games, platforms and game files.

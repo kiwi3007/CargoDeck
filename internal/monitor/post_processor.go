@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"playerr/internal/config"
-	"playerr/internal/domain"
-	"playerr/internal/metadata/igdb"
-	"playerr/internal/repository"
-	"playerr/internal/sse"
+	"github.com/kiwi3007/playerr/internal/config"
+	"github.com/kiwi3007/playerr/internal/domain"
+	"github.com/kiwi3007/playerr/internal/metadata/igdb"
+	"github.com/kiwi3007/playerr/internal/repository"
+	"github.com/kiwi3007/playerr/internal/sse"
 )
 
 // Processor runs the post-download pipeline: extract → clean → move → add to library.

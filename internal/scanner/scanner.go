@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"playerr/internal/domain"
-	"playerr/internal/repository"
+	"github.com/kiwi3007/playerr/internal/domain"
+	"github.com/kiwi3007/playerr/internal/repository"
 )
 
 // Service scans media folders and adds games to the repository.

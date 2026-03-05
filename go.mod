@@ -1,4 +1,4 @@
-module playerr
+module github.com/kiwi3007/playerr
 
 go 1.24.0
 

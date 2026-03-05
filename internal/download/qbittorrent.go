@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"playerr/internal/domain"
+	"github.com/kiwi3007/playerr/internal/domain"
 )
 
 type QBittorrentClient struct {

@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"playerr/internal/config"
+	"github.com/kiwi3007/playerr/internal/config"
 )
 
 // ---- IGDB ----

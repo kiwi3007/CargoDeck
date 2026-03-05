@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"playerr/internal/domain"
+	"github.com/kiwi3007/playerr/internal/domain"
 )
 
 type SabnzbdClient struct {

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"playerr/internal/agent"
+	"github.com/kiwi3007/playerr/internal/agent"
 )
 
 // ---- Register ----

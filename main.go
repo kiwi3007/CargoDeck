@@ -12,14 +12,14 @@ import (
 	"syscall"
 	"time"
 
-	"playerr/internal/agent"
-	"playerr/internal/api"
-	"playerr/internal/config"
-	dbpkg "playerr/internal/db"
-	"playerr/internal/monitor"
-	"playerr/internal/repository"
-	"playerr/internal/scanner"
-	"playerr/internal/sse"
+	"github.com/kiwi3007/playerr/internal/agent"
+	"github.com/kiwi3007/playerr/internal/api"
+	"github.com/kiwi3007/playerr/internal/config"
+	dbpkg "github.com/kiwi3007/playerr/internal/db"
+	"github.com/kiwi3007/playerr/internal/monitor"
+	"github.com/kiwi3007/playerr/internal/repository"
+	"github.com/kiwi3007/playerr/internal/scanner"
+	"github.com/kiwi3007/playerr/internal/sse"
 )
 
 func main() {
