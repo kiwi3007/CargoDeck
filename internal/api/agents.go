@@ -18,10 +18,11 @@ import (
 // ---- Register ----
 
 type registerRequest struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Platform  string `json:"platform"`
-	SteamPath string `json:"steamPath"`
+	ID           string              `json:"id"`
+	Name         string              `json:"name"`
+	Platform     string              `json:"platform"`
+	SteamPath    string              `json:"steamPath"`
+	InstallPaths []agent.InstallPath `json:"installPaths,omitempty"`
 }
 
 func (h *Handler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
@@ -36,13 +37,14 @@ func (h *Handler) RegisterAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.agentRegistry.Register(agent.AgentInfo{
-		ID:        req.ID,
-		Name:      req.Name,
-		Platform:  req.Platform,
-		SteamPath: req.SteamPath,
+		ID:           req.ID,
+		Name:         req.Name,
+		Platform:     req.Platform,
+		SteamPath:    req.SteamPath,
+		InstallPaths: req.InstallPaths,
 	})
 
-	log.Printf("[Agent] Registered: %s (%s) platform=%s", req.Name, req.ID, req.Platform)
+	log.Printf("[Agent] Registered: %s (%s) platform=%s paths=%d", req.Name, req.ID, req.Platform, len(req.InstallPaths))
 	jsonOK(w, map[string]string{"agentId": req.ID})
 }
 
@@ -83,7 +85,8 @@ func (h *Handler) AgentEvents(w http.ResponseWriter, r *http.Request) {
 // ---- Dispatch install job ----
 
 type dispatchRequest struct {
-	GameID int `json:"gameId"`
+	GameID     int    `json:"gameId"`
+	InstallDir string `json:"installDir,omitempty"` // override agent default install location
 }
 
 func (h *Handler) DispatchInstall(w http.ResponseWriter, r *http.Request) {
@@ -130,17 +133,25 @@ func (h *Handler) DispatchInstall(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	if len(files) == 0 {
+		jsonErr(w, 400, "no game files available for this game — add a file path in the library first")
+		return
+	}
+
 	serverURL := resolveServerURL(r)
 	jobID := fmt.Sprintf("%d-%d", req.GameID, time.Now().UnixMilli())
 
 	job := agent.InstallJob{
-		JobID:     jobID,
-		AgentID:   agentID,
-		GameID:    req.GameID,
-		GameTitle: game.Title,
-		Files:     files,
-		ServerURL: serverURL,
+		JobID:      jobID,
+		AgentID:    agentID,
+		GameID:     req.GameID,
+		GameTitle:  game.Title,
+		Files:      files,
+		ServerURL:  serverURL,
+		InstallDir: req.InstallDir,
 	}
+
+	h.agentRegistry.TrackJob(agentID, jobID, game.Title)
 
 	if !h.agentJobs.Enqueue(job) {
 		jsonErr(w, 503, "agent job queue full")
@@ -173,6 +184,8 @@ func (h *Handler) AgentProgress(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, err.Error())
 		return
 	}
+
+	h.agentRegistry.UpdateJobProgress(prog)
 
 	data, _ := json.Marshal(prog)
 	h.broker.Publish("AGENT_PROGRESS", string(data))

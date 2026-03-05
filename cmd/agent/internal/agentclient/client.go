@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/kiwi3007/playerr/internal/agent"
@@ -91,11 +92,12 @@ func (c *Client) Run() {
 
 // register calls POST /api/v3/agent/register.
 func (c *Client) register() error {
-	body, _ := json.Marshal(map[string]string{
-		"id":        c.agentID,
-		"name":      c.cfg.Name,
-		"platform":  runtime.GOOS + "/" + runtime.GOARCH,
-		"steamPath": launcher.FindSteamRoot(),
+	body, _ := json.Marshal(map[string]any{
+		"id":           c.agentID,
+		"name":         c.cfg.Name,
+		"platform":     runtime.GOOS + "/" + runtime.GOARCH,
+		"steamPath":    launcher.FindSteamRoot(),
+		"installPaths": discoverInstallPaths(),
 	})
 
 	req, err := http.NewRequest("POST", c.cfg.ServerURL+"/api/v3/agent/register", bytes.NewReader(body))
@@ -181,13 +183,18 @@ func (c *Client) listenSSE() error {
 	return io.EOF
 }
 
-// executeJob runs an install job: download → extract if needed → run installer → shortcut.
+// executeJob runs an install job: download → extract → install silently → apply crack → shortcut.
 func (c *Client) executeJob(job agent.InstallJob) {
 	log.Printf("[Agent] Job %s: installing %q", job.JobID, job.GameTitle)
 
-	installDir := filepath.Join(homeDir(), "Games", safeName(job.GameTitle))
-	if err := os.MkdirAll(installDir, 0755); err != nil {
-		c.reportProgress(job, agent.JobFailed, "Cannot create install dir: "+err.Error(), 0)
+	// Use agent-chosen install dir, or fall back to ~/Games
+	baseDir := job.InstallDir
+	if baseDir == "" {
+		baseDir = filepath.Join(homeDir(), "Games")
+	}
+	downloadDir := filepath.Join(baseDir, safeName(job.GameTitle))
+	if err := os.MkdirAll(downloadDir, 0755); err != nil {
+		c.reportProgress(job, agent.JobFailed, "Cannot create download dir: "+err.Error(), 0)
 		return
 	}
 
@@ -198,57 +205,340 @@ func (c *Client) executeJob(job agent.InstallJob) {
 		pct := (i * 80) / total
 		c.reportProgress(job, agent.JobDownloading, "Downloading: "+relPath, pct)
 
-		destPath := filepath.Join(installDir, filepath.FromSlash(relPath))
+		destPath := filepath.Join(downloadDir, filepath.FromSlash(relPath))
 		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 			c.reportProgress(job, agent.JobFailed, "mkdir failed: "+err.Error(), pct)
 			return
 		}
 
-		url := fmt.Sprintf("%s/api/v3/game/%d/file?path=%s", job.ServerURL, job.GameID, url.QueryEscape(relPath))
-		if err := c.downloadFile(url, destPath); err != nil {
+		dlURL := fmt.Sprintf("%s/api/v3/game/%d/file?path=%s", job.ServerURL, job.GameID, url.QueryEscape(relPath))
+		if err := c.downloadFile(dlURL, destPath); err != nil {
 			c.reportProgress(job, agent.JobFailed, "Download failed: "+err.Error(), pct)
 			return
 		}
 	}
 
-	// ---- Extract any ISO files ----
-	_ = filepath.Walk(installDir, func(path string, info os.FileInfo, err error) error {
+	// ---- Extract any ISO / archive files ----
+	archiveExts := map[string]bool{".iso": true, ".bin": true, ".zip": true, ".rar": true, ".7z": true}
+	_ = filepath.Walk(downloadDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		if strings.ToLower(filepath.Ext(path)) == ".iso" {
-			extractDir := strings.TrimSuffix(path, filepath.Ext(path))
-			c.reportProgress(job, agent.JobExtracting, "Extracting: "+filepath.Base(path), 82)
-			log.Printf("[Agent] Extracting ISO: %s → %s", path, extractDir)
-			if err := exec.Command("7z", "x", path, "-o"+extractDir, "-y").Run(); err != nil {
-				exec.Command("7za", "x", path, "-o"+extractDir, "-y").Run()
+		ext := strings.ToLower(filepath.Ext(path))
+		if !archiveExts[ext] {
+			return nil
+		}
+		extractDir := strings.TrimSuffix(path, filepath.Ext(path))
+		c.reportProgress(job, agent.JobExtracting, "Extracting: "+filepath.Base(path), 82)
+		log.Printf("[Agent] Extracting: %s → %s", path, extractDir)
+		if extractHeadless(path, extractDir) {
+			// Clean up archive after successful extraction
+			if err := os.Remove(path); err != nil {
+				log.Printf("[Agent] Could not remove archive %s: %v", path, err)
+			} else {
+				log.Printf("[Agent] Removed archive: %s", path)
 			}
 		}
 		return nil
 	})
 
+	// ---- Determine Proton compatdata path ----
+	suffix := fmt.Sprintf("playerr_%d", job.GameID)
+	home := homeDir()
+	compatData := filepath.Join(home, ".steam", "steam", "steamapps", "compatdata", suffix)
+	// Known install dir inside Proton prefix (we force /DIR= to this path)
+	gameInstallDir := filepath.Join(compatData, "pfx", "drive_c", "Games", safeName(job.GameTitle))
+
 	// ---- Find and run installer ----
 	c.reportProgress(job, agent.JobInstalling, "Looking for installer...", 85)
-	installer := findInstaller(installDir)
+	installer := findInstaller(downloadDir)
+
+	var gameExe string
+
 	if installer != "" {
 		c.reportProgress(job, agent.JobInstalling, "Running installer: "+filepath.Base(installer), 87)
-		if err := runInstaller(installer, job.GameID); err != nil {
+		if err := runInstallerSilent(installer, suffix, job.GameTitle); err != nil {
 			log.Printf("[Agent] Installer error (non-fatal): %v", err)
 		}
+		// Try known install dir first, then search entire prefix
+		gameExe = findMainExe(gameInstallDir)
+		if gameExe == "" {
+			gameExe = findGameExeInPrefix(compatData)
+		}
+		// Apply crack files: copy from Crack/SKIDROW/etc dirs to wherever game was installed
+		if gameExe != "" {
+			applyCrack(downloadDir, filepath.Dir(gameExe))
+		}
+	} else {
+		// No installer — portable game already in download dir
+		gameExe = findMainExe(downloadDir)
 	}
 
-	// ---- Create Steam shortcut ----
+	// ---- Create local Steam shortcut via wrapper script ----
 	c.reportProgress(job, agent.JobCreatingShortcut, "Creating Steam shortcut...", 95)
-	shortcutURL := fmt.Sprintf("%s/api/v3/game/%d/shortcut", job.ServerURL, job.GameID)
-	req, _ := http.NewRequest("POST", shortcutURL, nil)
-	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
-	resp, err := c.http.Do(req)
-	if err == nil {
-		resp.Body.Close()
+	if gameExe != "" {
+		scriptPath := createRunScript(job.GameTitle, gameExe, compatData)
+		exeForShortcut := gameExe
+		if scriptPath != "" {
+			exeForShortcut = scriptPath
+		}
+		entry := launcher.ShortcutEntry{
+			AppName:  job.GameTitle,
+			Exe:      exeForShortcut,
+			StartDir: filepath.Dir(exeForShortcut),
+		}
+		if _, err := launcher.AddSteamShortcut(entry); err != nil {
+			log.Printf("[Agent] Steam shortcut error: %v", err)
+		} else {
+			log.Printf("[Agent] Steam shortcut created for %q → %s", job.GameTitle, exeForShortcut)
+		}
+	} else {
+		log.Printf("[Agent] No game exe found, skipping shortcut")
 	}
 
-	c.reportProgress(job, agent.JobDone, "Install complete. Files in: "+installDir, 100)
+	c.reportProgress(job, agent.JobDone, "Install complete. Files in: "+downloadDir, 100)
 	log.Printf("[Agent] Job %s: done", job.JobID)
+}
+
+// runInstallerSilent runs a Windows installer via Proton with silent/unattended flags.
+// It forces the install directory to a known location inside the Proton prefix.
+func runInstallerSilent(installerPath, compatDataSuffix, gameTitle string) error {
+	winInstallDir := `C:\Games\` + safeName(gameTitle)
+	silentFlags := []string{
+		"/VERYSILENT",
+		"/SUPPRESSMSGBOXES",
+		"/NORESTART",
+		"/DIR=" + winInstallDir,
+	}
+
+	if cmd := launcher.TryProton(installerPath, compatDataSuffix, silentFlags...); cmd != nil {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+	if w, err := exec.LookPath("wine"); err == nil {
+		args := append([]string{installerPath}, silentFlags...)
+		cmd := exec.Command(w, args...)
+		cmd.Dir = filepath.Dir(installerPath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+	log.Printf("[Agent] No Proton or Wine found — skipping installer %s", installerPath)
+	return nil
+}
+
+// findGameExeInPrefix searches the Proton wine prefix for a non-system game exe.
+func findGameExeInPrefix(compatData string) string {
+	driveC := filepath.Join(compatData, "pfx", "drive_c")
+	skipDirs := map[string]bool{
+		"windows": true, "users": true, "programdata": true,
+	}
+
+	var found string
+	_ = filepath.Walk(driveC, func(path string, info os.FileInfo, err error) error {
+		if err != nil || found != "" {
+			return nil
+		}
+		if info.IsDir() {
+			rel, _ := filepath.Rel(driveC, path)
+			parts := strings.Split(rel, string(filepath.Separator))
+			if len(parts) >= 1 && skipDirs[strings.ToLower(parts[0])] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		lower := strings.ToLower(info.Name())
+		if isGameExe(lower) {
+			found = path
+		}
+		return nil
+	})
+	return found
+}
+
+// applyCrack copies files from Crack/SKIDROW/CODEX/etc subdirs to the game install dir.
+func applyCrack(srcDir, gameInstallDir string) {
+	if gameInstallDir == "" {
+		return
+	}
+	crackNames := []string{"Crack", "crack", "SKIDROW", "CODEX", "CPY", "EMPRESS", "Crk"}
+	_ = filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return nil
+		}
+		for _, name := range crackNames {
+			if strings.EqualFold(info.Name(), name) {
+				log.Printf("[Agent] Applying crack: %s → %s", path, gameInstallDir)
+				copyDir(path, gameInstallDir)
+				return filepath.SkipDir
+			}
+		}
+		return nil
+	})
+}
+
+// findInstaller finds setup*.exe or install*.exe recursively in dir.
+func findInstaller(dir string) string {
+	var found string
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || found != "" {
+			return nil
+		}
+		lower := strings.ToLower(info.Name())
+		if strings.HasSuffix(lower, ".exe") &&
+			(strings.HasPrefix(lower, "setup") || strings.HasPrefix(lower, "install")) {
+			found = path
+		}
+		return nil
+	})
+	return found
+}
+
+// findMainExe finds the primary game exe (excludes setup/install/unins/redist).
+func findMainExe(dir string) string {
+	var found string
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || found != "" {
+			return nil
+		}
+		lower := strings.ToLower(info.Name())
+		if isGameExe(lower) {
+			found = path
+		}
+		return nil
+	})
+	return found
+}
+
+func isGameExe(lower string) bool {
+	if !strings.HasSuffix(lower, ".exe") {
+		return false
+	}
+	excludePrefixes := []string{"setup", "install", "unins", "redist", "dxsetup", "vcredist", "directx"}
+	for _, p := range excludePrefixes {
+		if strings.HasPrefix(lower, p) {
+			return false
+		}
+	}
+	return true
+}
+
+// createRunScript writes a shell wrapper that launches the game via Proton.
+// Returns the script path, or "" if Proton is not available.
+func createRunScript(gameTitle, gameExe, compatData string) string {
+	protonBin := launcher.FindProton()
+	steamRoot := launcher.FindSteamRoot()
+	if protonBin == "" {
+		return ""
+	}
+
+	scriptDir := filepath.Join(homeDir(), "Games", safeName(gameTitle))
+	_ = os.MkdirAll(scriptDir, 0755)
+	scriptPath := filepath.Join(scriptDir, "run.sh")
+
+	content := fmt.Sprintf("#!/bin/bash\nexport STEAM_COMPAT_DATA_PATH=%q\nexport STEAM_COMPAT_CLIENT_INSTALL_PATH=%q\nexec %q run %q \"$@\"\n",
+		compatData, steamRoot, protonBin, gameExe)
+
+	if err := os.WriteFile(scriptPath, []byte(content), 0755); err != nil {
+		log.Printf("[Agent] Failed to write run script: %v", err)
+		return ""
+	}
+	return scriptPath
+}
+
+// extractHeadless extracts an archive non-interactively using 7z/7za.
+// Returns true on success.
+func extractHeadless(archivePath, extractDir string) bool {
+	for _, bin := range []string{"7z", "7za"} {
+		cmd := exec.Command(bin, "x", archivePath, "-o"+extractDir, "-y", "-bd")
+		cmd.Stdin = nil // explicitly no stdin — prevents interactive prompts
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+		if err := cmd.Run(); err == nil {
+			return true
+		}
+	}
+	log.Printf("[Agent] Extraction failed for %s", archivePath)
+	return false
+}
+
+// discoverInstallPaths returns available storage locations on this device.
+func discoverInstallPaths() []agent.InstallPath {
+	home := homeDir()
+	var paths []agent.InstallPath
+
+	// Default internal storage
+	defaultPath := filepath.Join(home, "Games")
+	_ = os.MkdirAll(defaultPath, 0755)
+	paths = append(paths, agent.InstallPath{
+		Path:      defaultPath,
+		Label:     "Internal Storage",
+		FreeBytes: diskFree(defaultPath),
+	})
+
+	// Removable media: /run/media/{username}/*/
+	username := filepath.Base(home)
+	mediaRoot := filepath.Join("/run/media", username)
+	entries, err := os.ReadDir(mediaRoot)
+	if err == nil {
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			mountPath := filepath.Join(mediaRoot, e.Name())
+			gamesPath := filepath.Join(mountPath, "Games")
+			_ = os.MkdirAll(gamesPath, 0755)
+			paths = append(paths, agent.InstallPath{
+				Path:      gamesPath,
+				Label:     e.Name(),
+				FreeBytes: diskFree(mountPath),
+			})
+		}
+	}
+	return paths
+}
+
+// diskFree returns the available bytes on the filesystem containing path.
+func diskFree(path string) int64 {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return -1
+	}
+	return int64(stat.Bavail) * int64(stat.Bsize)
+}
+
+// copyDir copies all files from src to dst recursively.
+func copyDir(src, dst string) {
+	_ = filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return nil
+		}
+		dest := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(dest, info.Mode())
+		}
+		return copyFileAtomic(path, dest)
+	})
+}
+
+func copyFileAtomic(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }
 
 // downloadFile downloads a URL to destPath, resuming if the file already exists.
@@ -329,36 +619,6 @@ func (c *Client) sleep(d time.Duration) {
 }
 
 // ---- Helpers ----
-
-func findInstaller(dir string) string {
-	var found string
-	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || found != "" {
-			return nil
-		}
-		lower := strings.ToLower(info.Name())
-		if strings.HasSuffix(lower, ".exe") &&
-			(strings.HasPrefix(lower, "setup") || strings.HasPrefix(lower, "install")) {
-			found = path
-		}
-		return nil
-	})
-	return found
-}
-
-func runInstaller(path string, gameID int) error {
-	suffix := fmt.Sprintf("playerr_%d", gameID)
-	if cmd := launcher.TryProton(path, suffix); cmd != nil {
-		return cmd.Run()
-	}
-	if w, err := exec.LookPath("wine"); err == nil {
-		cmd := exec.Command(w, path)
-		cmd.Dir = filepath.Dir(path)
-		return cmd.Run()
-	}
-	log.Printf("[Agent] No Proton or Wine found — skipping installer %s", path)
-	return nil
-}
 
 func safeName(title string) string {
 	var b strings.Builder

@@ -13,24 +13,39 @@ const (
 	StatusOffline AgentStatus = "offline"
 )
 
+const maxRecentJobs = 10
+
 // AgentInfo describes a connected remote agent.
 type AgentInfo struct {
-	ID        string      `json:"id"`
-	Name      string      `json:"name"`
-	Platform  string      `json:"platform"`
-	SteamPath string      `json:"steamPath"`
-	Status    AgentStatus `json:"status"`
-	LastSeen  time.Time   `json:"lastSeen"`
+	ID           string        `json:"id"`
+	Name         string        `json:"name"`
+	Platform     string        `json:"platform"`
+	SteamPath    string        `json:"steamPath"`
+	Status       AgentStatus   `json:"status"`
+	LastSeen     time.Time     `json:"lastSeen"`
+	InstallPaths []InstallPath `json:"installPaths,omitempty"`
+	CurrentJob   *ActiveJob    `json:"currentJob,omitempty"`
+	RecentJobs   []ActiveJob   `json:"recentJobs,omitempty"`
+}
+
+// jobMeta links a job ID to the agent and game title.
+type jobMeta struct {
+	AgentID   string
+	GameTitle string
 }
 
 // Registry holds all known agents (in-memory).
 type Registry struct {
-	mu     sync.RWMutex
-	agents map[string]*AgentInfo
+	mu       sync.RWMutex
+	agents   map[string]*AgentInfo
+	jobIndex map[string]jobMeta // jobID → (agentID, gameTitle)
 }
 
 func NewRegistry() *Registry {
-	return &Registry{agents: make(map[string]*AgentInfo)}
+	return &Registry{
+		agents:   make(map[string]*AgentInfo),
+		jobIndex: make(map[string]jobMeta),
+	}
 }
 
 // Register inserts or updates an agent entry and marks it online.
@@ -39,6 +54,11 @@ func (r *Registry) Register(info AgentInfo) {
 	defer r.mu.Unlock()
 	info.Status = StatusOnline
 	info.LastSeen = time.Now()
+	// Preserve job history if agent re-registers
+	if existing, ok := r.agents[info.ID]; ok {
+		info.CurrentJob = existing.CurrentJob
+		info.RecentJobs = existing.RecentJobs
+	}
 	r.agents[info.ID] = &info
 }
 
@@ -73,7 +93,7 @@ func (r *Registry) Get(id string) (*AgentInfo, bool) {
 	return &cp, true
 }
 
-// List returns all registered agents.
+// List returns all registered agents sorted by name.
 func (r *Registry) List() []AgentInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -95,4 +115,69 @@ func (r *Registry) OnlineCount() int {
 		}
 	}
 	return count
+}
+
+// TrackJob records that a job has been dispatched to an agent.
+// This lets UpdateJobProgress look up which agent owns a given job ID.
+func (r *Registry) TrackJob(agentID, jobID, gameTitle string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.jobIndex[jobID] = jobMeta{AgentID: agentID, GameTitle: gameTitle}
+	if a, ok := r.agents[agentID]; ok {
+		job := &ActiveJob{
+			JobID:     jobID,
+			GameTitle: gameTitle,
+			Status:    JobQueued,
+			Message:   "Queued",
+			Percent:   0,
+			UpdatedAt: time.Now(),
+		}
+		a.CurrentJob = job
+	}
+}
+
+// UpdateJobProgress updates the live status of a job from an agent progress report.
+// Completed/failed jobs are moved to RecentJobs.
+func (r *Registry) UpdateJobProgress(prog JobProgress) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	meta, ok := r.jobIndex[prog.JobID]
+	if !ok {
+		return
+	}
+	a, ok := r.agents[meta.AgentID]
+	if !ok {
+		return
+	}
+
+	switch prog.Status {
+	case JobDone, JobFailed:
+		finished := ActiveJob{
+			JobID:     prog.JobID,
+			GameTitle: meta.GameTitle,
+			Status:    prog.Status,
+			Message:   prog.Message,
+			Percent:   prog.Percent,
+			UpdatedAt: time.Now(),
+		}
+		// Prepend to recent jobs, cap at maxRecentJobs
+		a.RecentJobs = append([]ActiveJob{finished}, a.RecentJobs...)
+		if len(a.RecentJobs) > maxRecentJobs {
+			a.RecentJobs = a.RecentJobs[:maxRecentJobs]
+		}
+		a.CurrentJob = nil
+		delete(r.jobIndex, prog.JobID)
+	default:
+		if a.CurrentJob == nil || a.CurrentJob.JobID == prog.JobID {
+			a.CurrentJob = &ActiveJob{
+				JobID:     prog.JobID,
+				GameTitle: meta.GameTitle,
+				Status:    prog.Status,
+				Message:   prog.Message,
+				Percent:   prog.Percent,
+				UpdatedAt: time.Now(),
+			}
+		}
+	}
 }

@@ -7,6 +7,7 @@ import GameDetails from './pages/GameDetails';
 import About from './pages/About';
 import User from './pages/User';
 import Status from './pages/Status';
+import Devices from './pages/Devices';
 import Navigation from './components/Navigation';
 import ScannerStatus from './components/ScannerStatus';
 import { useUI, UIProvider } from './context/UIContext';
@@ -102,6 +103,9 @@ function App() {
                 </Routes>
               </TabContent>
 
+              <TabContent paths={['/devices']}>
+                <Devices />
+              </TabContent>
               <TabContent paths={['/status']}>
                 <Status />
               </TabContent>

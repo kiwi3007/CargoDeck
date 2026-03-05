@@ -1,6 +1,9 @@
 package agent
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 // JobStatus tracks the current phase of an install job.
 type JobStatus string
@@ -15,14 +18,32 @@ const (
 	JobFailed           JobStatus = "failed"
 )
 
+// InstallPath describes a storage location available on an agent.
+type InstallPath struct {
+	Path      string `json:"path"`
+	Label     string `json:"label"`     // e.g. "Internal Storage", "SD Card"
+	FreeBytes int64  `json:"freeBytes"` // -1 if unknown
+}
+
+// ActiveJob is the live state of an in-progress or recently completed install.
+type ActiveJob struct {
+	JobID     string    `json:"jobId"`
+	GameTitle string    `json:"gameTitle"`
+	Status    JobStatus `json:"status"`
+	Message   string    `json:"message"`
+	Percent   int       `json:"percent"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 // InstallJob is the payload pushed to an agent's SSE stream.
 type InstallJob struct {
-	JobID     string   `json:"jobId"`
-	AgentID   string   `json:"agentId"`
-	GameID    int      `json:"gameId"`
-	GameTitle string   `json:"gameTitle"`
-	Files     []string `json:"files"` // relative paths within game.Path
-	ServerURL string   `json:"serverUrl"`
+	JobID      string   `json:"jobId"`
+	AgentID    string   `json:"agentId"`
+	GameID     int      `json:"gameId"`
+	GameTitle  string   `json:"gameTitle"`
+	Files      []string `json:"files"` // relative paths within game.Path
+	ServerURL  string   `json:"serverUrl"`
+	InstallDir string   `json:"installDir,omitempty"` // override default ~/Games/
 }
 
 // JobProgress is reported back by the agent via POST.

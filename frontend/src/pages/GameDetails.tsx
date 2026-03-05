@@ -123,15 +123,21 @@ const GameDetails: React.FC = () => {
   const [versionOptions, setVersionOptions] = useState<VersionOption[]>([]);
   const [actionType, setActionType] = useState<'install' | 'play' | null>(null);
   const [activeTab, setActiveTab] = useState<'search' | 'files' | 'none'>('search');
+  const [hasSearched, setHasSearched] = useState(false);
 
   // ---- Remote agent install ----
-  interface AgentInfo { id: string; name: string; platform: string; status: string; }
+  interface InstallPath { path: string; label: string; freeBytes: number; }
+  interface AgentInfo { id: string; name: string; platform: string; status: string; installPaths?: InstallPath[]; }
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [agentJobProgress, setAgentJobProgress] = useState<{ status: string; message: string; percent: number } | null>(null);
 
   useEffect(() => {
-    axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
+    const fetchAgents = () =>
+      axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
+    fetchAgents();
+    const interval = setInterval(fetchAgents, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -148,11 +154,22 @@ const GameDetails: React.FC = () => {
     return () => window.removeEventListener('AGENT_PROGRESS_EVENT', handler);
   }, []);
 
-  const handleRemoteInstall = async (agentId: string) => {
+  const formatFreeSpace = (bytes: number): string => {
+    if (bytes < 0) return '';
+    const gb = bytes / (1024 ** 3);
+    if (gb >= 1) return gb.toFixed(0) + '\u00a0GB';
+    return (bytes / (1024 ** 2)).toFixed(0) + '\u00a0MB';
+  };
+
+  const handleRemoteInstall = async (agentId: string, installDir?: string) => {
     setShowAgentDropdown(false);
     if (!id) return;
+    if (!game?.path && (!game?.gameFiles || game.gameFiles.length === 0) && !game?.downloadPath) {
+      setNotification({ message: t('noGameFilesFound'), type: 'error' });
+      return;
+    }
     try {
-      await axios.post(`/api/v3/agent/${agentId}/install`, { gameId: parseInt(id) });
+      await axios.post(`/api/v3/agent/${agentId}/install`, { gameId: parseInt(id), installDir });
       setNotification({ message: 'Install job sent to agent', type: 'success' });
     } catch (err: any) {
       setNotification({ message: err.response?.data?.message || 'Failed to dispatch install job', type: 'error' });
@@ -446,6 +463,7 @@ const GameDetails: React.FC = () => {
     setSearching(true);
     setResults([]);
     setError(null);
+    setHasSearched(false);
 
     // Get categories based on platform
     let cats = '';
@@ -469,6 +487,7 @@ const GameDetails: React.FC = () => {
       setError(err.response?.data?.error || t('error'));
     } finally {
       setSearching(false);
+      setHasSearched(true);
     }
   };
 
@@ -757,16 +776,37 @@ const GameDetails: React.FC = () => {
                       <div style={{
                         position: 'absolute', top: '100%', left: 0, zIndex: 100,
                         background: '#1e1e2e', border: '1px solid #45475a', borderRadius: '6px',
-                        minWidth: '180px', padding: '4px 0'
+                        minWidth: '200px', padding: '4px 0'
                       }}>
-                        {onlineAgents.map(a => (
-                          <button key={a.id}
-                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', color: '#cdd6f4', cursor: 'pointer', fontSize: '0.9rem' }}
-                            onClick={() => handleRemoteInstall(a.id)}
-                          >
-                            📱 {a.name}
-                          </button>
-                        ))}
+                        {onlineAgents.map(a => {
+                          const paths = a.installPaths || [];
+                          if (paths.length > 1) {
+                            return (
+                              <React.Fragment key={a.id}>
+                                <div style={{ padding: '7px 14px 3px', color: '#a6adc8', fontSize: '0.78rem', fontWeight: 600, cursor: 'default', userSelect: 'none' }}>
+                                  📱 {a.name}
+                                </div>
+                                {paths.map((p, i) => (
+                                  <button key={i}
+                                    style={{ display: 'flex', justifyContent: 'space-between', width: '100%', textAlign: 'left', padding: '6px 14px 6px 24px', background: 'none', border: 'none', color: '#cdd6f4', cursor: 'pointer', fontSize: '0.85rem' }}
+                                    onClick={() => handleRemoteInstall(a.id, p.path)}
+                                  >
+                                    <span><span style={{ opacity: 0.4, marginRight: '4px' }}>›</span>{p.label}</span>
+                                    {p.freeBytes >= 0 && <span style={{ opacity: 0.45, fontSize: '0.75rem', marginLeft: '8px' }}>{formatFreeSpace(p.freeBytes)}</span>}
+                                  </button>
+                                ))}
+                              </React.Fragment>
+                            );
+                          }
+                          return (
+                            <button key={a.id}
+                              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', color: '#cdd6f4', cursor: 'pointer', fontSize: '0.9rem' }}
+                              onClick={() => handleRemoteInstall(a.id, paths[0]?.path)}
+                            >
+                              📱 {a.name}
+                            </button>
+                          );
+                        })}
                         <div style={{ borderTop: '1px solid #45475a', margin: '4px 0' }} />
                         <button
                           style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', color: '#cdd6f4', cursor: 'pointer', fontSize: '0.9rem' }}
@@ -914,16 +954,20 @@ const GameDetails: React.FC = () => {
       </div>
 
       {
-        activeTab === 'search' && (results.length > 0 || error || searching) && (
+        activeTab === 'search' && (results.length > 0 || error || searching || hasSearched) && (
           <div className="torrent-search">
-
-
 
             {searching && (
               <div className="search-loading">
                 <FontAwesomeIcon icon={faSearch} spin />
-                <p>{t('searching') || 'Buscando...'}</p>
+                <p>{t('searching') || 'Searching...'}</p>
               </div>
+            )}
+
+            {hasSearched && !searching && results.length === 0 && !error && (
+              <p style={{ color: '#a6adc8', textAlign: 'center', padding: '20px' }}>
+                No results found. Check your indexer settings (Prowlarr/Jackett) or try a different search term.
+              </p>
             )}
 
             {error && <p className="error">{error}</p>}

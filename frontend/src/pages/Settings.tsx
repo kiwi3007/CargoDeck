@@ -58,8 +58,12 @@ const AgentsTab: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
+    const fetchAgents = () =>
+      axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
+    fetchAgents();
     axios.get('/api/v3/settings/agent').then(r => setToken(r.data.token || '')).catch(() => {});
+    const interval = setInterval(fetchAgents, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const tokenInputRef = React.useRef<HTMLInputElement>(null);

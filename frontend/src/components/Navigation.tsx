@@ -28,6 +28,7 @@ const Navigation: React.FC = () => {
       </div>
       <ul className="nav-links">
         <li><NavLink to={lastLibraryPath}>{t('library')}</NavLink></li>
+        <li><NavLink to="/devices">Devices</NavLink></li>
         <li><NavLink to="/status">{t('status')}</NavLink></li>
         <li><NavLink to="/user">{t('user')}</NavLink></li>
         <li

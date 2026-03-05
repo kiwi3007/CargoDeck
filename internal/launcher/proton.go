@@ -75,8 +75,9 @@ func ProtonInDir(dir string) string {
 
 // TryProton builds a Proton exec.Cmd for the given exe.
 // compatDataSuffix is appended to the compatdata dir (e.g. "playerr" or "playerr_42").
+// extraArgs are passed after the exe path (e.g. installer flags like "/VERYSILENT").
 // Returns nil if no Proton installation is found.
-func TryProton(exePath, compatDataSuffix string) *exec.Cmd {
+func TryProton(exePath, compatDataSuffix string, extraArgs ...string) *exec.Cmd {
 	protonBin := FindProton()
 	if protonBin == "" {
 		return nil
@@ -87,7 +88,8 @@ func TryProton(exePath, compatDataSuffix string) *exec.Cmd {
 	compatData := filepath.Join(home, ".steam", "steam", "steamapps", "compatdata", compatDataSuffix)
 	_ = os.MkdirAll(compatData, 0755)
 
-	cmd := exec.Command(protonBin, "run", exePath)
+	args := append([]string{"run", exePath}, extraArgs...)
+	cmd := exec.Command(protonBin, args...)
 	cmd.Dir = filepath.Dir(exePath)
 	cmd.Env = append(os.Environ(),
 		"STEAM_COMPAT_DATA_PATH="+compatData,
