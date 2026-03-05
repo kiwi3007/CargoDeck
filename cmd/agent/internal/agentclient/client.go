@@ -229,7 +229,8 @@ func (c *Client) executeJob(job agent.InstallJob) {
 	}
 
 	// ---- Extract any ISO / archive files ----
-	archiveExts := map[string]bool{".iso": true, ".bin": true, ".zip": true, ".rar": true, ".7z": true}
+	// .bin is intentionally excluded — game data files commonly use .bin and are not archives
+	archiveExts := map[string]bool{".iso": true, ".zip": true, ".rar": true, ".7z": true}
 	_ = filepath.Walk(downloadDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
@@ -305,7 +306,11 @@ func (c *Client) executeJob(job agent.InstallJob) {
 		log.Printf("[Agent] No game exe found, skipping shortcut")
 	}
 
-	c.reportProgress(job, agent.JobDone, "Install complete. Files in: "+downloadDir, 100)
+	doneMsg := "Install complete. Files in: " + downloadDir
+	if gameExe != "" {
+		doneMsg += ". Restart Steam to see the shortcut."
+	}
+	c.reportProgress(job, agent.JobDone, doneMsg, 100)
 	log.Printf("[Agent] Job %s: done", job.JobID)
 }
 
@@ -427,7 +432,7 @@ func isGameExe(lower string) bool {
 	if !strings.HasSuffix(lower, ".exe") {
 		return false
 	}
-	excludePrefixes := []string{"setup", "install", "unins", "redist", "dxsetup", "vcredist", "directx"}
+	excludePrefixes := []string{"setup", "install", "unins", "redist", "dxsetup", "vcredist", "directx", "config", "crashreport", "crashpad", "bugsplat"}
 	for _, p := range excludePrefixes {
 		if strings.HasPrefix(lower, p) {
 			return false
