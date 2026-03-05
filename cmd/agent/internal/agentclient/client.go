@@ -211,6 +211,22 @@ func (c *Client) executeJob(job agent.InstallJob) {
 		}
 	}
 
+	// ---- Extract any ISO files ----
+	_ = filepath.Walk(installDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if strings.ToLower(filepath.Ext(path)) == ".iso" {
+			extractDir := strings.TrimSuffix(path, filepath.Ext(path))
+			c.reportProgress(job, agent.JobExtracting, "Extracting: "+filepath.Base(path), 82)
+			log.Printf("[Agent] Extracting ISO: %s → %s", path, extractDir)
+			if err := exec.Command("7z", "x", path, "-o"+extractDir, "-y").Run(); err != nil {
+				exec.Command("7za", "x", path, "-o"+extractDir, "-y").Run()
+			}
+		}
+		return nil
+	})
+
 	// ---- Find and run installer ----
 	c.reportProgress(job, agent.JobInstalling, "Looking for installer...", 85)
 	installer := findInstaller(installDir)
@@ -315,21 +331,19 @@ func (c *Client) sleep(d time.Duration) {
 // ---- Helpers ----
 
 func findInstaller(dir string) string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
+	var found string
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || found != "" {
+			return nil
 		}
-		lower := strings.ToLower(e.Name())
+		lower := strings.ToLower(info.Name())
 		if strings.HasSuffix(lower, ".exe") &&
 			(strings.HasPrefix(lower, "setup") || strings.HasPrefix(lower, "install")) {
-			return filepath.Join(dir, e.Name())
+			found = path
 		}
-	}
-	return ""
+		return nil
+	})
+	return found
 }
 
 func runInstaller(path string, gameID int) error {

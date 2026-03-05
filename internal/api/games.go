@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/kiwi3007/playerr/internal/domain"
 	"github.com/kiwi3007/playerr/internal/launcher"
+	"github.com/kiwi3007/playerr/internal/metadata/igdb"
 )
 
 func (h *Handler) GetAllGames(w http.ResponseWriter, r *http.Request) {
@@ -136,6 +138,44 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	}
 	if update.IgdbID != nil {
 		existing.IgdbID = update.IgdbID
+		// Fetch full metadata from IGDB and apply it
+		igdbCfg := h.cfg.LoadIgdb()
+		if igdbCfg.IsConfigured() {
+			client := igdb.NewClient(igdbCfg.ClientId, igdbCfg.ClientSecret)
+			if games, err := client.GetGamesByIds([]int{*update.IgdbID}); err == nil && len(games) > 0 {
+				g := games[0]
+				if g.Summary != "" {
+					existing.Overview = &g.Summary
+				}
+				if g.Cover != nil {
+					cu := igdb.ImageURL(g.Cover.ImageID, igdb.SizeCoverBig)
+					cl := igdb.ImageURL(g.Cover.ImageID, igdb.SizeHD)
+					existing.Images.CoverUrl = &cu
+					existing.Images.CoverLargeUrl = &cl
+				}
+				if g.FirstReleaseDate != nil {
+					existing.Year = time.Unix(*g.FirstReleaseDate, 0).UTC().Year()
+				}
+				existing.Genres = nil
+				for _, genre := range g.Genres {
+					existing.Genres = append(existing.Genres, genre.Name)
+				}
+				var screenshots, artworks []string
+				for _, s := range g.Screenshots {
+					screenshots = append(screenshots, igdb.ImageURL(s.ImageID, igdb.SizeScreenshotHuge))
+				}
+				for _, a := range g.Artworks {
+					artworks = append(artworks, igdb.ImageURL(a.ImageID, igdb.SizeHD))
+				}
+				existing.Images.Screenshots = screenshots
+				existing.Images.Artworks = artworks
+				if len(artworks) > 0 {
+					existing.Images.BackgroundUrl = &artworks[0]
+				} else if len(screenshots) > 0 {
+					existing.Images.BackgroundUrl = &screenshots[0]
+				}
+			}
+		}
 	}
 	if update.InstallPath != nil && *update.InstallPath != "" {
 		existing.InstallPath = update.InstallPath
