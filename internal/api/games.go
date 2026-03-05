@@ -594,10 +594,12 @@ func launchProcess(path string) error {
 	case "darwin":
 		cmd = exec.Command("open", path)
 	default:
-		// Linux: for .exe files try Proton, then Wine
+		// Linux: for .exe files try best runner, then Wine fallback
 		if strings.HasSuffix(strings.ToLower(path), ".exe") {
-			if protonCmd := launcher.TryProton(path, "playerr"); protonCmd != nil {
-				return protonCmd.Start()
+			wineprefix := filepath.Join(os.Getenv("HOME"), ".local", "share", "playerr", "prefix_launch")
+			if runner := launcher.FindRunner(); runner != nil {
+				runCmd := runner.RunWith(path, wineprefix)
+				return runCmd.Start()
 			}
 			cmd = exec.Command("wine", path)
 		} else {

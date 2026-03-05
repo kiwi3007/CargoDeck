@@ -34,6 +34,9 @@ func FindSteamUserConfigDir() string {
 	roots := []string{
 		filepath.Join(home, ".local", "share", "Steam", "userdata"),
 		filepath.Join(home, ".steam", "steam", "userdata"),
+		// Windows paths
+		filepath.Join(os.Getenv("ProgramFiles(x86)"), "Steam", "userdata"),
+		filepath.Join(os.Getenv("LOCALAPPDATA"), "Steam", "userdata"),
 	}
 	for _, root := range roots {
 		entries, err := os.ReadDir(root)

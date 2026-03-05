@@ -17,7 +17,6 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/kiwi3007/playerr/internal/agent"
@@ -253,12 +252,11 @@ func (c *Client) executeJob(job agent.InstallJob) {
 		return nil
 	})
 
-	// ---- Determine Proton compatdata path ----
-	suffix := fmt.Sprintf("playerr_%d", job.GameID)
+	// ---- Determine wineprefix path (outside Steam directories) ----
 	home := homeDir()
-	compatData := filepath.Join(home, ".steam", "steam", "steamapps", "compatdata", suffix)
-	// Known install dir inside Proton prefix (we force /DIR= to this path)
-	gameInstallDir := filepath.Join(compatData, "pfx", "drive_c", "Games", safeName(job.GameTitle))
+	wineprefix := filepath.Join(home, ".local", "share", "playerr", fmt.Sprintf("prefix_%d", job.GameID))
+	// Known install dir inside Wine prefix (we force /DIR= to this path)
+	gameInstallDir := filepath.Join(wineprefix, "pfx", "drive_c", "Games", safeName(job.GameTitle))
 
 	// ---- Find and run installer ----
 	c.reportProgress(job, agent.JobInstalling, "Looking for installer...", 85)
@@ -268,13 +266,13 @@ func (c *Client) executeJob(job agent.InstallJob) {
 
 	if installer != "" {
 		c.reportProgress(job, agent.JobInstalling, "Running installer: "+filepath.Base(installer), 87)
-		if err := runInstallerSilent(installer, suffix, job.GameTitle); err != nil {
+		if err := runInstallerSilent(installer, wineprefix, job.GameTitle); err != nil {
 			log.Printf("[Agent] Installer error (non-fatal): %v", err)
 		}
 		// Try known install dir first, then search entire prefix
 		gameExe = findMainExe(gameInstallDir)
 		if gameExe == "" {
-			gameExe = findGameExeInPrefix(compatData)
+			gameExe = findGameExeInPrefix(wineprefix)
 		}
 		// Apply crack files: copy from Crack/SKIDROW/etc dirs to wherever game was installed
 		if gameExe != "" {
@@ -288,7 +286,7 @@ func (c *Client) executeJob(job agent.InstallJob) {
 	// ---- Create local Steam shortcut via wrapper script ----
 	c.reportProgress(job, agent.JobCreatingShortcut, "Creating Steam shortcut...", 95)
 	if gameExe != "" {
-		scriptPath := createRunScript(job.GameTitle, gameExe, compatData)
+		scriptPath := createRunScript(job.GameTitle, gameExe, wineprefix)
 		exeForShortcut := gameExe
 		if scriptPath != "" {
 			exeForShortcut = scriptPath
@@ -311,32 +309,35 @@ func (c *Client) executeJob(job agent.InstallJob) {
 	log.Printf("[Agent] Job %s: done", job.JobID)
 }
 
-// runInstallerSilent runs a Windows installer via Proton with silent/unattended flags.
-// It forces the install directory to a known location inside the Proton prefix.
-func runInstallerSilent(installerPath, compatDataSuffix, gameTitle string) error {
-	winInstallDir := `C:\Games\` + safeName(gameTitle)
+// runInstallerSilent runs a Windows installer silently.
+// On Windows: runs the installer natively.
+// On Linux/macOS: uses the best available runner (UMU > Proton > Wine).
+func runInstallerSilent(installerPath, wineprefix, gameTitle string) error {
 	silentFlags := []string{
 		"/VERYSILENT",
 		"/SUPPRESSMSGBOXES",
 		"/NORESTART",
-		"/DIR=" + winInstallDir,
 	}
 
-	if cmd := launcher.TryProton(installerPath, compatDataSuffix, silentFlags...); cmd != nil {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
-	}
-	if w, err := exec.LookPath("wine"); err == nil {
-		args := append([]string{installerPath}, silentFlags...)
-		cmd := exec.Command(w, args...)
+	if runtime.GOOS == "windows" {
+		winDir := filepath.Join(os.Getenv("USERPROFILE"), "Games", safeName(gameTitle))
+		cmd := exec.Command(installerPath, append(silentFlags, "/DIR="+winDir)...)
 		cmd.Dir = filepath.Dir(installerPath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
 	}
-	log.Printf("[Agent] No Proton or Wine found — skipping installer %s", installerPath)
-	return nil
+
+	runner := launcher.FindRunner()
+	if runner == nil {
+		log.Printf("[Agent] No runner found — skipping installer %s", installerPath)
+		return nil
+	}
+	args := append(silentFlags, `/DIR=C:\Games\`+safeName(gameTitle))
+	cmd := runner.RunWith(installerPath, wineprefix, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // findGameExeInPrefix searches the Proton wine prefix for a non-system game exe.
@@ -435,24 +436,48 @@ func isGameExe(lower string) bool {
 	return true
 }
 
-// createRunScript writes a shell wrapper that launches the game via Proton.
-// Returns the script path, or "" if Proton is not available.
-func createRunScript(gameTitle, gameExe, compatData string) string {
-	protonBin := launcher.FindProton()
-	steamRoot := launcher.FindSteamRoot()
-	if protonBin == "" {
+// createRunScript writes a launcher script for the game.
+// On Windows: writes run.bat. On Linux: writes run.sh using the found runner.
+// Returns the script path, or "" if no runner is available and not on Windows.
+func createRunScript(gameTitle, gameExe, wineprefix string) string {
+	scriptDir := filepath.Join(homeDir(), "Games", safeName(gameTitle))
+	_ = os.MkdirAll(scriptDir, 0755)
+
+	if runtime.GOOS == "windows" {
+		scriptPath := filepath.Join(scriptDir, "run.bat")
+		content := fmt.Sprintf("@echo off\r\nstart \"\" %q\r\n", gameExe)
+		if err := os.WriteFile(scriptPath, []byte(content), 0644); err != nil {
+			log.Printf("[Agent] Failed to write run.bat: %v", err)
+			return ""
+		}
+		return scriptPath
+	}
+
+	runner := launcher.FindRunner()
+	if runner == nil {
 		return ""
 	}
 
-	scriptDir := filepath.Join(homeDir(), "Games", safeName(gameTitle))
-	_ = os.MkdirAll(scriptDir, 0755)
 	scriptPath := filepath.Join(scriptDir, "run.sh")
+	var content string
 
-	content := fmt.Sprintf("#!/bin/bash\nexport STEAM_COMPAT_DATA_PATH=%q\nexport STEAM_COMPAT_CLIENT_INSTALL_PATH=%q\nexec %q run %q \"$@\"\n",
-		compatData, steamRoot, protonBin, gameExe)
+	switch runner.Type {
+	case launcher.RunnerUMU:
+		content = fmt.Sprintf("#!/bin/bash\nexport WINEPREFIX=%q\nexport PROTONPATH=%q\nexport GAMEID=0\nexec %q %q \"$@\"\n",
+			wineprefix, runner.ProtonPath, runner.BinPath, gameExe)
+	case launcher.RunnerProton:
+		fakeSteam := filepath.Join(homeDir(), ".config", "playerr-agent", "fake-steam-root")
+		content = fmt.Sprintf("#!/bin/bash\nexport STEAM_COMPAT_DATA_PATH=%q\nexport STEAM_COMPAT_CLIENT_INSTALL_PATH=%q\nexec %q run %q \"$@\"\n",
+			wineprefix, fakeSteam, runner.BinPath, gameExe)
+	case launcher.RunnerWine:
+		content = fmt.Sprintf("#!/bin/bash\nexport WINEPREFIX=%q\nexec %q %q \"$@\"\n",
+			wineprefix, runner.BinPath, gameExe)
+	default:
+		return ""
+	}
 
 	if err := os.WriteFile(scriptPath, []byte(content), 0755); err != nil {
-		log.Printf("[Agent] Failed to write run script: %v", err)
+		log.Printf("[Agent] Failed to write run.sh: %v", err)
 		return ""
 	}
 	return scriptPath
@@ -505,7 +530,37 @@ func discoverInstallPaths() []agent.InstallPath {
 	home := homeDir()
 	var paths []agent.InstallPath
 
-	// Default internal storage
+	if runtime.GOOS == "windows" {
+		// Default: %USERPROFILE%\Games
+		defaultPath := filepath.Join(home, "Games")
+		_ = os.MkdirAll(defaultPath, 0755)
+		paths = append(paths, agent.InstallPath{
+			Path:      defaultPath,
+			Label:     "Local Disk",
+			FreeBytes: diskFree(defaultPath),
+		})
+		// Additional drives (C-Z, skip the drive containing home)
+		homeVol := strings.ToUpper(filepath.VolumeName(home))
+		for _, letter := range "CDEFGHIJKLMNOPQRSTUVWXYZ" {
+			vol := string(letter) + ":"
+			if strings.ToUpper(vol) == homeVol {
+				continue
+			}
+			root := vol + `\`
+			if _, err := os.Stat(root); err != nil {
+				continue
+			}
+			gamesPath := vol + `\Games`
+			paths = append(paths, agent.InstallPath{
+				Path:      gamesPath,
+				Label:     string(letter) + " Drive",
+				FreeBytes: diskFree(root),
+			})
+		}
+		return paths
+	}
+
+	// Linux/macOS: default internal storage
 	defaultPath := filepath.Join(home, "Games")
 	_ = os.MkdirAll(defaultPath, 0755)
 	paths = append(paths, agent.InstallPath{
@@ -534,15 +589,6 @@ func discoverInstallPaths() []agent.InstallPath {
 		}
 	}
 	return paths
-}
-
-// diskFree returns the available bytes on the filesystem containing path.
-func diskFree(path string) int64 {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(path, &stat); err != nil {
-		return -1
-	}
-	return int64(stat.Bavail) * int64(stat.Bsize)
 }
 
 // copyDir copies all files from src to dst recursively.
