@@ -97,11 +97,16 @@ func (r *Runner) RunWith(exePath, wineprefix string, extraArgs ...string) *exec.
 		args := append([]string{"run", exePath}, extraArgs...)
 		cmd := exec.Command(r.BinPath, args...)
 		cmd.Dir = filepath.Dir(exePath)
-		fakeSteamRoot := fakeSteamRootDir()
-		_ = os.MkdirAll(fakeSteamRoot, 0755)
+		// GE-Proton needs the real Steam root to find the Linux Runtime container.
+		steamRoot := FindSteamRoot()
+		if steamRoot == "" {
+			steamRoot = fakeSteamRootDir()
+			_ = os.MkdirAll(steamRoot, 0755)
+		}
+		_ = os.MkdirAll(wineprefix, 0755)
 		cmd.Env = append(os.Environ(),
 			"STEAM_COMPAT_DATA_PATH="+wineprefix,
-			"STEAM_COMPAT_CLIENT_INSTALL_PATH="+fakeSteamRoot,
+			"STEAM_COMPAT_CLIENT_INSTALL_PATH="+steamRoot,
 		)
 		return cmd
 

@@ -432,7 +432,7 @@ func isGameExe(lower string) bool {
 	if !strings.HasSuffix(lower, ".exe") {
 		return false
 	}
-	excludePrefixes := []string{"setup", "install", "unins", "redist", "dxsetup", "vcredist", "directx", "config", "crashreport", "crashpad", "bugsplat"}
+	excludePrefixes := []string{"setup", "install", "unins", "redist", "dxsetup", "vcredist", "directx", "config", "crashreport", "crashpad", "bugsplat", "quicksfv"}
 	for _, p := range excludePrefixes {
 		if strings.HasPrefix(lower, p) {
 			return false
@@ -466,16 +466,47 @@ func createRunScript(gameTitle, gameExe, wineprefix string) string {
 	scriptPath := filepath.Join(scriptDir, "run.sh")
 	var content string
 
+	logFile := filepath.Join(scriptDir, "run.log")
+
 	switch runner.Type {
 	case launcher.RunnerUMU:
-		content = fmt.Sprintf("#!/bin/bash\nexport WINEPREFIX=%q\nexport PROTONPATH=%q\nexport GAMEID=0\nexec %q %q \"$@\"\n",
+		content = fmt.Sprintf(
+			"#!/bin/bash\n"+
+				"LOG=%q\n"+
+				"mkdir -p %q\n"+
+				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
+				"export WINEPREFIX=%q\n"+
+				"export PROTONPATH=%q\n"+
+				"export GAMEID=0\n"+
+				"exec %q %q \"$@\" >> \"$LOG\" 2>&1\n",
+			logFile, wineprefix,
 			wineprefix, runner.ProtonPath, runner.BinPath, gameExe)
 	case launcher.RunnerProton:
-		fakeSteam := filepath.Join(homeDir(), ".config", "playerr-agent", "fake-steam-root")
-		content = fmt.Sprintf("#!/bin/bash\nexport STEAM_COMPAT_DATA_PATH=%q\nexport STEAM_COMPAT_CLIENT_INSTALL_PATH=%q\nexec %q run %q \"$@\"\n",
-			wineprefix, fakeSteam, runner.BinPath, gameExe)
+		// GE-Proton needs STEAM_COMPAT_CLIENT_INSTALL_PATH to point at the real Steam
+		// installation so it can find the Steam Linux Runtime container.
+		steamRoot := launcher.FindSteamRoot()
+		if steamRoot == "" {
+			steamRoot = filepath.Dir(filepath.Dir(runner.BinPath)) // proton is in <steamroot>/compatibilitytools.d/<ver>/proton
+		}
+		content = fmt.Sprintf(
+			"#!/bin/bash\n"+
+				"LOG=%q\n"+
+				"mkdir -p %q\n"+
+				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
+				"export STEAM_COMPAT_DATA_PATH=%q\n"+
+				"export STEAM_COMPAT_CLIENT_INSTALL_PATH=%q\n"+
+				"exec %q run %q \"$@\" >> \"$LOG\" 2>&1\n",
+			logFile, wineprefix,
+			wineprefix, steamRoot, runner.BinPath, gameExe)
 	case launcher.RunnerWine:
-		content = fmt.Sprintf("#!/bin/bash\nexport WINEPREFIX=%q\nexec %q %q \"$@\"\n",
+		content = fmt.Sprintf(
+			"#!/bin/bash\n"+
+				"LOG=%q\n"+
+				"mkdir -p %q\n"+
+				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
+				"export WINEPREFIX=%q\n"+
+				"exec %q %q \"$@\" >> \"$LOG\" 2>&1\n",
+			logFile, wineprefix,
 			wineprefix, runner.BinPath, gameExe)
 	default:
 		return ""
