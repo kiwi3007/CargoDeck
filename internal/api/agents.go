@@ -6,6 +6,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -114,7 +116,18 @@ func (h *Handler) DispatchInstall(w http.ResponseWriter, r *http.Request) {
 		files = append(files, gf.RelativePath)
 	}
 	if len(files) == 0 && game.Path != nil && *game.Path != "" {
-		files = []string{"."}
+		// No GameFile records — walk the directory and enumerate files
+		root := *game.Path
+		_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(root, path)
+			if err == nil {
+				files = append(files, filepath.ToSlash(rel))
+			}
+			return nil
+		})
 	}
 
 	serverURL := resolveServerURL(r)

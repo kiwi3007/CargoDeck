@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -203,7 +204,7 @@ func (c *Client) executeJob(job agent.InstallJob) {
 			return
 		}
 
-		url := fmt.Sprintf("%s/api/v3/game/%d/file?path=%s", job.ServerURL, job.GameID, relPath)
+		url := fmt.Sprintf("%s/api/v3/game/%d/file?path=%s", job.ServerURL, job.GameID, url.QueryEscape(relPath))
 		if err := c.downloadFile(url, destPath); err != nil {
 			c.reportProgress(job, agent.JobFailed, "Download failed: "+err.Error(), pct)
 			return
