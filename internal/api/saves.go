@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kiwi3007/playerr/internal/agent"
 	"github.com/kiwi3007/playerr/internal/manifest"
 )
 
@@ -112,6 +113,13 @@ func (h *Handler) UploadSaveSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Capture the current latest snapshot metadata before writing the new one (for conflict detection)
+	existingPath, _, _ := h.findLatestSnapshotDir(gameID)
+	prevLatestAgentID := ""
+	if existingPath != "" {
+		prevLatestAgentID = filepath.Base(filepath.Dir(existingPath))
+	}
+
 	// Extract tar.gz into a timestamped snapshot directory
 	timestamp := time.Now().UTC().Format("2006-01-02T15-04-05Z")
 	snapshotDir := filepath.Join(savesDir, timestamp)
@@ -129,6 +137,12 @@ func (h *Handler) UploadSaveSnapshot(w http.ResponseWriter, r *http.Request) {
 
 	size := dirSizeBytes(snapshotDir)
 	log.Printf("[Saves] Snapshot saved: game=%d agent=%s title=%q ts=%s size=%d", gameID, agentID, title, timestamp, size)
+
+	// Post-upload: conflict detection + auto-sync to other agents
+	if gameID != 0 {
+		go h.postSnapshotSync(gameID, title, agentID, prevLatestAgentID)
+	}
+
 	jsonOK(w, map[string]any{"ok": true, "timestamp": timestamp, "sizeBytes": size})
 }
 
@@ -340,6 +354,116 @@ func (h *Handler) DeleteSaveSnapshot(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]bool{"ok": true})
 }
 
+// ---- POST /api/v3/save/{gameId}/promote-snapshot ----
+// Promotes the specified agent's latest snapshot to be the globally newest by copying it
+// with a fresh timestamp, then dispatches RESTORE_SAVE to all online agents with the game.
+// Used for conflict resolution when the user wants to keep a specific device's saves.
+func (h *Handler) PromoteAgentSnapshot(w http.ResponseWriter, r *http.Request) {
+	gameIDStr := chi.URLParam(r, "gameId")
+	gameID, _ := strconv.Atoi(gameIDStr)
+	sourceAgentID := r.URL.Query().Get("sourceAgentId")
+	if gameID == 0 || sourceAgentID == "" {
+		http.Error(w, "gameId and sourceAgentId are required", http.StatusBadRequest)
+		return
+	}
+
+	// Find the source agent's latest snapshot directory
+	sourceAgentDir := h.saveSnapshotDir(gameID, sourceAgentID)
+	tsEntries, err := os.ReadDir(sourceAgentDir)
+	if err != nil {
+		http.Error(w, "no snapshots from source agent", http.StatusNotFound)
+		return
+	}
+	var latestTS time.Time
+	var latestEntry string
+	for _, e := range tsEntries {
+		if !e.IsDir() {
+			continue
+		}
+		ts, err := time.Parse("2006-01-02T15-04-05Z", e.Name())
+		if err != nil {
+			continue
+		}
+		if ts.After(latestTS) {
+			latestTS = ts
+			latestEntry = e.Name()
+		}
+	}
+	if latestEntry == "" {
+		http.Error(w, "no snapshots from source agent", http.StatusNotFound)
+		return
+	}
+
+	srcPath := filepath.Join(sourceAgentDir, latestEntry)
+	newTS := time.Now().UTC().Format("2006-01-02T15-04-05Z")
+	dstPath := filepath.Join(sourceAgentDir, newTS)
+
+	if err := copySnapshotDir(srcPath, dstPath); err != nil {
+		http.Error(w, "copy failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	game, err := h.repo.GetGameByID(gameID)
+	if err != nil || game == nil {
+		http.Error(w, "game not found", http.StatusNotFound)
+		return
+	}
+
+	// Dispatch RESTORE_SAVE to all online agents that have this game
+	restorePayload, _ := json.Marshal(map[string]any{"gameId": gameID, "title": game.Title})
+	agents := h.agentRegistry.List()
+	for _, a := range agents {
+		if a.Status != agent.StatusOnline {
+			continue
+		}
+		for _, ig := range a.InstalledGames {
+			if ig.Title == game.Title {
+				h.agentBroker.Send(a.ID, "RESTORE_SAVE", string(restorePayload))
+				log.Printf("[Saves] Promote: dispatched RESTORE_SAVE %q → %s", game.Title, a.ID)
+				break
+			}
+		}
+	}
+
+	log.Printf("[Saves] Promoted snapshot from agent=%s game=%d as %s", sourceAgentID, gameID, newTS)
+	jsonOK(w, map[string]any{"ok": true, "newTimestamp": newTS})
+}
+
+// postSnapshotSync runs after a new snapshot is saved.
+// If the previous latest was from a DIFFERENT agent, a conflict is emitted to the browser.
+// Otherwise, RESTORE_SAVE is dispatched to all other online agents with the game installed.
+func (h *Handler) postSnapshotSync(gameID int, title, uploaderID, prevLatestAgentID string) {
+	if prevLatestAgentID != "" && prevLatestAgentID != uploaderID {
+		// Conflict: the previous latest was from a different agent.
+		// The uploader may have been playing with outdated saves.
+		conflictData, _ := json.Marshal(map[string]any{
+			"gameId":             gameID,
+			"title":              title,
+			"uploadingAgentId":   uploaderID,
+			"conflictingAgentId": prevLatestAgentID,
+		})
+		h.broker.Publish("SAVE_CONFLICT", string(conflictData))
+		log.Printf("[Saves] Conflict: %q uploaded by %s, but %s had previous latest — notifying browser", title, uploaderID, prevLatestAgentID)
+		return
+	}
+
+	// No conflict — auto-restore to other online agents that have this game installed
+	restorePayload, _ := json.Marshal(map[string]any{"gameId": gameID, "title": title})
+	agents := h.agentRegistry.List()
+	for _, a := range agents {
+		if a.ID == uploaderID || a.Status != agent.StatusOnline {
+			continue
+		}
+		for _, ig := range a.InstalledGames {
+			if ig.Title == title {
+				h.agentBroker.Send(a.ID, "RESTORE_SAVE", string(restorePayload))
+				log.Printf("[Saves] Auto-restore: dispatched RESTORE_SAVE %q → %s", title, a.ID)
+				break
+			}
+		}
+	}
+}
+
 // ---- helpers ----
 
 // scanPrefixForGame scans common Wine prefix user-data locations for directories
@@ -497,6 +621,38 @@ func dirSizeBytes(dir string) int64 {
 	return total
 }
 
+// copySnapshotDir deep-copies a snapshot directory tree to a new destination.
+func copySnapshotDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, 0755)
+		}
+		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+			return err
+		}
+		in, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+		out, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+		if err != nil {
+			return err
+		}
+		defer out.Close()
+		_, err = io.Copy(out, in)
+		return err
+	})
+}
+
 // dedupePaths returns paths with empty strings removed and duplicates eliminated,
 // preserving order.
 func dedupePaths(paths []string) []string {
@@ -634,6 +790,11 @@ func (h *Handler) SetSavePath(w http.ResponseWriter, r *http.Request) {
 		if err := h.repo.SetAgentSavePath(gameID, body.AgentID, body.SavePath); err != nil {
 			http.Error(w, "update failed: "+err.Error(), http.StatusInternalServerError)
 			return
+		}
+		// Trigger the agent to re-scan so it picks up the new custom path immediately
+		if agentInfo, ok := h.agentRegistry.Get(body.AgentID); ok && agentInfo.Status == agent.StatusOnline {
+			h.agentBroker.Send(body.AgentID, "SCAN_GAMES", "{}")
+			log.Printf("[Saves] Triggered SCAN_GAMES on %s after custom path update for game %d", body.AgentID, gameID)
 		}
 	} else {
 		// Global per-game path (legacy / server-local games)

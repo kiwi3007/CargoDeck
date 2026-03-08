@@ -177,6 +177,7 @@ const GameDetails: React.FC = () => {
   const [savesLoading, setSavesLoading] = useState(false);
   const [savePathsInfo, setSavePathsInfo] = useState<SavePathsInfo | null>(null);
   const [browserAgent, setBrowserAgent] = useState<{ id: string; name: string } | null>(null);
+  const [saveConflict, setSaveConflict] = useState<{ gameId: number; title: string; uploadingAgentId: string; conflictingAgentId: string } | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
@@ -238,6 +239,20 @@ const GameDetails: React.FC = () => {
     window.addEventListener('AGENT_PROGRESS_EVENT', handler);
     return () => window.removeEventListener('AGENT_PROGRESS_EVENT', handler);
   }, []);
+
+  // Listen for save conflicts on this game
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const data = JSON.parse((e as CustomEvent).detail);
+        if (game && data.gameId === game.id) {
+          setSaveConflict(data);
+        }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('SAVE_CONFLICT_EVENT', handler);
+    return () => window.removeEventListener('SAVE_CONFLICT_EVENT', handler);
+  }, [game?.id]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -825,6 +840,20 @@ const GameDetails: React.FC = () => {
       setNotification({ message: 'Prefix rename requested — the agent will rename the directory and update run.sh.', type: 'success' });
     } catch (err: any) {
       setNotification({ message: 'Rename failed: ' + (err.response?.data?.error || err.message), type: 'error' });
+    }
+  };
+
+  const handleKeepSaves = async (keepAgentId: string, discardAgentId: string) => {
+    if (!game || !saveConflict) return;
+    try {
+      // Promote the keeper's snapshot as the new latest, then restore to all agents
+      await axios.post(`/api/v3/save/${game.id}/promote-snapshot?sourceAgentId=${keepAgentId}`);
+      const keepName = agents.find(a => a.id === keepAgentId)?.name ?? keepAgentId.slice(0, 8);
+      setNotification({ message: `Restoring ${keepName}'s saves to all devices.`, type: 'success' });
+      setSaveConflict(null);
+      setTimeout(() => { loadSaveSnapshots(); }, 1000);
+    } catch (err: any) {
+      setNotification({ message: 'Conflict resolution failed: ' + (err.response?.data?.error || err.message), type: 'error' });
     }
   };
 
@@ -1477,6 +1506,40 @@ const GameDetails: React.FC = () => {
 
       {activeTab === 'saves' && (
         <div className="saves-panel">
+          {/* Save conflict banner */}
+          {saveConflict && saveConflict.gameId === game?.id && (
+            <div className="save-conflict-banner">
+              <div className="save-conflict-icon">⚠</div>
+              <div className="save-conflict-body">
+                <strong>Save conflict detected</strong>
+                <p>
+                  <em>{agents.find(a => a.id === saveConflict.uploadingAgentId)?.name ?? saveConflict.uploadingAgentId.slice(0, 8)}</em> uploaded saves,
+                  but <em>{agents.find(a => a.id === saveConflict.conflictingAgentId)?.name ?? saveConflict.conflictingAgentId.slice(0, 8)}</em> had the previous latest save.
+                  Which version should be kept on all devices?
+                </p>
+              </div>
+              <div className="save-conflict-actions">
+                <button
+                  className="saves-restore-btn"
+                  onClick={() => handleKeepSaves(saveConflict.uploadingAgentId, saveConflict.conflictingAgentId)}
+                >
+                  Keep {agents.find(a => a.id === saveConflict.uploadingAgentId)?.name ?? 'uploaded'} saves
+                </button>
+                <button
+                  className="saves-restore-btn"
+                  onClick={() => handleKeepSaves(saveConflict.conflictingAgentId, saveConflict.uploadingAgentId)}
+                >
+                  Keep {agents.find(a => a.id === saveConflict.conflictingAgentId)?.name ?? 'previous'} saves
+                </button>
+                <button
+                  className="saves-path-remove"
+                  title="Dismiss"
+                  onClick={() => setSaveConflict(null)}
+                >✕</button>
+              </div>
+            </div>
+          )}
+
           {/* Save Locations */}
           <div className="saves-locations">
             <div className="saves-header">

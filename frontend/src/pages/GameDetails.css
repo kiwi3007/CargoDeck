@@ -877,6 +877,51 @@
   color: #a6e3a1;
   transform: translateX(-4px);
 }
+/* ---- Save conflict banner ---- */
+.save-conflict-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: rgba(255, 160, 0, 0.1);
+  border: 1px solid rgba(255, 160, 0, 0.45);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+.save-conflict-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: #ffb74d;
+}
+.save-conflict-body {
+  flex: 1;
+}
+.save-conflict-body strong {
+  color: #ffb74d;
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+}
+.save-conflict-body p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted, #aaa);
+  line-height: 1.4;
+}
+.save-conflict-body em {
+  color: var(--text-primary, #cdd6f4);
+  font-style: normal;
+  font-weight: 600;
+}
+.save-conflict-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
 /* ---- Saves tab ---- */
 .saves-panel {
   margin-top: 1.5rem;

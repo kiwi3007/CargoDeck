@@ -235,25 +235,32 @@ func (sw *SaveWatcher) UpdateGames(titles []string, scriptDirs map[string]string
 		}
 	}
 
-	// Add watches for new games
+	// Refresh watches for all installed games.
+	// Always re-fetch save paths so that custom paths added via the UI are picked up
+	// without requiring a full agent restart.
 	for _, title := range titles {
 		sn := safeName(title)
-		if _, already := sw.games[sn]; already {
-			continue
-		}
-
 		scriptDir := scriptDirs[sn]
-		game := &watchedSaveGame{title: title, scriptDir: scriptDir}
 
-		// Fetch save paths from server (releases the lock during HTTP call)
+		// Fetch latest save paths from server (releases the lock during HTTP call)
 		sw.mu.Unlock()
 		saveDirs := sw.client.fetchSavePaths(title, scriptDir)
 		sw.mu.Lock()
 
-		game.saveDirs = saveDirs
+		existing := sw.games[sn]
+		game := &watchedSaveGame{title: title, scriptDir: scriptDir, saveDirs: saveDirs}
 		sw.games[sn] = game
 
-		// Watch script dir for the exit marker
+		// Remove watches for directories that are no longer in the list
+		if existing != nil {
+			for _, old := range existing.saveDirs {
+				if !containsStr(saveDirs, old) {
+					_ = sw.watcher.Remove(old)
+				}
+			}
+		}
+
+		// Watch script dir for the exit marker (idempotent)
 		if scriptDir != "" {
 			_ = os.MkdirAll(scriptDir, 0755)
 			if err := sw.watcher.Add(scriptDir); err != nil {
@@ -261,7 +268,7 @@ func (sw *SaveWatcher) UpdateGames(titles []string, scriptDirs map[string]string
 			}
 		}
 
-		// Watch each save directory (create if needed)
+		// Watch each save directory (fsnotify.Add is idempotent for already-watched paths)
 		for _, dir := range saveDirs {
 			_ = os.MkdirAll(dir, 0755)
 			if err := sw.watcher.Add(dir); err != nil {
@@ -269,8 +276,10 @@ func (sw *SaveWatcher) UpdateGames(titles []string, scriptDirs map[string]string
 			}
 		}
 
-		if len(saveDirs) > 0 {
+		if existing == nil && len(saveDirs) > 0 {
 			log.Printf("[Saves] Watching %q: %v", title, saveDirs)
+		} else if existing != nil && !equalStringSlices(existing.saveDirs, saveDirs) {
+			log.Printf("[Saves] Updated watches for %q: %v", title, saveDirs)
 		}
 	}
 }
@@ -478,6 +487,29 @@ func (c *Client) uploadSaves(g *watchedSaveGame) {
 		b, _ := io.ReadAll(resp.Body)
 		log.Printf("[Saves] Upload HTTP %d for %q: %s", resp.StatusCode, g.title, strings.TrimSpace(string(b)))
 	}
+}
+
+// containsStr reports whether s is in slice.
+func containsStr(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// equalStringSlices reports whether a and b have the same elements in the same order.
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // tarDir archives all files under dir into tw.

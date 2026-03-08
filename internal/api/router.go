@@ -212,6 +212,8 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Patch("/{gameId}/path", h.SetSavePath)
 		// Per-device save path overrides (map of agentId → path)
 		r.Get("/{gameId}/agent-paths", h.GetAgentSavePaths)
+		// Conflict resolution: promote a specific agent's snapshot as globally latest
+		r.Post("/{gameId}/promote-snapshot", h.PromoteAgentSnapshot)
 	})
 
 	// Agent API

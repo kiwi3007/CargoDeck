@@ -66,6 +66,9 @@ function useSSE() {
         es.addEventListener('GAME_UPDATE_AVAILABLE', (e: MessageEvent) => {
           window.dispatchEvent(new CustomEvent('GAME_UPDATE_AVAILABLE_EVENT', { detail: e.data }));
         });
+        es.addEventListener('SAVE_CONFLICT', (e: MessageEvent) => {
+          window.dispatchEvent(new CustomEvent('SAVE_CONFLICT_EVENT', { detail: e.data }));
+        });
         es.onerror = () => {
           es?.close();
           // Reconnect after 5 seconds on error
