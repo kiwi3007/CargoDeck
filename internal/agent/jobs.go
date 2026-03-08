@@ -81,6 +81,27 @@ type DeleteGameJob struct {
 	RemoveShortcut bool   `json:"removeShortcut"`
 }
 
+// BrowseDirJob is pushed to the agent to list a remote directory.
+type BrowseDirJob struct {
+	RequestID string `json:"requestId"`
+	Path      string `json:"path"` // "~" means home dir
+}
+
+// DirEntry is a single item returned by the agent's directory listing.
+type DirEntry struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	IsDir bool   `json:"isDir"`
+}
+
+// BrowseDirResult is posted back by the agent after listing a directory.
+type BrowseDirResult struct {
+	RequestID string     `json:"requestId"`
+	Path      string     `json:"path"`
+	Entries   []DirEntry `json:"entries"`
+	Error     string     `json:"error,omitempty"`
+}
+
 // JobQueue holds a buffered channel per agent for pending install jobs.
 type JobQueue struct {
 	mu     sync.Mutex

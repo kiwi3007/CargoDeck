@@ -6,6 +6,7 @@ import { useSearchCache } from '../context/SearchCacheContext';
 import GameCorrectionModal from '../components/GameCorrectionModal';
 import UninstallModal from '../components/UninstallModal';
 import SwitchInstallerModal from '../components/SwitchInstallerModal';
+import AgentFileBrowserModal from '../components/AgentFileBrowserModal';
 import WorkflowPipeline, { WorkflowStep } from '../components/WorkflowPipeline';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faPen, faFolderOpen, faDownload, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown, faTrash, faMicrochip, faDatabase } from '@fortawesome/free-solid-svg-icons';
@@ -69,9 +70,10 @@ interface ServerFile {
 }
 
 interface SavePathsInfo {
-  source: 'custom' | 'manifest' | 'fallback' | 'none';
-  paths: string[];
-  savePath?: string; // custom path if source=custom
+  source: 'manifest' | 'prefix-scan' | 'fallback' | 'none';
+  paths: string[];       // merged (custom + detected), for agent use
+  customPaths: string[]; // only user-added paths (subset of paths)
+  agentPaths: Record<string, string>; // agentId → custom path
   steamId?: number;
 }
 
@@ -173,8 +175,7 @@ const GameDetails: React.FC = () => {
   const [saveSnapshots, setSaveSnapshots] = useState<SaveSnapshot[]>([]);
   const [savesLoading, setSavesLoading] = useState(false);
   const [savePathsInfo, setSavePathsInfo] = useState<SavePathsInfo | null>(null);
-  const [customPathInput, setCustomPathInput] = useState('');
-  const [savingCustomPath, setSavingCustomPath] = useState(false);
+  const [browserAgent, setBrowserAgent] = useState<{ id: string; name: string } | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
@@ -784,7 +785,6 @@ const GameDetails: React.FC = () => {
     try {
       const r = await axios.get<SavePathsInfo>(`/api/v3/save/paths-info?gameId=${game.id}`);
       setSavePathsInfo(r.data);
-      setCustomPathInput(r.data.savePath ?? '');
     } catch {
       setSavePathsInfo(null);
     }
@@ -817,17 +817,25 @@ const GameDetails: React.FC = () => {
     }
   };
 
-  const handleSetCustomPath = async () => {
+  const handleBrowseSelect = async (agentId: string, path: string) => {
     if (!game) return;
-    setSavingCustomPath(true);
     try {
-      await axios.patch(`/api/v3/save/${game.id}/path`, { savePath: customPathInput.trim() });
+      await axios.patch(`/api/v3/save/${game.id}/path`, { savePath: path, agentId });
+      setBrowserAgent(null);
       await loadSavePathsInfo();
-      setNotification({ message: customPathInput.trim() ? 'Custom save path set.' : 'Custom save path cleared.', type: 'success' });
+      setNotification({ message: 'Custom save path set.', type: 'success' });
     } catch (err: any) {
       setNotification({ message: 'Failed to set path: ' + (err.response?.data?.error || err.message), type: 'error' });
-    } finally {
-      setSavingCustomPath(false);
+    }
+  };
+
+  const handleRemoveAgentPath = async (agentId: string) => {
+    if (!game) return;
+    try {
+      await axios.patch(`/api/v3/save/${game.id}/path`, { savePath: '', agentId });
+      await loadSavePathsInfo();
+    } catch (err: any) {
+      setNotification({ message: 'Failed to remove path: ' + (err.response?.data?.error || err.message), type: 'error' });
     }
   };
 
@@ -1447,53 +1455,87 @@ const GameDetails: React.FC = () => {
         )
       }
 
+      {browserAgent && (
+        <AgentFileBrowserModal
+          agentId={browserAgent.id}
+          agentName={browserAgent.name}
+          onSelect={(path) => handleBrowseSelect(browserAgent.id, path)}
+          onClose={() => setBrowserAgent(null)}
+        />
+      )}
+
       {activeTab === 'saves' && (
         <div className="saves-panel">
           {/* Save Locations */}
           <div className="saves-locations">
             <div className="saves-header">
               <span className="saves-title">Save Locations</span>
-              {savePathsInfo && (
+              {savePathsInfo && savePathsInfo.source !== 'none' && (
                 <span className={`saves-source-badge saves-source-${savePathsInfo.source}`}>
-                  {savePathsInfo.source === 'custom' ? 'Custom' :
-                   savePathsInfo.source === 'manifest' ? 'Ludusavi Manifest' :
-                   savePathsInfo.source === 'fallback' ? 'Fallback (guessed)' : 'None detected'}
+                  {savePathsInfo.source === 'manifest' ? 'Ludusavi Manifest' :
+                   savePathsInfo.source === 'prefix-scan' ? 'Wine Prefix Scan' :
+                   'Fallback (guessed)'}
                 </span>
               )}
             </div>
-            {savePathsInfo && savePathsInfo.paths.length > 0 && (
-              <ul className="saves-paths-list">
-                {savePathsInfo.paths.map(p => (
-                  <li key={p} className="saves-path-item">{p}</li>
-                ))}
-              </ul>
+
+            {/* Detected paths */}
+            {savePathsInfo && (() => {
+              const customSet = new Set(savePathsInfo.customPaths);
+              const detected = savePathsInfo.paths.filter(p => !customSet.has(p));
+              return detected.length > 0 ? (
+                <>
+                  <div className="saves-section-label">Detected paths (watched by all devices)</div>
+                  <ul className="saves-paths-list">
+                    {detected.map(p => <li key={p} className="saves-path-item">{p}</li>)}
+                  </ul>
+                </>
+              ) : null;
+            })()}
+
+            {/* Per-device custom paths */}
+            {savePathsInfo && Object.keys(savePathsInfo.agentPaths).length > 0 && (
+              <>
+                <div className="saves-section-label">Per-device custom paths</div>
+                <ul className="saves-paths-list">
+                  {Object.entries(savePathsInfo.agentPaths).map(([agentId, path]) => {
+                    const agentInfo = agents.find(a => a.id === agentId);
+                    const agentName = agentInfo?.name ?? agentId.slice(0, 8);
+                    return (
+                      <li key={agentId} className="saves-path-item saves-path-item-custom">
+                        <span className="saves-path-agent">{agentName}:</span>
+                        <span className="saves-path-value">{path}</span>
+                        <button
+                          className="saves-path-remove"
+                          title="Remove custom path"
+                          onClick={() => handleRemoveAgentPath(agentId)}
+                        >✕</button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
             )}
-            {savePathsInfo && savePathsInfo.paths.length === 0 && (
+
+            {savePathsInfo && savePathsInfo.paths.length === 0 && Object.keys(savePathsInfo.agentPaths).length === 0 && (
               <div className="saves-empty">No save paths detected.</div>
             )}
-            <div className="saves-custom-row">
-              <input
-                className="saves-custom-input"
-                type="text"
-                placeholder="Custom override path (overrides detected paths)"
-                value={customPathInput}
-                onChange={e => setCustomPathInput(e.target.value)}
-              />
-              <button
-                className="saves-custom-btn"
-                onClick={handleSetCustomPath}
-                disabled={savingCustomPath}
-              >
-                {savingCustomPath ? '...' : 'Set'}
-              </button>
-              {customPathInput && (
-                <button
-                  className="saves-custom-clear-btn"
-                  onClick={() => { setCustomPathInput(''); }}
-                  title="Clear"
-                >✕</button>
-              )}
-            </div>
+
+            {/* Browse buttons for online agents */}
+            {agents.filter(a => a.status === 'connected').length > 0 && (
+              <div className="saves-browse-row">
+                {agents.filter(a => a.status === 'connected').map(a => (
+                  <button
+                    key={a.id}
+                    className="saves-browse-btn"
+                    onClick={() => setBrowserAgent({ id: a.id, name: a.name })}
+                    title={`Browse ${a.name} filesystem to set a custom save path`}
+                  >
+                    📁 Browse {a.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Restore to Device */}

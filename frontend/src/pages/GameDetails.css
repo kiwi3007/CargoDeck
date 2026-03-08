@@ -1017,45 +1017,164 @@
   word-break: break-all;
 }
 
-.saves-custom-row {
+.saves-section-label {
+  font-size: 0.72rem;
+  color: #6c7086;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.saves-path-item-custom {
   display: flex;
-  gap: 6px;
   align-items: center;
-  margin-top: 0.5rem;
+  gap: 6px;
 }
-.saves-custom-input {
+.saves-path-agent {
+  color: #89b4fa;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.saves-path-value {
   flex: 1;
-  background: #1e1e2e;
-  border: 1px solid #45475a;
-  border-radius: 4px;
-  color: #cdd6f4;
-  font-size: 0.8rem;
-  padding: 5px 8px;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.saves-custom-input:focus { outline: none; border-color: #89b4fa; }
-.saves-custom-input::placeholder { color: #6c7086; }
-.saves-custom-btn {
-  background: #313244;
-  border: 1px solid #45475a;
-  border-radius: 4px;
-  color: #cdd6f4;
+.saves-path-remove {
+  background: transparent;
+  border: none;
+  color: #585b70;
+  cursor: pointer;
   font-size: 0.8rem;
-  padding: 5px 12px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.saves-path-remove:hover { color: #f38ba8; background: rgba(243,139,168,0.1); }
+
+.saves-browse-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0.75rem;
+}
+.saves-browse-btn {
+  background: rgba(137,180,250,0.08);
+  border: 1px solid rgba(137,180,250,0.25);
+  border-radius: 4px;
+  color: #89b4fa;
+  font-size: 0.8rem;
+  padding: 5px 10px;
   cursor: pointer;
   white-space: nowrap;
 }
-.saves-custom-btn:hover { background: #45475a; }
-.saves-custom-btn:disabled { opacity: 0.5; cursor: default; }
-.saves-custom-clear-btn {
+.saves-browse-btn:hover { background: rgba(137,180,250,0.18); }
+
+/* ---- File Browser Modal ---- */
+.file-browser-modal {
+  width: 560px;
+  max-width: 95vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.file-browser-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 8px 16px;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  font-size: 0.8rem;
+}
+.breadcrumb-seg {
   background: transparent;
   border: none;
-  color: #6c7086;
+  color: #89b4fa;
   cursor: pointer;
-  font-size: 0.85rem;
-  padding: 4px 6px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.8rem;
 }
-.saves-custom-clear-btn:hover { color: #f38ba8; }
+.breadcrumb-seg:hover { background: rgba(137,180,250,0.1); }
+.breadcrumb-seg:disabled { color: #cdd6f4; cursor: default; }
+.breadcrumb-sep { color: #585b70; }
+
+.file-browser-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #313244;
+  background: rgba(166,227,161,0.04);
+}
+.file-browser-select-btn {
+  background: rgba(166,227,161,0.12);
+  border: 1px solid rgba(166,227,161,0.3);
+  border-radius: 4px;
+  color: #a6e3a1;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.file-browser-select-btn:hover { background: rgba(166,227,161,0.22); }
+.file-browser-current-path {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #6c7086;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.file-browser-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.file-browser-loading,
+.file-browser-error,
+.file-browser-empty {
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  color: #6c7086;
+}
+.file-browser-error { color: #f38ba8; }
+
+.file-browser-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 16px;
+  cursor: default;
+  font-size: 0.82rem;
+  color: #cdd6f4;
+  position: relative;
+}
+.file-browser-entry-dir { cursor: pointer; }
+.file-browser-entry-dir:hover { background: rgba(137,180,250,0.07); }
+.file-browser-entry-file { color: #585b70; }
+.file-browser-icon { font-size: 0.9em; flex-shrink: 0; }
+.file-browser-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-browser-select-inline {
+  background: transparent;
+  border: none;
+  color: #585b70;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  border-radius: 3px;
+  opacity: 0;
+  flex-shrink: 0;
+}
+.file-browser-entry-dir:hover .file-browser-select-inline { opacity: 1; }
+.file-browser-select-inline:hover { color: #89b4fa; background: rgba(137,180,250,0.1); }
 
 /* ---- Files tab ---- */
 .files-panel {

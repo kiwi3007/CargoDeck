@@ -1,7 +1,10 @@
 package api
 
 import (
+	"log"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -29,6 +32,7 @@ type Handler struct {
 	agentBroker   *agent.AgentBroker
 	manifest      *manifest.Service
 	checker       *updater.Checker
+	browsePending sync.Map // requestId → chan agent.BrowseDirResult
 }
 
 func NewHandler(
@@ -63,7 +67,7 @@ func NewHandler(
 func (h *Handler) NewRouter() http.Handler {
 	r := chi.NewRouter()
 
-	r.Use(middleware.Logger)
+	r.Use(filteredLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(corsMiddleware)
 
@@ -239,6 +243,10 @@ func (h *Handler) NewRouter() http.Handler {
 		// Agent-authenticated callbacks
 		r.With(h.agentAuthMiddleware).Post("/{agentId}/games", h.ReportInstalledGames)
 		r.With(h.agentAuthMiddleware).Post("/log", h.ReceiveAgentLog)
+		r.With(h.agentAuthMiddleware).Post("/browse-result", h.ReceiveBrowseResult)
+
+		// Browser-facing: request a directory listing from an agent
+		r.Get("/{agentId}/browse", h.BrowseAgentDir)
 	})
 
 	return r
@@ -246,6 +254,26 @@ func (h *Handler) NewRouter() http.Handler {
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
+}
+
+// filteredLogger is a minimal request logger that skips high-frequency polling
+// endpoints to keep Docker logs readable.
+var silencedPaths = map[string]bool{
+	"/api/v3/media/scan/status": true,
+	"/api/v3/agent/progress":    true,
+}
+
+func filteredLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if silencedPaths[r.URL.Path] {
+			next.ServeHTTP(w, r)
+			return
+		}
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(ww, r)
+		log.Printf("%s %s %d %s", r.Method, r.URL.Path, ww.Status(), time.Since(start))
+	})
 }
 
 func corsMiddleware(next http.Handler) http.Handler {

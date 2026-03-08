@@ -625,6 +625,61 @@ func (h *Handler) publishAgentList() {
 	}
 }
 
+// ---- Agent filesystem browser ----
+
+// BrowseAgentDir dispatches a LIST_DIR job to an online agent and waits up to
+// 10 s for the directory listing. GET /api/v3/agent/{agentId}/browse?path=
+func (h *Handler) BrowseAgentDir(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentId")
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		path = "~"
+	}
+
+	if _, ok := h.agentRegistry.Get(agentID); !ok {
+		jsonErr(w, 404, "agent not found or offline")
+		return
+	}
+
+	requestID := fmt.Sprintf("browse-%d", time.Now().UnixNano())
+	ch := make(chan agent.BrowseDirResult, 1)
+	h.browsePending.Store(requestID, ch)
+	defer h.browsePending.Delete(requestID)
+
+	job := agent.BrowseDirJob{RequestID: requestID, Path: path}
+	data, _ := json.Marshal(job)
+	h.agentBroker.Send(agentID, "LIST_DIR", string(data))
+
+	select {
+	case result := <-ch:
+		if result.Error != "" {
+			jsonErr(w, 422, result.Error)
+			return
+		}
+		jsonOK(w, result)
+	case <-time.After(10 * time.Second):
+		jsonErr(w, 504, "agent did not respond in time")
+	}
+}
+
+// ReceiveBrowseResult is called by the agent with the directory listing result.
+// POST /api/v3/agent/browse-result (agent-authenticated)
+func (h *Handler) ReceiveBrowseResult(w http.ResponseWriter, r *http.Request) {
+	var result agent.BrowseDirResult
+	if err := decodeBody(r, &result); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	if v, ok := h.browsePending.Load(result.RequestID); ok {
+		ch := v.(chan agent.BrowseDirResult)
+		select {
+		case ch <- result:
+		default:
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ---- Auth middleware for agent-only endpoints ----
 
 func (h *Handler) agentAuthMiddleware(next http.Handler) http.Handler {

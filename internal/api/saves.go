@@ -23,7 +23,7 @@ import (
 // ---- GET /api/v3/save/paths ----
 // Query: title=<game title>&os=<linux|windows|mac>&wineprefix=<optional>&agentId=<optional>
 // Returns: []string of resolved save directory paths.
-// Priority: per-device override > global game override > manifest > prefix scan > fallback.
+// Custom per-device paths are prepended to (not replacing) manifest/fallback paths.
 // Used by the agent to discover where to look for saves.
 func (h *Handler) GetSavePaths(w http.ResponseWriter, r *http.Request) {
 	title := r.URL.Query().Get("title")
@@ -41,44 +41,37 @@ func (h *Handler) GetSavePaths(w http.ResponseWriter, r *http.Request) {
 
 	game, _ := h.repo.GetGameByTitle(title)
 
-	// 1. Per-device (per-agent) override
-	if agentID != "" && game != nil {
-		if path, _ := h.repo.GetAgentSavePath(game.ID, agentID); path != "" {
-			jsonOK(w, []string{path})
-			return
-		}
-	}
-
-	// 2. Global per-game custom save path (legacy / server-local games)
-	if game != nil && game.SavePath != "" {
-		jsonOK(w, []string{game.SavePath})
-		return
-	}
-
-	// 3. Manifest lookup
+	// Collect base paths: manifest → prefix-scan → fallback
+	var basePaths []string
 	if err := h.manifest.EnsureLoaded(); err != nil {
 		log.Printf("[Saves] Manifest load error: %v", err)
 	} else {
 		if entry, found := h.manifest.FindByTitle(title); found {
 			if paths := manifest.ResolvePaths(entry, targetOS, wineprefix); len(paths) > 0 {
-				jsonOK(w, paths)
-				return
+				basePaths = append(basePaths, paths...)
 			}
 		}
 	}
-
-	// 4. Scan the wineprefix for existing directories matching the game title.
-	//    This catches games not in the manifest that have already been launched.
-	if wineprefix != "" {
+	if len(basePaths) == 0 && wineprefix != "" {
 		if found := scanPrefixForGame(wineprefix, title); len(found) > 0 {
-			jsonOK(w, found)
-			return
+			basePaths = append(basePaths, found...)
 		}
 	}
+	if len(basePaths) == 0 {
+		home, _ := os.UserHomeDir()
+		basePaths = fallbackSavePaths(title, home, wineprefix)
+	}
 
-	// 5. Fallback candidate paths
-	home, _ := os.UserHomeDir()
-	jsonOK(w, fallbackSavePaths(title, home, wineprefix))
+	// Prepend per-device custom path (takes priority, appears first in watch list)
+	var customPath string
+	if agentID != "" && game != nil {
+		customPath, _ = h.repo.GetAgentSavePath(game.ID, agentID)
+	}
+	if customPath == "" && game != nil && game.SavePath != "" {
+		customPath = game.SavePath // legacy global path
+	}
+
+	jsonOK(w, dedupePaths(prependIfNonEmpty(customPath, basePaths)))
 }
 
 // ---- POST /api/v3/save/snapshot ----
@@ -504,14 +497,38 @@ func dirSizeBytes(dir string) int64 {
 	return total
 }
 
+// dedupePaths returns paths with empty strings removed and duplicates eliminated,
+// preserving order.
+func dedupePaths(paths []string) []string {
+	seen := make(map[string]bool, len(paths))
+	result := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if p != "" && !seen[p] {
+			seen[p] = true
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+// prependIfNonEmpty prepends p to paths if p is non-empty.
+func prependIfNonEmpty(p string, paths []string) []string {
+	if p == "" {
+		return paths
+	}
+	result := make([]string, 0, 1+len(paths))
+	result = append(result, p)
+	result = append(result, paths...)
+	return result
+}
+
 // GetSavePathsInfo returns a JSON summary of save path resolution for a game.
 // GET /api/v3/save/paths-info?gameId=<id>&os=linux&wineprefix=<optional>&agentId=<optional>
-// Includes: paths, source, agentPaths (per-device overrides), steamId.
+// Response: { source, paths (merged), customPaths (user-added only), agentPaths (map), steamId }
 func (h *Handler) GetSavePathsInfo(w http.ResponseWriter, r *http.Request) {
 	gameIDStr := r.URL.Query().Get("gameId")
 	targetOS := r.URL.Query().Get("os")
 	wineprefix := r.URL.Query().Get("wineprefix")
-	agentID := r.URL.Query().Get("agentId")
 
 	if gameIDStr == "" {
 		http.Error(w, "gameId required", http.StatusBadRequest)
@@ -528,82 +545,65 @@ func (h *Handler) GetSavePathsInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Always include per-device overrides in the response
+	// Per-device overrides map (agentId → path)
 	agentPaths, _ := h.repo.GetAllAgentSavePaths(gameID)
 
-	// 1. Per-device override for this specific agent
-	if agentID != "" {
-		if path, _ := h.repo.GetAgentSavePath(gameID, agentID); path != "" {
-			jsonOK(w, map[string]any{
-				"source":     "agent-custom",
-				"paths":      []string{path},
-				"savePath":   path,
-				"agentPaths": agentPaths,
-			})
-			return
-		}
-	}
+	// Collect base paths from manifest / prefix-scan / fallback
+	var basePaths []string
+	source := "none"
+	steamID := 0
 
-	// 2. Global per-game custom save path
-	if game.SavePath != "" {
-		jsonOK(w, map[string]any{
-			"source":     "custom",
-			"paths":      []string{game.SavePath},
-			"savePath":   game.SavePath,
-			"agentPaths": agentPaths,
-		})
-		return
-	}
-
-	// 3. Manifest lookup
 	_ = h.manifest.EnsureLoaded()
-	entry, found := h.manifest.FindByTitle(game.Title)
-	if found {
-		paths := manifest.ResolvePaths(entry, targetOS, wineprefix)
-		if len(paths) > 0 {
-			steamID := 0
+	if entry, found := h.manifest.FindByTitle(game.Title); found {
+		if paths := manifest.ResolvePaths(entry, targetOS, wineprefix); len(paths) > 0 {
+			basePaths = paths
+			source = "manifest"
 			if entry.Steam != nil {
 				steamID = entry.Steam.ID
 			}
-			jsonOK(w, map[string]any{
-				"source":     "manifest",
-				"paths":      paths,
-				"steamId":    steamID,
-				"agentPaths": agentPaths,
-			})
-			return
 		}
 	}
-
-	// 4. Prefix scan
-	if wineprefix != "" {
+	if len(basePaths) == 0 && wineprefix != "" {
 		if found := scanPrefixForGame(wineprefix, game.Title); len(found) > 0 {
-			jsonOK(w, map[string]any{
-				"source":     "prefix-scan",
-				"paths":      found,
-				"agentPaths": agentPaths,
-			})
-			return
+			basePaths = found
+			source = "prefix-scan"
+		}
+	}
+	if len(basePaths) == 0 {
+		home, _ := os.UserHomeDir()
+		if fb := fallbackSavePaths(game.Title, home, wineprefix); len(fb) > 0 {
+			basePaths = fb
+			source = "fallback"
 		}
 	}
 
-	// 5. Fallback
-	home, _ := os.UserHomeDir()
-	fallback := fallbackSavePaths(game.Title, home, wineprefix)
-	if len(fallback) > 0 {
-		jsonOK(w, map[string]any{
-			"source":     "fallback",
-			"paths":      fallback,
-			"agentPaths": agentPaths,
-		})
-		return
+	// Collect all per-agent custom paths (deduplicated, for remove-button display)
+	seenCustom := map[string]bool{}
+	var customPaths []string
+	for _, p := range agentPaths {
+		if p != "" && !seenCustom[p] {
+			seenCustom[p] = true
+			customPaths = append(customPaths, p)
+		}
+	}
+	// Include legacy global path as a custom path
+	if game.SavePath != "" && !seenCustom[game.SavePath] {
+		customPaths = append(customPaths, game.SavePath)
 	}
 
-	jsonOK(w, map[string]any{
-		"source":     "none",
-		"paths":      []string{},
-		"agentPaths": agentPaths,
-	})
+	// Merged list: custom paths first, then detected base paths, deduped
+	merged := dedupePaths(append(customPaths, basePaths...))
+
+	resp := map[string]any{
+		"source":      source,
+		"paths":       merged,
+		"customPaths": customPaths,
+		"agentPaths":  agentPaths,
+	}
+	if steamID != 0 {
+		resp["steamId"] = steamID
+	}
+	jsonOK(w, resp)
 }
 
 // SetSavePath sets or clears the custom save path for a game.

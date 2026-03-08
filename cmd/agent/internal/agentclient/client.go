@@ -256,6 +256,15 @@ func (c *Client) listenSSE() error {
 						go c.changeGameExe(req.Title, req.ExePath)
 					}
 				}
+			case "LIST_DIR":
+				if dataLine != "" {
+					var job agent.BrowseDirJob
+					if err := json.Unmarshal([]byte(dataLine), &job); err != nil {
+						log.Printf("[Agent] Bad LIST_DIR JSON: %v", err)
+					} else {
+						go c.browseDir(job)
+					}
+				}
 			}
 			eventType = ""
 			dataLine = ""
@@ -1586,6 +1595,42 @@ func removeShortcut(title string) {
 		_, _ = launcher.AddSteamShortcut(e)
 	}
 	log.Printf("[Agent] Removed shortcut for %q", title)
+}
+
+// browseDir lists the contents of a directory on the agent and posts the result back.
+func (c *Client) browseDir(job agent.BrowseDirJob) {
+	path := job.Path
+	if path == "~" || path == "" {
+		path = homeDir()
+	}
+
+	result := agent.BrowseDirResult{RequestID: job.RequestID, Path: path}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		result.Error = err.Error()
+	} else {
+		for _, e := range entries {
+			result.Entries = append(result.Entries, agent.DirEntry{
+				Name:  e.Name(),
+				Path:  filepath.Join(path, e.Name()),
+				IsDir: e.IsDir(),
+			})
+		}
+	}
+
+	body, _ := json.Marshal(result)
+	req, err := http.NewRequest("POST", c.cfg.ServerURL+"/api/v3/agent/browse-result", bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		log.Printf("[Agent] browse-result POST failed: %v", err)
+		return
+	}
+	resp.Body.Close()
 }
 
 func (c *Client) reportDeleteProgress(jobID, status, message string) {
