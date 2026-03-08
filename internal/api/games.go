@@ -6,16 +6,12 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/kiwi3007/playerr/internal/domain"
-	"github.com/kiwi3007/playerr/internal/launcher"
 	"github.com/kiwi3007/playerr/internal/metadata/igdb"
-	"github.com/kiwi3007/playerr/internal/steamgriddb"
 )
 
 func (h *Handler) GetAllGames(w http.ResponseWriter, r *http.Request) {
@@ -270,157 +266,6 @@ func (h *Handler) DeleteAllGames(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) PlayGame(w http.ResponseWriter, r *http.Request) {
-	id, _ := paramInt(r, "id")
-	game, _ := h.repo.GetGameByID(id)
-	if game == nil {
-		jsonErr(w, 404, "game not found")
-		return
-	}
-
-	pathOverride := r.URL.Query().Get("path")
-
-	// Steam launch
-	if game.SteamID != nil && *game.SteamID > 0 {
-		steamURL := fmt.Sprintf("steam://rungameid/%d", *game.SteamID)
-		if err := openURL(steamURL); err != nil {
-			jsonErr(w, 500, err.Error())
-			return
-		}
-		jsonOK(w, map[string]string{"message": fmt.Sprintf("Launching %s via Steam...", game.Title)})
-		return
-	}
-
-	// Native launch
-	exePath := pathOverride
-	if exePath == "" && game.ExecutablePath != nil {
-		exePath = *game.ExecutablePath
-	}
-	if exePath == "" {
-		jsonErr(w, 400, "no executable path set")
-		return
-	}
-
-	if err := launchProcess(exePath); err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonOK(w, map[string]string{"message": fmt.Sprintf("Launching %s...", game.Title)})
-}
-
-func (h *Handler) InstallGame(w http.ResponseWriter, r *http.Request) {
-	id, _ := paramInt(r, "id")
-	game, _ := h.repo.GetGameByID(id)
-	if game == nil {
-		jsonErr(w, 404, "game not found")
-		return
-	}
-
-	pathOverride := r.URL.Query().Get("path")
-	targetPath := pathOverride
-	if targetPath == "" && game.Path != nil {
-		targetPath = *game.Path
-	}
-	if targetPath == "" {
-		jsonErr(w, 400, "game path not set")
-		return
-	}
-
-	// Use manual install path if set
-	if game.InstallPath != nil && *game.InstallPath != "" && fileExists(*game.InstallPath) {
-		if err := launchInstaller(*game.InstallPath); err != nil {
-			jsonErr(w, 500, err.Error())
-			return
-		}
-		jsonOK(w, map[string]string{"message": "Installer launched"})
-		return
-	}
-
-	installer := findInstaller(targetPath, game.Title)
-	if installer == "" {
-		jsonErr(w, 400, "no installer found")
-		return
-	}
-
-	if err := launchInstaller(installer); err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonOK(w, map[string]string{"message": fmt.Sprintf("Installer launched: %s", filepath.Base(installer))})
-}
-
-func (h *Handler) UninstallGame(w http.ResponseWriter, r *http.Request) {
-	id, _ := paramInt(r, "id")
-	game, _ := h.repo.GetGameByID(id)
-	if game == nil {
-		jsonErr(w, 404, "game not found")
-		return
-	}
-
-	uninstaller := findUninstaller(game.Path)
-	if uninstaller == "" {
-		jsonErr(w, 404, "no uninstaller found")
-		return
-	}
-
-	if err := launchInstaller(uninstaller); err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-	jsonOK(w, map[string]string{"message": "Uninstaller launched"})
-}
-
-func (h *Handler) AddSteamShortcut(w http.ResponseWriter, r *http.Request) {
-	id, _ := paramInt(r, "id")
-	game, _ := h.repo.GetGameByID(id)
-	if game == nil {
-		jsonErr(w, 404, "game not found")
-		return
-	}
-
-	exePath := ""
-	if game.ExecutablePath != nil {
-		exePath = *game.ExecutablePath
-	}
-	if exePath == "" {
-		jsonErr(w, 400, "no executable path set for this game")
-		return
-	}
-
-	startDir := filepath.Dir(exePath)
-	entry := shortcutEntry{
-		AppName:  game.Title,
-		Exe:      exePath,
-		StartDir: startDir,
-	}
-
-	appID, err := addSteamShortcut(entry)
-	if err != nil {
-		jsonErr(w, 500, err.Error())
-		return
-	}
-
-	// Fetch SteamGridDB artwork in the background — non-fatal.
-	sgdbCfg := h.cfg.LoadSteamGridDB()
-	if sgdbCfg.IsConfigured() {
-		gridDir := launcher.FindSteamGridDir()
-		if gridDir != "" {
-			go func() {
-				client := steamgriddb.NewClient(sgdbCfg.ApiKey)
-				if err := client.FetchImages(game.Title, appID, gridDir); err != nil {
-					log.Printf("[SteamGridDB] Image fetch failed for %q: %v", game.Title, err)
-				} else {
-					log.Printf("[SteamGridDB] Images downloaded for %q (appid=%d)", game.Title, appID)
-				}
-			}()
-		}
-	}
-
-	jsonOK(w, map[string]any{
-		"message": fmt.Sprintf("Steam shortcut added for %q. Restart Steam to see it.", game.Title),
-		"appId":   appID,
-	})
-}
 
 // ---- helpers ----
 
@@ -754,44 +599,3 @@ func dirExists(path string) bool {
 	return err == nil && fi.IsDir()
 }
 
-func launchInstaller(path string) error {
-	return launchProcess(path)
-}
-
-func launchProcess(path string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command(path)
-		cmd.Dir = filepath.Dir(path)
-	case "darwin":
-		cmd = exec.Command("open", path)
-	default:
-		// Linux: for .exe files try best runner, then Wine fallback
-		if strings.HasSuffix(strings.ToLower(path), ".exe") {
-			wineprefix := filepath.Join(os.Getenv("HOME"), ".local", "share", "playerr", "prefix_launch")
-			if runner := launcher.FindRunner(); runner != nil {
-				runCmd := runner.RunWith(path, wineprefix)
-				return runCmd.Start()
-			}
-			cmd = exec.Command("wine", path)
-		} else {
-			cmd = exec.Command(path)
-		}
-		cmd.Dir = filepath.Dir(path)
-	}
-	return cmd.Start()
-}
-
-func openURL(url string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
-	case "darwin":
-		cmd = exec.Command("open", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	return cmd.Start()
-}

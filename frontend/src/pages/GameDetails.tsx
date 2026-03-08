@@ -7,9 +7,8 @@ import GameCorrectionModal from '../components/GameCorrectionModal';
 import UninstallModal from '../components/UninstallModal';
 import SwitchInstallerModal from '../components/SwitchInstallerModal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faPen, faFolderOpen, faDownload, faGamepad, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown, faTrash, faMicrochip, faDatabase } from '@fortawesome/free-solid-svg-icons';
+import { faSearch, faPen, faFolderOpen, faDownload, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown, faTrash, faMicrochip, faDatabase } from '@fortawesome/free-solid-svg-icons';
 import './GameDetails.css';
-import VersionSelectorModal, { VersionOption } from '../components/VersionSelectorModal';
 
 interface Game {
   id: number;
@@ -153,11 +152,7 @@ const GameDetails: React.FC = () => {
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
   const [showUninstallModal, setShowUninstallModal] = useState(false);
-  const [showInstallWarning, setShowInstallWarning] = useState(false);
   const [showSwitchModal, setShowSwitchModal] = useState(false);
-  const [showVersionModal, setShowVersionModal] = useState(false);
-  const [versionOptions, setVersionOptions] = useState<VersionOption[]>([]);
-  const [actionType, setActionType] = useState<'install' | 'play' | null>(null);
   const [activeTab, setActiveTab] = useState<'search' | 'files' | 'saves' | 'none'>('search');
   const [serverFiles, setServerFiles] = useState<ServerFile[]>([]);
   const [serverFilesLoading, setServerFilesLoading] = useState(false);
@@ -751,162 +746,6 @@ const GameDetails: React.FC = () => {
       setNotification({ message: t('errorUpdating'), type: 'error' });
     }
   };
-  const handleInstallClick = () => {
-    if (!game?.path && (!game?.gameFiles || game.gameFiles.length === 0) && !game?.downloadPath) {
-      setNotification({ message: t('noGameFilesFound'), type: 'error' });
-      return;
-    }
-    setActionType('install');
-    setShowInstallWarning(true);
-  };
-
-  const getAvailableVersions = (type: 'install' | 'play'): VersionOption[] => {
-    const options: VersionOption[] = [];
-    if (!game) return [];
-
-    // 1. Primary Version
-    if (game.path) {
-      const primaryTag = game.status === 'InstallerDetected' || (game.isInstallable && !game.canPlay) ? 'Installer' : 'Playable';
-      // Backend status is vague, check our computed logic or trust the tag logic above
-      // Better: check if we are filtering.
-
-      // Let's assume standard logic:
-      let tag = 'Playable';
-      if (game.status === 'InstallerDetected' || (game.isInstallable && !game.canPlay)) tag = 'Installer';
-
-      // Override: If checking specifically for 'play', and this is 'Installer', don't add? 
-      // Actually, let's add all and filter later or handle in filtering.
-      options.push({
-        label: game.title + (tag === 'Installer' ? ' (Installer)' : ''),
-        path: game.executablePath || game.path,
-        details: game.executablePath || game.path,
-        tag: tag
-      });
-    }
-
-    // 2. Download path (incoming, not yet installed)
-    if (!game.path && game.downloadPath) {
-      options.push({
-        label: `${game.title} (Downloaded)`,
-        path: game.downloadPath,
-        details: game.downloadPath,
-        tag: 'Installer'
-      });
-    }
-
-    // 3. Alternate Versions
-    if (game.gameFiles && game.gameFiles.length > 0) {
-      game.gameFiles.forEach(f => {
-        options.push({
-          label: f.releaseGroup || 'Alternate Version',
-          path: f.relativePath,
-          details: f.relativePath,
-          tag: f.quality || 'Playable'
-        });
-      });
-    }
-
-    // Filter based on action
-    if (type === 'install') {
-      return options.filter(o => o.tag === 'Installer');
-    } else {
-      return options.filter(o => o.tag === 'Playable');
-    }
-  };
-
-  const onWarningConfirmed = () => {
-    setShowInstallWarning(false);
-
-    // Fallback: If no strict installers found (e.g. status is weird), show all?
-    // User wants strict behavior.
-    let options = getAvailableVersions('install');
-
-    // Safety fallback: if 0 options found but we clicked Install, maybe the logic tagged it wrong. 
-    // Just show everything if filtering yields 0?
-    if (options.length === 0) options = getAvailableVersions('install').length === 0 ? [] : options; // wait logic loop
-    // Let's rely on getAvailableVersions first. If empty, maybe fall back to ALL options just in case?
-    if (options.length === 0) {
-      // If empty, use unfiltered to be safe (maybe tag is missing)
-      const all = [];
-      if (game?.path) all.push({ label: game.title, path: game.path, details: game.path, tag: 'Unknown' });
-      if (game?.gameFiles) game.gameFiles.forEach(f => all.push({ label: f.releaseGroup || 'Alt', path: f.relativePath, details: f.relativePath, tag: f.quality || 'Unknown' }));
-      options = all;
-    }
-
-    if (options.length > 1) {
-      setVersionOptions(options);
-      setShowVersionModal(true);
-    } else {
-      // If only 1 option, just launch it? 
-      // Yes.
-      executeInstall(options.length > 0 ? options[0].path : undefined);
-    }
-  };
-
-  const executeInstall = async (overridePath?: string) => {
-    setShowVersionModal(false);
-
-    // If event object came through (from onClick), ignore it
-    const actualPath = typeof overridePath === 'string' ? overridePath : undefined;
-
-    try {
-      setNotification({ message: t('searchingInstaller'), type: 'info' });
-      let url = `/api/v3/game/${id}/install`;
-      if (actualPath && actualPath.length > 0) {
-        url += `?path=${encodeURIComponent(actualPath)}`;
-      }
-
-      const res = await axios.post(url);
-      setNotification({ message: `${t('installerLaunched')}: ${res.data.path}`, type: 'success' });
-    } catch (err: any) {
-      console.error(err);
-      setNotification({ message: err.response?.data || t('errorLaunchingInstaller'), type: 'error' });
-    }
-  };
-
-  const handlePlay = async () => {
-    setActionType('play');
-    console.log('[handlePlay] Checking versions...');
-
-    const options = getAvailableVersions('play');
-
-    if (options.length > 1) {
-      setVersionOptions(options);
-      setShowVersionModal(true);
-      return;
-    }
-
-    // If 1 or 0 (default), execute directly
-    await executePlay(options.length === 1 ? options[0].path : undefined);
-  };
-
-  const executePlay = async (path?: string) => {
-    // alert(`Debug: Launching game ${id} (Steam ID: ${game?.steamId})`);
-    console.log('[executePlay] Launching. Path:', path);
-    try {
-      setNotification({ message: t('launchingGame'), type: 'info' });
-      let url = `/api/v3/game/${id}/play`;
-      if (path) url += `?path=${encodeURIComponent(path)}`;
-
-      await axios.post(url);
-      setNotification({ message: t('gameLaunched'), type: 'success' });
-    } catch (err: any) {
-      console.error(err);
-      setNotification({ message: err.response?.data?.error || t('errorLaunchingGame'), type: 'error' });
-    }
-  };
-
-  const handleRunUninstaller = async () => {
-    try {
-      setNotification({ message: t('launchingUninstaller') || 'Launching Uninstaller...', type: 'info' });
-      await axios.post(`/api/v3/game/${id}/uninstall`);
-      setNotification({ message: t('uninstallerLaunched') || 'Uninstaller Launched', type: 'success' });
-    } catch (err: any) {
-      console.error(err);
-      setNotification({ message: err.response?.data || t('errorLaunchingUninstaller') || 'Error launching uninstaller', type: 'error' });
-    }
-  };
-
   const handleDeleteGame = async (deleteLibraryFiles: boolean, deleteDownloadFiles: boolean, targetLibraryPath?: string, targetDownloadPath?: string) => {
     if (!id) return;
     try {
@@ -1070,12 +909,6 @@ const GameDetails: React.FC = () => {
                           );
                         })}
                         <div style={{ borderTop: '1px solid #45475a', margin: '4px 0' }} />
-                        <button
-                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 14px', background: 'none', border: 'none', color: '#cdd6f4', cursor: 'pointer', fontSize: '0.9rem' }}
-                          onClick={handleInstallClick}
-                        >
-                          🖥️ This server
-                        </button>
                         <a
                           href={`/api/v3/game/${id}/install-script`}
                           download
@@ -1089,25 +922,15 @@ const GameDetails: React.FC = () => {
                 );
               }
               return (
-                <React.Fragment>
-                  <button
-                    className={`action-btn ${game.isInstallable && !game.canPlay ? 'install-ready' : ''}`}
-                    onClick={handleInstallClick}
-                    title={t('install')}
-                  >
-                    <FontAwesomeIcon icon={faDownload} />
-                    <span>{t('install')}</span>
-                  </button>
-                  <a
-                    href={`/api/v3/game/${id}/install-script`}
-                    download
-                    className="action-btn"
-                    title="Download install script"
-                  >
-                    <span>📄</span>
-                    <span>Script</span>
-                  </a>
-                </React.Fragment>
+                <a
+                  href={`/api/v3/game/${id}/install-script`}
+                  download
+                  className="action-btn"
+                  title="Download install script"
+                >
+                  <span>📄</span>
+                  <span>Script</span>
+                </a>
               );
             })()}
 
@@ -1123,16 +946,6 @@ const GameDetails: React.FC = () => {
               </button>
             )}
 
-            {(!isSwitchGame) && (
-              <button
-                className={`action-btn ${game.canPlay ? 'play-ready' : ''}`}
-                onClick={handlePlay}
-                title={t('play')}
-              >
-                <FontAwesomeIcon icon={faGamepad} />
-                <span>{t('play')}</span>
-              </button>
-            )}
           </div>
 
           {agentJobProgress && (
@@ -1222,11 +1035,9 @@ const GameDetails: React.FC = () => {
           <UninstallModal
             isOpen={showUninstallModal}
             onClose={() => setShowUninstallModal(false)}
-            onRunUninstaller={handleRunUninstaller}
             onDelete={handleDeleteGame}
             gameTitle={game.title}
             gamePath={game.path}
-            uninstallerPath={game.uninstallerPath}
             downloadPath={game.downloadPath}
           />
         )
@@ -1805,49 +1616,6 @@ const GameDetails: React.FC = () => {
         </div>
       )}
 
-      {
-        showInstallWarning && (
-          <div className="modal-overlay">
-            <div className="modal">
-              <div className="modal-header">
-                <h3>{t('installWarningTitle')}</h3>
-                <button className="modal-close" onClick={() => setShowInstallWarning(false)}>×</button>
-              </div>
-              <div className="modal-content">
-                <p style={{ color: '#cdd6f4', lineHeight: '1.6', marginBottom: '1.5rem' }}>{t('installWarningBody')}</p>
-                <div className="modal-actions">
-                  <button
-                    className="btn-secondary"
-                    onClick={() => setShowInstallWarning(false)}
-                  >
-                    {t('cancel')}
-                  </button>
-                  <button
-                    className="btn-danger"
-                    onClick={() => onWarningConfirmed()}
-                  >
-                    {t('confirmInstall')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
-      }
-      {
-        showVersionModal && (
-          <VersionSelectorModal
-            isOpen={showVersionModal}
-            onClose={() => setShowVersionModal(false)}
-            onSelect={(path) => {
-              if (actionType === 'install') executeInstall(path);
-              else executePlay(path);
-            }}
-            options={versionOptions}
-            gameTitle={game?.title || 'Game'}
-          />
-        )
-      }
     </div >
   );
 };

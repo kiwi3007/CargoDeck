@@ -1,28 +1,24 @@
 import React, { useState } from 'react';
 import { t } from '../i18n/translations';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faMicrochip, faExclamationTriangle, faFolder, faDownload, faFileExport } from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faExclamationTriangle, faFolder, faDownload } from '@fortawesome/free-solid-svg-icons';
 import './UninstallModal.css';
 
 interface UninstallModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onRunUninstaller: () => void;
     onDelete: (deleteLibraryFiles: boolean, deleteDownloadFiles: boolean, targetLibraryPath?: string, targetDownloadPath?: string) => void;
     gameTitle: string;
     gamePath?: string;
-    uninstallerPath?: string;
     downloadPath?: string;
 }
 
 const UninstallModal: React.FC<UninstallModalProps> = ({
     isOpen,
     onClose,
-    onRunUninstaller,
     onDelete,
     gameTitle,
     gamePath,
-    uninstallerPath,
     downloadPath
 }) => {
     const [deleteLibraryFiles, setDeleteLibraryFiles] = useState(true);
@@ -73,37 +69,7 @@ const UninstallModal: React.FC<UninstallModalProps> = ({
                         {t('manageGame')}: <strong>{gameTitle}</strong>
                     </p>
 
-                    {/* SECTION 1: OFFICIAL UNINSTALLER */}
-                    <div className="um-section">
-                        <div className="um-section-label">
-                            <FontAwesomeIcon icon={faMicrochip} style={{ marginRight: '10px', color: '#89b4fa' }} />
-                            {t('uninstallOption')}
-                        </div>
-                        <p className="um-section-desc">
-                            {uninstallerPath
-                                ? t('uninstallerFound') || 'Official uninstaller detected.'
-                                : t('noUninstallerFound') || 'No official uninstaller detected.'}
-                        </p>
-                        {uninstallerPath && (
-                            <div className="um-path-preview" style={{ marginBottom: '12px', color: '#89b4fa', borderColor: 'rgba(137, 180, 250, 0.2)' }}>
-                                <FontAwesomeIcon icon={faFileExport} style={{ marginRight: '8px' }} />
-                                {uninstallerPath}
-                            </div>
-                        )}
-                        <button
-                            className="um-btn-secondary"
-                            onClick={() => {
-                                onRunUninstaller();
-                                onClose();
-                            }}
-                            disabled={!uninstallerPath}
-                            style={{ opacity: uninstallerPath ? 1 : 0.5 }}
-                        >
-                            {t('runUninstaller')}
-                        </button>
-                    </div>
-
-                    {/* SECTION 2: LIBRARY FILES */}
+                    {/* LIBRARY FILES */}
                     <div className="um-delete-section">
                         <div className="um-section-label" style={{ color: '#f38ba8' }}>
                             <FontAwesomeIcon icon={faTrash} style={{ marginRight: '10px' }} />

@@ -83,10 +83,7 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Get("/{id}", h.GetGameByID)
 		r.Put("/{id}", h.UpdateGame)
 		r.Delete("/{id}", h.DeleteGame)
-		r.Post("/{id}/play", h.PlayGame)
-		r.Post("/{id}/install", h.InstallGame)
-		r.Post("/{id}/uninstall", h.UninstallGame)
-		r.Post("/{id}/shortcut", h.AddSteamShortcut)
+
 
 		// Server-side file management (files physically on this server's game.Path)
 		r.Get("/{id}/server-files", h.GetServerFiles)
