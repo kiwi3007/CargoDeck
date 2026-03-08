@@ -133,6 +133,7 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + '\u00a0' + sizes[i];
 }
 
+
 const GameDetails: React.FC = () => {
   useTranslation(); // Subscribe to language changes
   const { id } = useParams<{ id: string }>();
@@ -1522,9 +1523,9 @@ const GameDetails: React.FC = () => {
             )}
 
             {/* Browse buttons for online agents */}
-            {agents.filter(a => a.status === 'connected').length > 0 && (
+            {agents.filter(a => a.status === 'online').length > 0 && (
               <div className="saves-browse-row">
-                {agents.filter(a => a.status === 'connected').map(a => (
+                {agents.filter(a => a.status === 'online').map(a => (
                   <button
                     key={a.id}
                     className="saves-browse-btn"
@@ -1539,13 +1540,13 @@ const GameDetails: React.FC = () => {
           </div>
 
           {/* Restore to Device */}
-          {agents.filter(a => a.status === 'connected').length > 0 && saveSnapshots.length > 0 && (
+          {agents.filter(a => a.status === 'online').length > 0 && saveSnapshots.length > 0 && (
             <div style={{ marginTop: '1rem' }}>
               <div className="saves-header">
                 <span className="saves-title">Restore Latest to Device</span>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
-                {agents.filter(a => a.status === 'connected').map(agent => (
+                {agents.filter(a => a.status === 'online').map(agent => (
                   <button
                     key={agent.id}
                     className="saves-restore-btn"
