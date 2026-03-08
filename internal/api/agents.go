@@ -625,6 +625,33 @@ func (h *Handler) publishAgentList() {
 	}
 }
 
+// ---- Dispatch prefix rename ----
+
+func (h *Handler) DispatchRenamePrefix(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentId")
+	if _, ok := h.agentRegistry.Get(agentID); !ok {
+		jsonErr(w, 404, "agent not found")
+		return
+	}
+	var req struct {
+		GameID    int    `json:"gameId"`
+		GameTitle string `json:"gameTitle"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	if req.GameID == 0 || req.GameTitle == "" {
+		jsonErr(w, 400, "gameId and gameTitle are required")
+		return
+	}
+	job := agent.RenamePrefixJob{GameID: req.GameID, GameTitle: req.GameTitle}
+	data, _ := json.Marshal(job)
+	h.agentBroker.Send(agentID, "RENAME_PREFIX", string(data))
+	log.Printf("[Agent] Dispatched RENAME_PREFIX %q → %s", req.GameTitle, agentID)
+	jsonOK(w, map[string]string{"message": "prefix rename requested"})
+}
+
 // ---- Agent filesystem browser ----
 
 // BrowseAgentDir dispatches a LIST_DIR job to an online agent and waits up to

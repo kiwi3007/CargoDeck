@@ -265,6 +265,15 @@ func (c *Client) listenSSE() error {
 						go c.browseDir(job)
 					}
 				}
+			case "RENAME_PREFIX":
+				if dataLine != "" {
+					var job agent.RenamePrefixJob
+					if err := json.Unmarshal([]byte(dataLine), &job); err != nil {
+						log.Printf("[Agent] Bad RENAME_PREFIX JSON: %v", err)
+					} else {
+						go c.renamePrefix(job)
+					}
+				}
 			}
 			eventType = ""
 			dataLine = ""
@@ -350,7 +359,7 @@ func (c *Client) executeJob(job agent.InstallJob) {
 
 	// ---- Determine wineprefix path (outside Steam directories) ----
 	home := homeDir()
-	wineprefix := filepath.Join(home, ".local", "share", "playerr", fmt.Sprintf("prefix_%d", job.GameID))
+	wineprefix := filepath.Join(home, ".local", "share", "playerr", "prefix_"+safeName(job.GameTitle))
 	// Known install dir inside Wine prefix (we force /DIR= to this path)
 	gameInstallDir := filepath.Join(wineprefix, "pfx", "drive_c", "Games", safeName(job.GameTitle))
 
@@ -1610,10 +1619,19 @@ func (c *Client) browseDir(job agent.BrowseDirJob) {
 		result.Error = err.Error()
 	} else {
 		for _, e := range entries {
+			entryPath := filepath.Join(path, e.Name())
+			isDir := e.IsDir()
+			// Follow symlinks so Wine prefix symlinks (e.g. drive_c/users/name → /home/name)
+			// are correctly identified as directories rather than files.
+			if e.Type()&os.ModeSymlink != 0 {
+				if info, err := os.Stat(entryPath); err == nil {
+					isDir = info.IsDir()
+				}
+			}
 			result.Entries = append(result.Entries, agent.DirEntry{
 				Name:  e.Name(),
-				Path:  filepath.Join(path, e.Name()),
-				IsDir: e.IsDir(),
+				Path:  entryPath,
+				IsDir: isDir,
 			})
 		}
 	}
@@ -1631,6 +1649,49 @@ func (c *Client) browseDir(job agent.BrowseDirJob) {
 		return
 	}
 	resp.Body.Close()
+}
+
+// renamePrefix renames a game's Wine prefix from the old numeric format
+// (prefix_{gameId}) to the title-based format (prefix_{safeTitle}) and
+// updates the WINEPREFIX / STEAM_COMPAT_DATA_PATH line in run.sh to match.
+func (c *Client) renamePrefix(job agent.RenamePrefixJob) {
+	scriptPath := filepath.Join(homeDir(), "Games", safeName(job.GameTitle), "run.sh")
+	currentPrefix, _ := parseRunScript(scriptPath)
+
+	newPrefix := filepath.Join(homeDir(), ".local", "share", "playerr", "prefix_"+safeName(job.GameTitle))
+
+	// Fall back to the old numeric naming if run.sh didn't yield a prefix
+	if currentPrefix == "" {
+		oldNumeric := filepath.Join(homeDir(), ".local", "share", "playerr", fmt.Sprintf("prefix_%d", job.GameID))
+		if _, err := os.Stat(oldNumeric); err == nil {
+			currentPrefix = oldNumeric
+		}
+	}
+
+	if currentPrefix == "" || currentPrefix == newPrefix {
+		log.Printf("[Agent] Prefix already correctly named (or not found) for %q", job.GameTitle)
+		return
+	}
+
+	if _, err := os.Stat(currentPrefix); os.IsNotExist(err) {
+		log.Printf("[Agent] Prefix directory not found, cannot rename: %s", currentPrefix)
+		return
+	}
+
+	if err := os.Rename(currentPrefix, newPrefix); err != nil {
+		log.Printf("[Agent] Failed to rename prefix %s → %s: %v", currentPrefix, newPrefix, err)
+		return
+	}
+	log.Printf("[Agent] Renamed prefix: %s → %s", currentPrefix, newPrefix)
+
+	// Update every occurrence of the old path in run.sh
+	data, err := os.ReadFile(scriptPath)
+	if err == nil {
+		updated := strings.ReplaceAll(string(data), currentPrefix, newPrefix)
+		if err := os.WriteFile(scriptPath, []byte(updated), 0755); err == nil {
+			log.Printf("[Agent] Updated run.sh prefix path for %q", job.GameTitle)
+		}
+	}
 }
 
 func (c *Client) reportDeleteProgress(jobID, status, message string) {

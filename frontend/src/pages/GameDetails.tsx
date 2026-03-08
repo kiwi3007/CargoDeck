@@ -818,6 +818,16 @@ const GameDetails: React.FC = () => {
     }
   };
 
+  const handleRenamePrefix = async (agentId: string) => {
+    if (!game) return;
+    try {
+      await axios.post(`/api/v3/agent/${agentId}/rename-prefix`, { gameId: game.id, gameTitle: game.title });
+      setNotification({ message: 'Prefix rename requested — the agent will rename the directory and update run.sh.', type: 'success' });
+    } catch (err: any) {
+      setNotification({ message: 'Rename failed: ' + (err.response?.data?.error || err.message), type: 'error' });
+    }
+  };
+
   const handleBrowseSelect = async (agentId: string, path: string) => {
     if (!game) return;
     try {
@@ -1721,6 +1731,15 @@ const GameDetails: React.FC = () => {
                           onClick={() => handleViewLog(agent.id, ig.title)}
                         >
                           {requestingLog[ig.title] ? '⟳' : '📋'}
+                        </button>
+                      )}
+                      {agent.status === 'online' && ig.scriptPath && (
+                        <button
+                          className="files-device-btn"
+                          title="Rename Wine prefix to match game title (e.g. prefix_12 → prefix_Cairn)"
+                          onClick={() => handleRenamePrefix(agent.id)}
+                        >
+                          🍷
                         </button>
                       )}
                       <button

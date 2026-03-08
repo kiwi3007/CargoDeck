@@ -81,6 +81,14 @@ type DeleteGameJob struct {
 	RemoveShortcut bool   `json:"removeShortcut"`
 }
 
+// RenamePrefixJob instructs the agent to rename a game's Wine prefix directory
+// from the old numeric format (prefix_{gameId}) to the title-based format
+// (prefix_{safeTitle}) and update the run.sh launcher script to match.
+type RenamePrefixJob struct {
+	GameID    int    `json:"gameId"`
+	GameTitle string `json:"gameTitle"`
+}
+
 // BrowseDirJob is pushed to the agent to list a remote directory.
 type BrowseDirJob struct {
 	RequestID string `json:"requestId"`
