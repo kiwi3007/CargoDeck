@@ -108,14 +108,14 @@ func extractArchive(src, destDir string) bool {
 			log.Printf("[PostDownload] 7z not found, skipping %s", src)
 			return false
 		}
-		return runExtractor(tool, "e", src, "-o"+destDir, "-y")
+		return runExtractor(tool, "x", src, "-o"+destDir, "-y")
 	case ".7z":
 		tool := find7z()
 		if tool == "" {
 			log.Printf("[PostDownload] 7z not found, skipping %s", src)
 			return false
 		}
-		return runExtractor(tool, "e", src, "-o"+destDir, "-y")
+		return runExtractor(tool, "x", src, "-o"+destDir, "-y")
 	}
 	return false
 }

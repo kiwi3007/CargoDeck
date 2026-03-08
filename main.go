@@ -73,7 +73,7 @@ func main() {
 	updateChecker := updater.NewChecker(repo, cfg, broker)
 
 	// ---- API ----
-	handler := api.NewHandler(repo, cfg, broker, scan, importStatus, agentRegistry, agentJobs, agentBroker, manifestSvc, updateChecker)
+	handler := api.NewHandler(repo, cfg, broker, scan, importStatus, processor, agentRegistry, agentJobs, agentBroker, manifestSvc, updateChecker)
 	router := handler.NewRouter()
 
 	// ---- Static UI ----

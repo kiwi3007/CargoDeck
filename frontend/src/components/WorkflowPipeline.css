@@ -1,0 +1,127 @@
+.workflow-pipeline {
+  padding: 14px 0 4px;
+  overflow-x: auto;
+}
+
+.workflow-track {
+  display: flex;
+  align-items: center;
+  padding: 0 6%;
+}
+
+.workflow-circle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  z-index: 1;
+  position: relative;
+}
+
+.workflow-circle.done {
+  background: #a6e3a1;
+  color: #1e1e2e;
+}
+
+.workflow-circle.active {
+  background: #89b4fa;
+  color: #1e1e2e;
+  animation: pipeline-pulse 1.5s infinite;
+}
+
+.workflow-circle.pending {
+  background: #313244;
+  color: #585b70;
+  border: 2px solid #45475a;
+}
+
+.workflow-circle.error {
+  background: #f38ba8;
+  color: #1e1e2e;
+}
+
+@keyframes pipeline-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(137, 180, 250, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(137, 180, 250, 0); }
+}
+
+.workflow-connector {
+  flex: 1;
+  height: 2px;
+  background: #45475a;
+  min-width: 12px;
+}
+
+.workflow-connector.done {
+  background: #a6e3a1;
+}
+
+.workflow-labels {
+  display: flex;
+  margin-top: 8px;
+}
+
+.workflow-step-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 4px;
+  min-width: 0;
+}
+
+.workflow-step-label {
+  font-size: 0.72rem;
+  color: #cdd6f4;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.workflow-step-info.pending .workflow-step-label {
+  color: #585b70;
+}
+
+.workflow-step-detail {
+  font-size: 0.68rem;
+  color: #89b4fa;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.workflow-step-info.active .workflow-step-detail {
+  color: #89b4fa;
+}
+
+.workflow-step-info.done .workflow-step-detail {
+  color: #a6e3a1;
+}
+
+.workflow-step-action {
+  margin-top: 5px;
+}
+
+.workflow-step-action button {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border: 1px solid #89b4fa;
+  background: rgba(137, 180, 250, 0.1);
+  color: #89b4fa;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.workflow-step-action button:hover:not(:disabled) {
+  background: rgba(137, 180, 250, 0.2);
+}
+
+.workflow-step-action button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

@@ -553,6 +553,47 @@ func (h *Handler) DeleteServerFile(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]bool{"ok": true})
 }
 
+// ImportGame manually triggers the post-processor pipeline on a path for a game.
+// POST /api/v3/game/{id}/import
+// Body (optional): {"path": "/some/download/dir"}
+func (h *Handler) ImportGame(w http.ResponseWriter, r *http.Request) {
+	id, err := paramInt(r, "id")
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+	game, err := h.repo.GetGameByID(id)
+	if err != nil || game == nil {
+		jsonErr(w, 404, "game not found")
+		return
+	}
+
+	var req struct {
+		Path string `json:"path"`
+	}
+	_ = decodeBody(r, &req)
+
+	path := req.Path
+	if path == "" {
+		path = h.findDownloadPath(game)
+	}
+	if path == "" && game.Path != nil {
+		path = *game.Path
+	}
+	if path == "" {
+		jsonErr(w, 400, "no path found to import")
+		return
+	}
+
+	go h.processor.Process(domain.DownloadStatus{
+		Name:         game.Title,
+		DownloadPath: path,
+	})
+
+	w.WriteHeader(http.StatusAccepted)
+	jsonOK(w, map[string]string{"message": "import started"})
+}
+
 // CheckGameUpdate triggers an immediate update check for a single game.
 func (h *Handler) CheckGameUpdate(w http.ResponseWriter, r *http.Request) {
 	id, err := paramInt(r, "id")

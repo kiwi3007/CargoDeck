@@ -23,6 +23,7 @@ type Handler struct {
 	broker        *sse.Broker
 	scanner       *scanner.Service
 	importStatus  *monitor.ImportStatus
+	processor     *monitor.Processor
 	agentRegistry *agent.Registry
 	agentJobs     *agent.JobQueue
 	agentBroker   *agent.AgentBroker
@@ -36,6 +37,7 @@ func NewHandler(
 	broker *sse.Broker,
 	scanner *scanner.Service,
 	importStatus *monitor.ImportStatus,
+	processor *monitor.Processor,
 	agentRegistry *agent.Registry,
 	agentJobs *agent.JobQueue,
 	agentBroker *agent.AgentBroker,
@@ -48,6 +50,7 @@ func NewHandler(
 		broker:        broker,
 		scanner:       scanner,
 		importStatus:  importStatus,
+		processor:     processor,
 		agentRegistry: agentRegistry,
 		agentJobs:     agentJobs,
 		agentBroker:   agentBroker,
@@ -94,6 +97,9 @@ func (h *Handler) NewRouter() http.Handler {
 
 		// Install script download (browser, no auth needed)
 		r.Get("/{id}/install-script", h.ServeInstallScript)
+
+		// Manually trigger post-processor import pipeline
+		r.Post("/{id}/import", h.ImportGame)
 
 		// Manual update check for a single game
 		r.Post("/{id}/check-update", h.CheckGameUpdate)

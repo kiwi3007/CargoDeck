@@ -6,6 +6,7 @@ import { useSearchCache } from '../context/SearchCacheContext';
 import GameCorrectionModal from '../components/GameCorrectionModal';
 import UninstallModal from '../components/UninstallModal';
 import SwitchInstallerModal from '../components/SwitchInstallerModal';
+import WorkflowPipeline, { WorkflowStep } from '../components/WorkflowPipeline';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch, faPen, faFolderOpen, faDownload, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown, faTrash, faMicrochip, faDatabase } from '@fortawesome/free-solid-svg-icons';
 import './GameDetails.css';
@@ -72,6 +73,18 @@ interface SavePathsInfo {
   paths: string[];
   savePath?: string; // custom path if source=custom
   steamId?: number;
+}
+
+interface DownloadItem {
+  clientId: number;
+  id: string;
+  name: string;
+  size: number;
+  progress: number;
+  state: number; // 0=Downloading, 1=Paused, 2=Completed, 3=Error, 4=Queued, 5=Checking
+  category: string;
+  downloadPath: string;
+  clientName: string;
 }
 
 interface TorrentResult {
@@ -165,6 +178,8 @@ const GameDetails: React.FC = () => {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+  const [downloadQueue, setDownloadQueue] = useState<DownloadItem[]>([]);
+  const [importRunning, setImportRunning] = useState(false);
 
   // ---- Remote agent install ----
   interface InstallPath { path: string; label: string; freeBytes: number; }
@@ -241,6 +256,28 @@ const GameDetails: React.FC = () => {
     window.addEventListener('AGENT_LOG_DATA_EVENT', handler);
     return () => window.removeEventListener('AGENT_LOG_DATA_EVENT', handler);
   }, [agents]);
+
+  // ---- Download queue ----
+  useEffect(() => {
+    axios.get<DownloadItem[]>('/api/v3/downloadclient/queue').then(r => setDownloadQueue(r.data || [])).catch(() => {});
+    const handler = (e: Event) => {
+      try { setDownloadQueue(JSON.parse((e as CustomEvent).detail) || []); } catch { /* ignore */ }
+    };
+    window.addEventListener('DOWNLOAD_QUEUE_UPDATED_EVENT', handler);
+    return () => window.removeEventListener('DOWNLOAD_QUEUE_UPDATED_EVENT', handler);
+  }, []);
+
+  // Clear importRunning when library is updated
+  useEffect(() => {
+    const handler = () => {
+      setImportRunning(false);
+      if (id) {
+        axios.get(`/api/v3/game/${id}`).then(r => setGame(r.data)).catch(() => {});
+      }
+    };
+    window.addEventListener('LIBRARY_UPDATED_EVENT', handler);
+    return () => window.removeEventListener('LIBRARY_UPDATED_EVENT', handler);
+  }, [id]);
 
   const formatFreeSpace = (bytes: number): string => {
     if (bytes < 0) return '';
@@ -332,6 +369,128 @@ const GameDetails: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [notification]);
+
+  // ---- Import (post-processor) ----
+  const handleImport = async () => {
+    if (!id) return;
+    setImportRunning(true);
+    try {
+      await axios.post(`/api/v3/game/${id}/import`);
+      setNotification({ message: 'Import started', type: 'success' });
+    } catch (err: any) {
+      setImportRunning(false);
+      setNotification({ message: err.response?.data?.message || 'Import failed', type: 'error' });
+    }
+  };
+
+  // ---- Workflow pipeline steps ----
+  const buildWorkflowSteps = (): WorkflowStep[] => {
+    if (!game) return [];
+
+    const titleLower = game.title.toLowerCase();
+    const matchingDownload = downloadQueue.find(d => {
+      const nameLower = d.name.toLowerCase();
+      return nameLower.includes(titleLower) ||
+        titleLower.includes(nameLower.split(' ').slice(0, 3).join(' '));
+    });
+
+    const anyAgentHasGame = agents.some(a =>
+      a.installedGames?.some(ig => agentTitleMatches(ig.title, game.title))
+    );
+    const anyAgentInstalled = agents.some(a =>
+      a.installedGames?.some(ig => agentTitleMatches(ig.title, game.title) && ig.exePath)
+    );
+
+    const jobStatus = agentJobProgress?.status ?? '';
+
+    // Step 1: Library — always done
+    const step1: WorkflowStep = {
+      id: 'library',
+      label: 'Library',
+      status: 'done',
+    };
+
+    // Step 2: Find Download
+    const hasDownload = !!matchingDownload || !!game.path;
+    const step2: WorkflowStep = {
+      id: 'find-download',
+      label: 'Find Download',
+      status: hasDownload ? 'done' : 'pending',
+    };
+
+    // Step 3: Downloading
+    let step3Status: WorkflowStep['status'] = 'pending';
+    let step3Detail: string | undefined;
+    if (game.path || matchingDownload?.state === 2) {
+      step3Status = 'done';
+    } else if (matchingDownload && (matchingDownload.state === 0 || matchingDownload.state === 4)) {
+      step3Status = 'active';
+      step3Detail = `${Math.round(matchingDownload.progress)}%`;
+    }
+    const step3: WorkflowStep = {
+      id: 'downloading',
+      label: 'Downloading',
+      status: step3Status,
+      detail: step3Detail,
+    };
+
+    // Step 4: Game Folder
+    const hasFolderFiles = !!(game.path && (
+      (game.sizeOnDisk && game.sizeOnDisk > 0) ||
+      (game.gameFiles && game.gameFiles.length > 0)
+    ));
+    let step4Status: WorkflowStep['status'] = 'pending';
+    if (hasFolderFiles) {
+      step4Status = 'done';
+    } else if (importRunning) {
+      step4Status = 'active';
+    }
+    const canImport = !!(matchingDownload?.state === 2 && !game.path) || !!(matchingDownload?.downloadPath && !game.path);
+    const step4: WorkflowStep = {
+      id: 'game-folder',
+      label: 'Game Folder',
+      status: step4Status,
+      detail: game.path ? game.path.split('/').pop() : undefined,
+      action: canImport ? {
+        label: 'Move to Library',
+        onClick: handleImport,
+        disabled: importRunning,
+      } : undefined,
+    };
+
+    // Step 5: On Device
+    let step5Status: WorkflowStep['status'] = 'pending';
+    if (anyAgentHasGame) {
+      step5Status = 'done';
+    } else if (jobStatus === 'downloading' || jobStatus === 'extracting') {
+      step5Status = 'active';
+    }
+    const onlineAgents = agents.filter(a => a.status === 'online');
+    const step5: WorkflowStep = {
+      id: 'on-device',
+      label: 'On Device',
+      status: step5Status,
+      action: hasFolderFiles && onlineAgents.length > 0 && !anyAgentHasGame ? {
+        label: 'Install ▾',
+        onClick: () => setShowAgentDropdown(v => !v),
+      } : undefined,
+    };
+
+    // Step 6: Installed
+    let step6Status: WorkflowStep['status'] = 'pending';
+    if (anyAgentInstalled) {
+      step6Status = 'done';
+    } else if (jobStatus === 'installing' || jobStatus === 'creating_shortcut') {
+      step6Status = 'active';
+    }
+    const step6: WorkflowStep = {
+      id: 'installed',
+      label: 'Installed',
+      status: step6Status,
+    };
+
+    return [step1, step2, step3, step4, step5, step6];
+  };
 
   const language = getLanguage();
 
@@ -998,6 +1157,8 @@ const GameDetails: React.FC = () => {
           )}
         </div>
       </div>
+
+      <WorkflowPipeline steps={buildWorkflowSteps()} />
 
       {game.updateAvailable && !updateBannerDismissed && (
         <div className="update-banner">
