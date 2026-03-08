@@ -183,15 +183,18 @@ func (r *Registry) UpdateJobProgress(prog JobProgress) {
 		a.CurrentJob = nil
 		delete(r.jobIndex, prog.JobID)
 	default:
-		if a.CurrentJob == nil || a.CurrentJob.JobID == prog.JobID {
-			a.CurrentJob = &ActiveJob{
-				JobID:     prog.JobID,
-				GameTitle: meta.GameTitle,
-				Status:    prog.Status,
-				Message:   prog.Message,
-				Percent:   prog.Percent,
-				UpdatedAt: time.Now(),
-			}
+		// Always update currentJob to reflect what the agent is actually running.
+		// Without this, dispatching a new job while an old one is still in-flight
+		// would leave currentJob at the new job's 0%/queued state, causing the
+		// AGENTS_UPDATED event and the direct AGENT_PROGRESS event to carry
+		// different percent values and make the UI oscillate between them.
+		a.CurrentJob = &ActiveJob{
+			JobID:     prog.JobID,
+			GameTitle: meta.GameTitle,
+			Status:    prog.Status,
+			Message:   prog.Message,
+			Percent:   prog.Percent,
+			UpdatedAt: time.Now(),
 		}
 	}
 }

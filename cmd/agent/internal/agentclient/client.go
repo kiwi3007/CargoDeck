@@ -928,7 +928,7 @@ type progressReader struct {
 func (pr *progressReader) Read(p []byte) (int, error) {
 	n, err := pr.r.Read(p)
 	pr.read += int64(n)
-	if pr.onProgress != nil && time.Since(pr.lastReport) >= 2*time.Second {
+	if pr.onProgress != nil && time.Since(pr.lastReport) >= 500*time.Millisecond {
 		pr.onProgress(pr.read, pr.total)
 		pr.lastReport = time.Now()
 	}
