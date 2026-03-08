@@ -314,11 +314,6 @@ func (h *Handler) DispatchInstall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Push directly via SSE if agent is already connected
-	if data, err := json.Marshal(job); err == nil {
-		h.agentBroker.Send(agentID, "INSTALL_JOB", string(data))
-	}
-
 	// Notify browser via fan-out broker
 	progressJSON, _ := json.Marshal(agent.JobProgress{
 		JobID:   jobID,

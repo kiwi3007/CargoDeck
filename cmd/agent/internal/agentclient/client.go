@@ -177,6 +177,7 @@ func (c *Client) listenSSE() error {
 	log.Println("[Agent] SSE stream established — idle (waiting for jobs)")
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024) // 16MB max — handles large INSTALL_JOB payloads
 	var eventType, dataLine string
 
 	for scanner.Scan() {
