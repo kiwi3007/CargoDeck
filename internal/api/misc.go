@@ -337,6 +337,13 @@ func trimSpace(s string) string {
 // matchesAnyCategory returns true if any result category shares the same Newznab
 // parent (thousands digit) as any of the requested category IDs.
 // e.g. requesting 4000 matches result categories 4010, 4050, etc., and vice versa.
+//
+// Extended Newznab categories (ID >= 100000) are normalised by stripping the
+// leading 100000 prefix before parent-matching:
+//   104050 → 4050 → parent 4000 (PC)
+//   101035 → 1035 → parent 1000 (Console)
+// Sub-1000 remainders (e.g. TPB: 100400 → 400) cannot be mapped to a standard
+// parent, so they are passed through rather than filtered out.
 func matchesAnyCategory(resultCats []indexer.Category, requested []int) bool {
 	if len(resultCats) == 0 {
 		return true // no category info — don't filter out
@@ -344,7 +351,14 @@ func matchesAnyCategory(resultCats []indexer.Category, requested []int) bool {
 	for _, req := range requested {
 		reqParent := (req / 1000) * 1000
 		for _, rc := range resultCats {
-			rcParent := (rc.ID / 1000) * 1000
+			id := rc.ID
+			if id >= 100000 {
+				id = id % 100000
+				if id < 1000 {
+					return true // TPB-style sub-1000 ID — can't determine standard parent, allow through
+				}
+			}
+			rcParent := (id / 1000) * 1000
 			if reqParent == rcParent {
 				return true
 			}
