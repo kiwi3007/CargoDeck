@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -226,7 +227,8 @@ func parseProwlarrXML(data []byte) ([]SearchResult, error) {
 		}
 		for _, attr := range item.Attrs {
 			if attr.Name == "category" {
-				sr.Categories = append(sr.Categories, Category{ID: 0, Name: attr.Value})
+				id, _ := strconv.Atoi(attr.Value)
+				sr.Categories = append(sr.Categories, Category{ID: id, Name: attr.Value})
 			}
 		}
 		results = append(results, sr)

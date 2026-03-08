@@ -348,6 +348,17 @@ func matchesAnyCategory(resultCats []indexer.Category, requested []int) bool {
 	if len(resultCats) == 0 {
 		return true // no category info — don't filter out
 	}
+	// Treat all-zero IDs (dummy/unset) the same as no category info
+	hasRealID := false
+	for _, rc := range resultCats {
+		if rc.ID != 0 {
+			hasRealID = true
+			break
+		}
+	}
+	if !hasRealID {
+		return true
+	}
 	for _, req := range requested {
 		reqParent := (req / 1000) * 1000
 		for _, rc := range resultCats {
