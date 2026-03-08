@@ -552,6 +552,33 @@ func findAllGameExes(dir string) []string {
 	return found
 }
 
+// findAllGameExesInPrefix searches an entire Wine drive_c for game-like exes,
+// skipping standard Windows system directories (windows, users, programdata).
+func findAllGameExesInPrefix(driveC string) []string {
+	skipDirs := map[string]bool{
+		"windows": true, "users": true, "programdata": true,
+	}
+	var found []string
+	_ = filepath.Walk(driveC, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			rel, _ := filepath.Rel(driveC, path)
+			parts := strings.Split(rel, string(filepath.Separator))
+			if len(parts) >= 1 && skipDirs[strings.ToLower(parts[0])] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if isGameExe(strings.ToLower(info.Name())) {
+			found = append(found, path)
+		}
+		return nil
+	})
+	return found
+}
+
 // findFileByBasename finds a file with exact base name (case-insensitive) anywhere under dir.
 func findFileByBasename(dir, basename string) string {
 	var found string
@@ -610,7 +637,14 @@ func isGameExe(lower string) bool {
 			return false
 		}
 	}
-	return true
+	// Exclude well-known Wine/Windows system executables that are never the game.
+	systemExes := map[string]bool{
+		"iexplore.exe": true, "explorer.exe": true, "wmplayer.exe": true,
+		"notepad.exe": true, "msiexec.exe": true, "rundll32.exe": true,
+		"regsvr32.exe": true, "cmd.exe": true, "powershell.exe": true,
+		"werfault.exe": true, "wineboot.exe": true, "wineconsole.exe": true,
+	}
+	return !systemExes[lower]
 }
 
 // createRunScript writes a launcher script for the game.
@@ -934,9 +968,17 @@ func (c *Client) scanInstalledGames() {
 			// Resolve the active exe and all candidates.
 			// For Wine/Proton installs the real exe is inside the prefix, not gameDir.
 			if scriptPath != "" {
-				_, parsedExe := parseRunScript(scriptPath)
+				wineprefix, parsedExe := parseRunScript(scriptPath)
 				if parsedExe != "" {
 					exePath = parsedExe
+				}
+				if wineprefix != "" {
+					// Search the entire drive_c (excluding system dirs) so we find the
+					// game exe even if the installer ignored our /DIR= flag and put it
+					// somewhere like Program Files instead of C:\Games\.
+					driveC := filepath.Join(wineprefix, "pfx", "drive_c")
+					exeCandidates = findAllGameExesInPrefix(driveC)
+				} else if parsedExe != "" {
 					exeCandidates = findAllGameExes(filepath.Dir(parsedExe))
 				}
 			}
