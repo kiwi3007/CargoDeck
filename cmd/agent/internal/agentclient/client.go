@@ -361,8 +361,12 @@ func (c *Client) executeJob(job agent.InstallJob) {
 		}
 		if isInstaller {
 			c.reportProgress(job, agent.JobInstalling, "Running installer: "+base, 87)
-			if err := runInstallerSilent(selectedPath, wineprefix, job.GameTitle); err != nil {
+			logLine := func(line string) { c.reportProgress(job, agent.JobInstalling, line, 88) }
+			if err := runInstallerSilent(selectedPath, wineprefix, job.GameTitle, logLine); err != nil {
 				log.Printf("[Agent] Installer error (non-fatal): %v", err)
+				c.reportProgress(job, agent.JobInstalling, "Installer exited with error: "+err.Error(), 89)
+			} else {
+				c.reportProgress(job, agent.JobInstalling, "Installer finished", 89)
 			}
 			gameExe = findMainExe(gameInstallDir)
 			if gameExe == "" {
@@ -382,8 +386,12 @@ autoDetect:
 		installer := findInstaller(downloadDir)
 		if installer != "" {
 			c.reportProgress(job, agent.JobInstalling, "Running installer: "+filepath.Base(installer), 87)
-			if err := runInstallerSilent(installer, wineprefix, job.GameTitle); err != nil {
+			logLine := func(line string) { c.reportProgress(job, agent.JobInstalling, line, 88) }
+			if err := runInstallerSilent(installer, wineprefix, job.GameTitle, logLine); err != nil {
 				log.Printf("[Agent] Installer error (non-fatal): %v", err)
+				c.reportProgress(job, agent.JobInstalling, "Installer exited with error: "+err.Error(), 89)
+			} else {
+				c.reportProgress(job, agent.JobInstalling, "Installer finished", 89)
 			}
 			// Try known install dir first, then search entire prefix
 			gameExe = findMainExe(gameInstallDir)
@@ -457,34 +465,71 @@ shortcut:
 }
 
 // runInstallerSilent runs a Windows installer silently.
+// logLine is called for each output line that passes the noise filter (may be nil).
 // On Windows: runs the installer natively.
 // On Linux/macOS: uses the best available runner (UMU > Proton > Wine).
-func runInstallerSilent(installerPath, wineprefix, gameTitle string) error {
+func runInstallerSilent(installerPath, wineprefix, gameTitle string, logLine func(string)) error {
 	silentFlags := []string{
 		"/VERYSILENT",
 		"/SUPPRESSMSGBOXES",
 		"/NORESTART",
 	}
 
+	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
 		winDir := filepath.Join(os.Getenv("USERPROFILE"), "Games", safeName(gameTitle))
-		cmd := exec.Command(installerPath, append(silentFlags, "/DIR="+winDir)...)
+		cmd = exec.Command(installerPath, append(silentFlags, "/DIR="+winDir)...)
 		cmd.Dir = filepath.Dir(installerPath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
+	} else {
+		runner := launcher.FindRunner()
+		if runner == nil {
+			log.Printf("[Agent] No runner found — skipping installer %s", installerPath)
+			return nil
+		}
+		args := append(silentFlags, `/DIR=C:\Games\`+safeName(gameTitle))
+		cmd = runner.RunWith(installerPath, wineprefix, args...)
 	}
 
-	runner := launcher.FindRunner()
-	if runner == nil {
-		log.Printf("[Agent] No runner found — skipping installer %s", installerPath)
-		return nil
+	pr, pw := io.Pipe()
+	cmd.Stdout = io.MultiWriter(os.Stdout, pw)
+	cmd.Stderr = io.MultiWriter(os.Stderr, pw)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		sc := bufio.NewScanner(pr)
+		for sc.Scan() {
+			if logLine != nil {
+				if line := installerLineFilter(sc.Text()); line != "" {
+					logLine(line)
+				}
+			}
+		}
+	}()
+
+	err := cmd.Run()
+	pw.Close()
+	<-done
+	return err
+}
+
+// installerLineFilter strips Wine/Proton noise and returns the line if worth surfacing,
+// or "" to discard it. Lines are also truncated to 120 chars to fit the UI.
+func installerLineFilter(line string) string {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return ""
 	}
-	args := append(silentFlags, `/DIR=C:\Games\`+safeName(gameTitle))
-	cmd := runner.RunWith(installerPath, wineprefix, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	lower := strings.ToLower(line)
+	for _, prefix := range []string{"fixme:", "trace:", "wine: created stub", "0009:", "0014:", "0024:"} {
+		if strings.HasPrefix(lower, prefix) {
+			return ""
+		}
+	}
+	if len(line) > 120 {
+		line = line[:117] + "..."
+	}
+	return line
 }
 
 // findGameExeInPrefix searches the Proton wine prefix for a non-system game exe.
