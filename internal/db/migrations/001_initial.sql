@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS Games (
     IsInstallable    INTEGER NOT NULL DEFAULT 0,
     ExecutablePath   TEXT,
     IsExternal       INTEGER NOT NULL DEFAULT 0,
+    save_path        TEXT,
+    current_version  TEXT,
+    latest_version   TEXT,
+    update_available INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (PlatformId) REFERENCES Platforms(Id)
 );
 
@@ -56,6 +60,16 @@ CREATE TABLE IF NOT EXISTS GameFiles (
     ReleaseGroup TEXT,
     Edition      TEXT,
     Languages    TEXT,  -- JSON array
+    FOREIGN KEY (GameId) REFERENCES Games(Id) ON DELETE CASCADE
+);
+
+-- Per-device (per-agent) save path overrides.
+-- Takes priority over the global game.save_path when set.
+CREATE TABLE IF NOT EXISTS AgentGameSavePaths (
+    GameId   INTEGER NOT NULL,
+    AgentId  TEXT    NOT NULL,
+    SavePath TEXT    NOT NULL,
+    PRIMARY KEY (GameId, AgentId),
     FOREIGN KEY (GameId) REFERENCES Games(Id) ON DELETE CASCADE
 );
 

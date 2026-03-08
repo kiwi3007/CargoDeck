@@ -16,11 +16,15 @@ import (
 	"github.com/kiwi3007/playerr/internal/api"
 	"github.com/kiwi3007/playerr/internal/config"
 	dbpkg "github.com/kiwi3007/playerr/internal/db"
+	"github.com/kiwi3007/playerr/internal/manifest"
 	"github.com/kiwi3007/playerr/internal/monitor"
 	"github.com/kiwi3007/playerr/internal/repository"
 	"github.com/kiwi3007/playerr/internal/scanner"
 	"github.com/kiwi3007/playerr/internal/sse"
+	"github.com/kiwi3007/playerr/internal/updater"
 )
+
+var version = "dev"
 
 func main() {
 	// ---- Resolve paths ----
@@ -62,8 +66,14 @@ func main() {
 	agentJobs := agent.NewJobQueue()
 	agentBroker := agent.NewAgentBroker()
 
+	// ---- Manifest (Ludusavi save paths) ----
+	manifestSvc := manifest.NewService(cfg.Dir())
+
+	// ---- Update checker ----
+	updateChecker := updater.NewChecker(repo, cfg, broker)
+
 	// ---- API ----
-	handler := api.NewHandler(repo, cfg, broker, scan, importStatus, agentRegistry, agentJobs, agentBroker)
+	handler := api.NewHandler(repo, cfg, broker, scan, importStatus, agentRegistry, agentJobs, agentBroker, manifestSvc, updateChecker)
 	router := handler.NewRouter()
 
 	// ---- Static UI ----
@@ -108,6 +118,7 @@ func main() {
 
 	go dlMonitor.Run(ctx)
 	go handler.RunQueueBroadcaster(ctx)
+	go updateChecker.Run(ctx)
 
 	// ---- Serve ----
 	log.Printf("[Server] Playerr backend listening on http://%s", addr)

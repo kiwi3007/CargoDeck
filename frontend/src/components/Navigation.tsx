@@ -47,21 +47,12 @@ const Navigation: React.FC = () => {
             <Link to="/settings#language" onClick={() => handleDropdownItemClick('language')}>{t('settingsLanguage')}</Link>
             <Link to="/settings#advanced" onClick={() => handleDropdownItemClick('advanced')}>{t('settingsAdvanced') || 'Advanced'}</Link>
             <Link to="/settings#agents" onClick={() => handleDropdownItemClick('agents')}>Agents</Link>
+            <Link to="/settings#updates" onClick={() => handleDropdownItemClick('updates')}>Updates</Link>
           </div>
         </li>
         <li><NavLink to="/about">{t('about')}</NavLink></li>
       </ul>
-      <div className="nav-branch-tag" style={{
-        fontSize: '10px',
-        opacity: 0.6,
-        padding: '2px 6px',
-        border: '1px solid currentColor',
-        borderRadius: '4px',
-        marginLeft: '10px',
-        whiteSpace: 'nowrap'
-      }}>
-        BETA Release
-      </div>
+      <div className="nav-branch-tag">BETA</div>
     </nav>
   );
 };

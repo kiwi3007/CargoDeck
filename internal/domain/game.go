@@ -111,6 +111,10 @@ type Game struct {
 	ExecutablePath   *string    `json:"executablePath,omitempty"`
 	IsExternal       bool       `json:"isExternal"`
 	IsOwned          bool       `json:"isOwned"`
+	SavePath         string     `json:"savePath,omitempty"`
+	CurrentVersion   string     `json:"currentVersion,omitempty"`
+	LatestVersion    string     `json:"latestVersion,omitempty"`
+	UpdateAvailable  bool       `json:"updateAvailable"`
 }
 
 // JSONStringSlice wraps []string for SQLite JSON column round-trips.

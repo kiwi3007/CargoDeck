@@ -2,15 +2,15 @@
   position: sticky;
   top: 0;
   z-index: 1000;
-  background-color: #171a21;
-  /* Steam's distinct dark blue-grey header color */
-  padding: 1rem 2rem;
+  background: rgba(11, 10, 18, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 0.85rem 2rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: none;
-  /* Steam usually doesn't have a border here, just shadow or distinct color */
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  border-bottom: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 0 rgba(168, 85, 247, 0.08), 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .nav-logo-link {
@@ -18,54 +18,56 @@
   align-items: center;
   gap: 0.75rem;
   text-decoration: none;
-  transition: transform 0.2s;
+  transition: transform 0.2s, filter 0.2s;
+  cursor: pointer;
 }
 
 .nav-logo-link:hover {
-  transform: scale(1.02);
+  transform: scale(1.03);
+  filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.4));
 }
 
 .nav-logo-eye {
-  height: 32px;
+  height: 30px;
   width: auto;
 }
 
 .nav-logo-letters {
-  height: 24px;
+  height: 22px;
   width: auto;
 }
 
 .nav-links {
   list-style: none;
   display: flex;
-  gap: 2rem;
+  gap: 0.25rem;
+  align-items: center;
 }
 
 .nav-links a {
-  color: #cba6f7;
-  /* Steam's inactive text color */
+  color: var(--text-secondary);
   text-decoration: none;
-  font-family: 'Inter', sans-serif;
-  /* Close to Motiva Sans */
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.82rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  transition: color 0.2s;
+  letter-spacing: 0.08em;
+  transition: color 0.2s, background 0.2s;
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--radius-sm);
 }
 
 .nav-links a:hover {
-  color: #ffffff;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
-  /* Subtle glow */
+  color: var(--text-primary);
+  background: rgba(168, 85, 247, 0.08);
 }
 
 .nav-links a.active {
-  color: #f9e2af;
-  /* Playerr Yellow */
+  color: var(--amber-400);
+  background: rgba(251, 191, 36, 0.08);
 }
 
-/* Dropdown Submenu - Steam Inspired */
+/* Dropdown */
 .nav-item-dropdown {
   position: relative;
 }
@@ -73,14 +75,15 @@
 .nav-link-with-arrow {
   display: flex !important;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .dropdown-arrow {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   transition: transform 0.2s;
   display: inline-block;
   line-height: 1;
+  opacity: 0.7;
 }
 
 .dropdown-arrow.open {
@@ -89,23 +92,23 @@
 
 .dropdown-menu {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 8px);
   left: 50%;
-  transform: translateX(-50%) translateY(10px);
-  background: rgba(23, 26, 33, 0.98);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-  border-radius: 4px;
-  min-width: 200px;
-  padding: 0.5rem 0;
+  transform: translateX(-50%) translateY(6px);
+  background: rgba(18, 16, 30, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-normal);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), var(--glow-purple-sm);
+  border-radius: var(--radius-md);
+  min-width: 190px;
+  padding: 0.4rem 0;
   display: flex;
   flex-direction: column;
   opacity: 0;
   visibility: hidden;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1001;
-  margin-top: 10px;
 }
 
 .dropdown-menu.show {
@@ -115,44 +118,45 @@
 }
 
 .dropdown-menu a {
-  padding: 0.8rem 1.5rem !important;
-  font-size: 0.85rem !important;
-  color: #c7d5e0 !important;
+  padding: 0.65rem 1.2rem !important;
+  font-size: 0.82rem !important;
+  color: var(--text-secondary) !important;
   text-transform: none !important;
   font-weight: 500 !important;
-  letter-spacing: normal !important;
-  transition: all 0.2s !important;
+  letter-spacing: 0.02em !important;
+  transition: all 0.15s !important;
   text-align: left !important;
-  border-left: 3px solid transparent !important;
+  border-left: 2px solid transparent !important;
   display: block !important;
+  background: transparent !important;
+  border-radius: 0 !important;
 }
 
 .dropdown-menu a:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: #ffffff !important;
-  border-left-color: #f9e2af !important;
-  text-shadow: none !important;
-  padding-left: 1.7rem !important;
+  background: rgba(168, 85, 247, 0.08) !important;
+  color: var(--text-primary) !important;
+  border-left-color: var(--amber-400) !important;
+  padding-left: 1.45rem !important;
+}
+
+.nav-branch-tag {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--purple-400);
+  background: rgba(168, 85, 247, 0.1);
+  border: 1px solid var(--border-normal);
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 @media (max-width: 768px) {
-  .navigation {
-    padding: 0.75rem 1rem;
-  }
-
-  .nav-links {
-    gap: 1rem;
-  }
-
-  .nav-links a {
-    font-size: 0.8rem;
-  }
-
-  .nav-logo-eye {
-    height: 24px;
-  }
-
-  .nav-logo-letters {
-    height: 18px;
-  }
+  .navigation { padding: 0.75rem 1rem; }
+  .nav-links { gap: 0; }
+  .nav-links a { font-size: 0.75rem; padding: 0.35rem 0.6rem; }
+  .nav-logo-eye { height: 24px; }
+  .nav-logo-letters { height: 18px; }
+  .nav-branch-tag { display: none; }
 }

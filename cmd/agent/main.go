@@ -25,10 +25,26 @@ func main() {
 	token := flag.String("token", "", "Agent auth token (from Settings → Agents)")
 	name := flag.String("name", "", "Agent display name (default: hostname)")
 	showVersion := flag.Bool("version", false, "Print version and exit")
+	testConn := flag.Bool("test-connection", false, "Test server connectivity and exit")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println("playerr-agent", version)
+		os.Exit(0)
+	}
+
+	if *testConn {
+		if *server == "" || *token == "" {
+			os.Exit(1)
+		}
+		c, err := agentclient.New(agentclient.Config{ServerURL: *server, Token: *token, Name: "test"})
+		if err != nil {
+			os.Exit(1)
+		}
+		if err := c.TestConnection(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 
@@ -52,6 +68,7 @@ func main() {
 		ServerURL: *server,
 		Token:     *token,
 		Name:      agentName,
+		Version:   version,
 	})
 	if err != nil {
 		log.Fatalf("[Agent] Init failed: %v", err)

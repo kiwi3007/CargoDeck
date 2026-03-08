@@ -182,6 +182,41 @@ func (h *Handler) SaveMediaSettings(w http.ResponseWriter, r *http.Request) {
 
 // ---- Hydra ----
 
+// ---- SteamGridDB ----
+
+func (h *Handler) GetSteamGridDB(w http.ResponseWriter, r *http.Request) {
+	cfg := h.cfg.LoadSteamGridDB()
+	// Mask the key in the response
+	masked := config.SteamGridDBSettings{}
+	if cfg.ApiKey != "" {
+		masked.ApiKey = "••••••••"
+	}
+	jsonOK(w, masked)
+}
+
+func (h *Handler) SaveSteamGridDB(w http.ResponseWriter, r *http.Request) {
+	var v config.SteamGridDBSettings
+	if err := decodeBody(r, &v); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	if err := h.cfg.SaveSteamGridDB(v); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "SteamGridDB settings saved"})
+}
+
+func (h *Handler) DeleteSteamGridDB(w http.ResponseWriter, r *http.Request) {
+	if err := h.cfg.SaveSteamGridDB(config.SteamGridDBSettings{}); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "SteamGridDB settings cleared"})
+}
+
+// ---- Hydra ----
+
 func (h *Handler) GetHydra(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, h.cfg.LoadHydra())
 }
@@ -197,4 +232,23 @@ func (h *Handler) SaveHydra(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, map[string]string{"message": "Hydra indexers saved"})
+}
+
+// ---- Discord ----
+
+func (h *Handler) GetDiscord(w http.ResponseWriter, r *http.Request) {
+	jsonOK(w, h.cfg.LoadDiscord())
+}
+
+func (h *Handler) SaveDiscord(w http.ResponseWriter, r *http.Request) {
+	var v config.DiscordSettings
+	if err := decodeBody(r, &v); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	if err := h.cfg.SaveDiscord(v); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "Discord settings saved"})
 }

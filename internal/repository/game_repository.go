@@ -73,7 +73,8 @@ const gameSelectCols = `
     g.Genres, g.Developer, g.Publisher, g.ReleaseDate, g.Rating, g.RatingCount,
     g.Status, g.Monitored, g.Path, g.SizeOnDisk,
     g.IgdbId, g.SteamId, g.GogId, g.InstallPath, g.IsInstallable,
-    g.ExecutablePath, g.IsExternal`
+    g.ExecutablePath, g.IsExternal, g.save_path,
+    g.current_version, g.latest_version, g.update_available`
 
 func scanGame(row interface {
 	Scan(...any) error
@@ -102,9 +103,13 @@ func scanGame(row interface {
 		steamId         sql.NullInt64
 		gogId           sql.NullString
 		installPath     sql.NullString
-		isInstallable   int
-		executablePath  sql.NullString
-		isExternal      int
+		isInstallable    int
+		executablePath   sql.NullString
+		isExternal       int
+		savePath         sql.NullString
+		currentVersion   sql.NullString
+		latestVersion    sql.NullString
+		updateAvailable  int
 	)
 
 	err := row.Scan(
@@ -115,7 +120,8 @@ func scanGame(row interface {
 		&genres, &developer, &publisher, &releaseDate, &rating, &ratingCount,
 		&g.Status, &g.Monitored, &path, &sizeOnDisk,
 		&igdbId, &steamId, &gogId, &installPath, &isInstallable,
-		&executablePath, &isExternal,
+		&executablePath, &isExternal, &savePath,
+		&currentVersion, &latestVersion, &updateAvailable,
 	)
 	if err != nil {
 		return nil, err
@@ -174,6 +180,16 @@ func scanGame(row interface {
 	g.IsInstallable = isInstallable != 0
 	g.IsExternal = isExternal != 0
 	g.Monitored = g.Monitored // already bool from scan
+	if savePath.Valid {
+		g.SavePath = savePath.String
+	}
+	if currentVersion.Valid {
+		g.CurrentVersion = currentVersion.String
+	}
+	if latestVersion.Valid {
+		g.LatestVersion = latestVersion.String
+	}
+	g.UpdateAvailable = updateAvailable != 0
 
 	// DateTime
 	g.Added = parseFlexibleTime(added)
@@ -351,6 +367,112 @@ func (r *GameRepository) UpdateGame(id int, g *domain.Game) (*domain.Game, error
 	return r.GetGameByID(id)
 }
 
+// UpdateGameSavePath sets (or clears) the custom save path for a game.
+func (r *GameRepository) UpdateGameSavePath(id int, path string) error {
+	var val interface{}
+	if path != "" {
+		val = path
+	}
+	_, err := r.db.Exec(`UPDATE Games SET save_path = ? WHERE Id = ?`, val, id)
+	return err
+}
+
+// ---- Per-device (per-agent) save path overrides ----
+
+// GetAgentSavePath returns the custom save path for a specific agent+game, or "" if none.
+func (r *GameRepository) GetAgentSavePath(gameID int, agentID string) (string, error) {
+	var path string
+	err := r.db.QueryRow(
+		`SELECT SavePath FROM AgentGameSavePaths WHERE GameId = ? AND AgentId = ?`,
+		gameID, agentID,
+	).Scan(&path)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return path, err
+}
+
+// SetAgentSavePath upserts a custom save path for an agent+game. Empty path deletes.
+func (r *GameRepository) SetAgentSavePath(gameID int, agentID, path string) error {
+	if path == "" {
+		_, err := r.db.Exec(
+			`DELETE FROM AgentGameSavePaths WHERE GameId = ? AND AgentId = ?`,
+			gameID, agentID,
+		)
+		return err
+	}
+	_, err := r.db.Exec(
+		`INSERT INTO AgentGameSavePaths(GameId, AgentId, SavePath) VALUES(?,?,?)
+		 ON CONFLICT(GameId, AgentId) DO UPDATE SET SavePath = excluded.SavePath`,
+		gameID, agentID, path,
+	)
+	return err
+}
+
+// GetAllAgentSavePaths returns all per-device save path overrides for a game.
+// Returns a map of agentId → savePath.
+func (r *GameRepository) GetAllAgentSavePaths(gameID int) (map[string]string, error) {
+	rows, err := r.db.Query(
+		`SELECT AgentId, SavePath FROM AgentGameSavePaths WHERE GameId = ?`,
+		gameID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := map[string]string{}
+	for rows.Next() {
+		var agentID, path string
+		if err := rows.Scan(&agentID, &path); err == nil {
+			result[agentID] = path
+		}
+	}
+	return result, rows.Err()
+}
+
+// UpdateGameVersion sets the current_version field (called when agent reports installed version).
+func (r *GameRepository) UpdateGameVersion(id int, version string) error {
+	_, err := r.db.Exec(`UPDATE Games SET current_version = ? WHERE Id = ?`, version, id)
+	return err
+}
+
+// UpdateGameUpdateInfo sets latest_version and update_available flag.
+func (r *GameRepository) UpdateGameUpdateInfo(id int, latestVersion string, updateAvailable bool) error {
+	_, err := r.db.Exec(
+		`UPDATE Games SET latest_version = ?, update_available = ? WHERE Id = ?`,
+		latestVersion, boolToInt(updateAvailable), id,
+	)
+	return err
+}
+
+// GetMonitoredGamesWithVersion returns games that have current_version set (eligible for update checks).
+func (r *GameRepository) GetMonitoredGamesWithVersion() ([]domain.Game, error) {
+	query := fmt.Sprintf(
+		`SELECT %s FROM Games g WHERE g.current_version IS NOT NULL AND g.current_version != '' ORDER BY g.Title`,
+		gameSelectCols,
+	)
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var games []domain.Game
+	platformCache := map[int]*domain.Platform{}
+	for rows.Next() {
+		g, err := scanGame(rows)
+		if err != nil {
+			continue
+		}
+		g.Platform = r.resolvePlatform(g.PlatformID, platformCache)
+		games = append(games, *g)
+	}
+	if games == nil {
+		games = []domain.Game{}
+	}
+	return games, rows.Err()
+}
+
 func (r *GameRepository) DeleteGame(id int) (bool, error) {
 	res, err := r.db.Exec(`DELETE FROM Games WHERE Id = ?`, id)
 	if err != nil {
@@ -490,6 +612,33 @@ func (r *GameRepository) GetGamesByPlatform(platformID int) ([]domain.Game, erro
 }
 
 // GetIgdbIds returns the set of IGDB IDs already in the library (for "isOwned" flagging).
+func (r *GameRepository) GetGameByIgdbID(igdbID int) (*domain.Game, error) {
+	query := fmt.Sprintf(`SELECT %s FROM Games g WHERE g.IgdbId = ? LIMIT 1`, gameSelectCols)
+	row := r.db.QueryRow(query, igdbID)
+	g, err := scanGame(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
+// GetGameByTitle returns the first library game matching the title (case-insensitive).
+func (r *GameRepository) GetGameByTitle(title string) (*domain.Game, error) {
+	query := fmt.Sprintf(`SELECT %s FROM Games g WHERE LOWER(g.Title) = LOWER(?) LIMIT 1`, gameSelectCols)
+	row := r.db.QueryRow(query, title)
+	g, err := scanGame(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
 func (r *GameRepository) GetIgdbIds() (map[int]struct{}, error) {
 	rows, err := r.db.Query(`SELECT IgdbId FROM Games WHERE IgdbId IS NOT NULL`)
 	if err != nil {

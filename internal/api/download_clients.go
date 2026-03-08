@@ -261,6 +261,7 @@ func (h *Handler) AddTorrent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	isNZB := strings.EqualFold(req.Protocol, "nzb") ||
+		strings.EqualFold(req.Protocol, "usenet") ||
 		strings.HasSuffix(strings.ToLower(req.URL), ".nzb")
 
 	clients := h.cfg.LoadDownloadClients()

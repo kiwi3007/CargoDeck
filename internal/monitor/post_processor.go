@@ -317,11 +317,36 @@ func (p *Processor) moveSingleFile(d domain.DownloadStatus, libraryRoot, contain
 	p.broker.Publish("LIBRARY_UPDATED", "{}")
 }
 
-// addGameToLibrary inserts a new Game record if the path is not already tracked.
+// addGameToLibrary associates the downloaded file with an existing game (matched by IGDB ID)
+// or creates a new Game record if no match is found.
 func (p *Processor) addGameToLibrary(title, filePath string, igdbID *int) {
-	// Skip if already in library
-	games, err := p.repo.GetAllGames()
-	if err == nil {
+	dir := filepath.Dir(filePath)
+
+	baseLower := strings.ToLower(filepath.Base(filePath))
+	status := domain.GameStatusDownloaded
+	if strings.Contains(baseLower, "setup") || strings.Contains(baseLower, "install") {
+		status = domain.GameStatusInstallerDetected
+	}
+
+	// If we resolved an IGDB ID, check whether this game is already in the library.
+	if igdbID != nil {
+		existing, err := p.repo.GetGameByIgdbID(*igdbID)
+		if err == nil && existing != nil {
+			// Update the existing game with the downloaded file path.
+			existing.Path = &dir
+			existing.ExecutablePath = &filePath
+			existing.Status = status
+			if _, err := p.repo.UpdateGame(existing.ID, existing); err != nil {
+				log.Printf("[PostDownload] Failed to update %q (id:%d): %v", existing.Title, existing.ID, err)
+			} else {
+				log.Printf("[PostDownload] Associated download with existing game %q (id:%d)", existing.Title, existing.ID)
+			}
+			return
+		}
+	}
+
+	// Skip if this exact path is already tracked.
+	if games, err := p.repo.GetAllGames(); err == nil {
 		for _, g := range games {
 			if g.ExecutablePath != nil && *g.ExecutablePath == filePath {
 				return
@@ -332,20 +357,10 @@ func (p *Processor) addGameToLibrary(title, filePath string, igdbID *int) {
 	game := domain.Game{
 		Title:          title,
 		ExecutablePath: &filePath,
+		Path:           &dir,
 		Added:          time.Now(),
-		Status:         domain.GameStatusInstallerDetected,
+		Status:         status,
 		Monitored:      true,
-	}
-
-	dir := filepath.Dir(filePath)
-	game.Path = &dir
-
-	// Tag installer status
-	baseLower := strings.ToLower(filepath.Base(filePath))
-	if strings.Contains(baseLower, "setup") || strings.Contains(baseLower, "install") {
-		game.Status = domain.GameStatusInstallerDetected
-	} else {
-		game.Status = domain.GameStatusDownloaded
 	}
 
 	// Attach IGDB metadata if we have an ID
@@ -360,10 +375,8 @@ func (p *Processor) addGameToLibrary(title, filePath string, igdbID *int) {
 				if g.Summary != "" {
 					game.Overview = &g.Summary
 				}
-				if len(g.Genres) > 0 {
-					for _, genre := range g.Genres {
-						game.Genres = append(game.Genres, genre.Name)
-					}
+				for _, genre := range g.Genres {
+					game.Genres = append(game.Genres, genre.Name)
 				}
 				if g.Cover != nil {
 					u := fmt.Sprintf("https://images.igdb.com/igdb/image/upload/t_cover_big/%s.jpg", g.Cover.ImageID)

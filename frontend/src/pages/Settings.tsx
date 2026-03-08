@@ -50,16 +50,27 @@ interface AgentRow {
   platform: string;
   status: string;
   lastSeen: string;
+  version?: string;
 }
 
 const AgentsTab: React.FC = () => {
   const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [serverVersion, setServerVersion] = useState('');
+  const [copiedCmd, setCopiedCmd] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [token, setToken] = useState('');
-  const [copied, setCopied] = useState(false);
+
+  const serverOrigin = window.location.origin;
+  const isWindows = navigator.userAgent.includes('Windows');
+
+  const setupCmd = `curl -fsSL '${serverOrigin}/api/v3/agent/setup.sh' | bash`;
+  const setupCmdWithName = `curl -fsSL '${serverOrigin}/api/v3/agent/setup.sh' | bash -s "My Device Name"`;
+  const winCmd = `$d="$env:APPDATA\\playerr-agent"; New-Item -Force -ItemType Directory $d | Out-Null; Invoke-WebRequest '${serverOrigin}/api/v3/agent/binary?os=win-x64' -OutFile "$d\\playerr-agent.exe"; & "$d\\playerr-agent.exe" --server '${serverOrigin}' --token '${token}' --name $env:COMPUTERNAME`;
 
   useEffect(() => {
     axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
-    axios.get('/api/v3/settings/agent').then(r => setToken(r.data.token || '')).catch(() => {});
+    axios.get('/api/v3/settings/agent').then(r => setToken(r.data?.token || '')).catch(() => {});
+    axios.get('/api/v3/agent/version').then(r => setServerVersion(r.data?.version || '')).catch(() => {});
     const handler = (e: Event) => {
       try { setAgents(JSON.parse((e as CustomEvent).detail) || []); } catch { /* ignore */ }
     };
@@ -67,34 +78,43 @@ const AgentsTab: React.FC = () => {
     return () => window.removeEventListener('AGENTS_UPDATED_EVENT', handler);
   }, []);
 
-  const tokenInputRef = React.useRef<HTMLInputElement>(null);
-
-  const copyToken = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(token).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      }).catch(() => fallbackCopy());
-    } else {
-      fallbackCopy();
-    }
+  const copyCmd = () => {
+    const copy = (text: string) => {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).catch(() => fallback(text));
+      } else {
+        fallback(text);
+      }
+    };
+    const fallback = (text: string) => {
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    };
+    copy(isWindows ? winCmd : setupCmd);
+    setCopiedCmd(true);
+    setTimeout(() => setCopiedCmd(false), 2500);
   };
 
-  const fallbackCopy = () => {
-    const el = tokenInputRef.current;
-    if (!el) return;
-    el.select();
-    el.setSelectionRange(0, 99999);
-    document.execCommand('copy');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const platforms = [
+    { id: 'linux-x64',   label: 'Linux x64',       icon: '🐧', hint: 'Steam Deck, most PCs' },
+    { id: 'linux-arm64', label: 'Linux ARM64',      icon: '🐧', hint: 'Raspberry Pi, ARM servers' },
+    { id: 'win-x64',     label: 'Windows x64',      icon: '🪟', hint: '' },
+    { id: 'osx-arm64',   label: 'macOS Apple Silicon', icon: '🍎', hint: 'M1/M2/M3' },
+    { id: 'osx-x64',     label: 'macOS Intel',      icon: '🍎', hint: '' },
+  ];
 
-  const platform = navigator.platform || '';
-  const agentArch = platform.includes('arm') || platform.includes('aarch') ? 'arm64' : 'amd64';
-  const agentOS = navigator.userAgent.toLowerCase().includes('win') ? 'win-x64'
-    : navigator.userAgent.toLowerCase().includes('mac') ? 'osx-arm64'
-    : `linux-${agentArch}`;
+  const formatLastSeen = (iso: string) => {
+    if (!iso) return 'never';
+    const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86400)}d ago`;
+  };
 
   return (
     <div className="settings-section" id="agents">
@@ -102,81 +122,268 @@ const AgentsTab: React.FC = () => {
         <h3>Remote Agents</h3>
       </div>
       <p className="settings-description">
-        Install games to remote devices (e.g. Steam Deck) running the Playerr Agent.
+        Install the Playerr Agent on any device to remotely install and manage games.
+        Saves sync back automatically when games close.
       </p>
 
-      <div className="settings-card" style={{ marginBottom: '20px' }}>
-        <h4>Agent Token</h4>
-        <p style={{ fontSize: '0.85rem', color: '#a6adc8', marginBottom: '10px' }}>
-          Copy this token and pass it to the agent with <code>--token</code>.
-        </p>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <input
-            ref={tokenInputRef}
-            type="text"
-            readOnly
-            value={token}
-            style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.9rem' }}
-          />
-          <button className="btn-secondary" onClick={copyToken}>
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
+      {/* ── Setup script (primary) ── */}
+      <div className="settings-card agent-setup-card" style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '1.4rem' }}>🚀</span>
+          <div>
+            <h4 style={{ margin: 0 }}>Quick Install</h4>
+            <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: '#a6adc8' }}>
+              Run this command on the target device — it downloads, installs, and starts the agent automatically.
+            </p>
+          </div>
         </div>
-      </div>
 
-      <div className="settings-card" style={{ marginBottom: '20px' }}>
-        <h4>Download Agent</h4>
-        <p style={{ fontSize: '0.85rem', color: '#a6adc8', marginBottom: '10px' }}>
-          Run on the target device, then connect it to this server.
-        </p>
-        <a
-          href={`/_output/${agentOS}/playerr-agent`}
-          className="btn-secondary"
-          style={{ display: 'inline-block', textDecoration: 'none' }}
-        >
-          Download playerr-agent ({agentOS})
-        </a>
-        <p style={{ fontSize: '0.8rem', color: '#6c7086', marginTop: '10px' }}>
-          Usage: <code>./playerr-agent --server http://YOUR-SERVER:5002 --token YOUR-TOKEN</code>
-        </p>
-      </div>
-
-      <div className="settings-card">
-        <h4>Connected Agents</h4>
-        {agents.length === 0 ? (
-          <p style={{ color: '#6c7086', fontSize: '0.9rem' }}>No agents registered yet.</p>
+        {isWindows ? (
+          <>
+            <p style={{ fontSize: '0.8rem', color: '#a6adc8', marginBottom: '6px' }}>
+              Run in <strong>PowerShell</strong> (Windows):
+            </p>
+            <div className="agent-cmd-box">
+              <code className="agent-cmd-text">{token ? winCmd : 'Loading...'}</code>
+              <button className="agent-cmd-copy" onClick={copyCmd} title="Copy command" disabled={!token}>
+                {copiedCmd ? '✓ Copied!' : 'Copy'}
+              </button>
+            </div>
+            <p style={{ fontSize: '0.78rem', color: '#6c7086', marginTop: '10px' }}>
+              Downloads the agent to <code>%APPDATA%\playerr-agent\</code> and starts it. To run on login, add a shortcut to your Startup folder.
+            </p>
+          </>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-            <thead>
-              <tr style={{ color: '#a6adc8', textAlign: 'left', borderBottom: '1px solid #45475a' }}>
-                <th style={{ padding: '8px 10px' }}>Name</th>
-                <th style={{ padding: '8px 10px' }}>Platform</th>
-                <th style={{ padding: '8px 10px' }}>Status</th>
-                <th style={{ padding: '8px 10px' }}>Last Seen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agents.map(a => (
-                <tr key={a.id} style={{ borderBottom: '1px solid #313244' }}>
-                  <td style={{ padding: '8px 10px', color: '#cdd6f4' }}>{a.name}</td>
-                  <td style={{ padding: '8px 10px', color: '#a6adc8' }}>{a.platform}</td>
-                  <td style={{ padding: '8px 10px' }}>
-                    <span style={{
-                      color: a.status === 'online' ? '#a6e3a1' : '#f38ba8',
-                      fontWeight: 500
-                    }}>
-                      {a.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: '8px 10px', color: '#6c7086', fontSize: '0.8rem' }}>
-                    {a.lastSeen ? new Date(a.lastSeen).toLocaleString() : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            <div className="agent-cmd-box">
+              <code className="agent-cmd-text">{setupCmd}</code>
+              <button className="agent-cmd-copy" onClick={copyCmd} title="Copy command">
+                {copiedCmd ? '✓ Copied!' : 'Copy'}
+              </button>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#6c7086', marginTop: '10px' }}>
+              To set a custom device name: <br />
+              <code style={{ fontSize: '0.78rem', color: '#a6adc8' }}>{setupCmdWithName}</code>
+            </p>
+            <p style={{ fontSize: '0.78rem', color: '#6c7086', marginTop: '8px' }}>
+              Works on Linux (systemd) and macOS (launchd). The agent auto-restarts on crash and reboot.
+            </p>
+          </>
         )}
       </div>
+
+      {/* ── Manual download (advanced) ── */}
+      <div className="settings-card" style={{ marginBottom: '20px' }}>
+        <button
+          className="agent-advanced-toggle"
+          onClick={() => setShowAdvanced(v => !v)}
+        >
+          {showAdvanced ? '▾' : '▸'} Manual / Advanced Download
+        </button>
+
+        {showAdvanced && (
+          <div style={{ marginTop: '14px' }}>
+            <p style={{ fontSize: '0.85rem', color: '#a6adc8', marginBottom: '12px' }}>
+              Download the binary directly and run it manually.
+            </p>
+            <div className="agent-platform-grid">
+              {platforms.map(p => (
+                <a
+                  key={p.id}
+                  href={`/api/v3/agent/binary?os=${p.id}`}
+                  className="agent-platform-btn"
+                  download
+                >
+                  <span className="agent-platform-icon">{p.icon}</span>
+                  <span className="agent-platform-label">{p.label}</span>
+                  {p.hint && <span className="agent-platform-hint">{p.hint}</span>}
+                </a>
+              ))}
+            </div>
+            <div className="agent-manual-usage">
+              <p style={{ margin: '12px 0 4px', fontSize: '0.82rem', color: '#a6adc8' }}>Usage:</p>
+              <code style={{ fontSize: '0.78rem', color: '#cdd6f4', display: 'block', background: '#181825', padding: '8px 10px', borderRadius: '6px', lineHeight: 1.6 }}>
+                ./playerr-agent \<br />
+                &nbsp;&nbsp;--server {serverOrigin} \<br />
+                &nbsp;&nbsp;--token YOUR_TOKEN \<br />
+                &nbsp;&nbsp;--name "My Device"
+              </code>
+              <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#6c7086' }}>
+                Find your token in the server config at <code>config/agent.json</code>
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Connected agents ── */}
+      <div className="settings-card">
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          Connected Devices
+          {serverVersion && (
+            <span style={{ fontSize: '0.75rem', color: '#6c7086', fontWeight: 'normal', fontFamily: 'monospace' }}>
+              server {serverVersion}
+            </span>
+          )}
+        </h4>
+        {agents.length === 0 ? (
+          <p style={{ color: '#6c7086', fontSize: '0.9rem', marginTop: '8px' }}>
+            No agents connected yet. Run the setup command on a device to get started.
+          </p>
+        ) : (
+          <div className="agent-device-list">
+            {agents.map(a => {
+              const isOutdated = serverVersion && a.version && a.version !== serverVersion;
+              return (
+                <div key={a.id} className={`agent-device-row ${a.status}`}>
+                  <span className={`agent-device-dot ${a.status}`} />
+                  <div className="agent-device-info">
+                    <span className="agent-device-name">{a.name}</span>
+                    <span className="agent-device-platform">{a.platform}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+                    {a.version && (
+                      <span style={{
+                        fontSize: '0.72rem',
+                        color: isOutdated ? '#f38ba8' : (serverVersion && a.version === serverVersion ? '#a6e3a1' : '#6c7086'),
+                        fontFamily: 'monospace',
+                      }} title={isOutdated ? `Server is ${serverVersion}, agent is ${a.version}` : 'Up to date'}>
+                        {a.version}
+                        {isOutdated && ' ↑'}
+                      </span>
+                    )}
+                    <span className="agent-device-seen">{formatLastSeen(a.lastSeen)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ---- Updates tab (Discord + update check) ----
+
+interface DiscordSettings {
+  webhookUrl: string;
+  checkIntervalHours: number;
+}
+
+interface GameWithUpdate {
+  id: number;
+  title: string;
+  currentVersion: string;
+  latestVersion: string;
+}
+
+const UpdatesTab: React.FC = () => {
+  const [discord, setDiscord] = useState<DiscordSettings>({ webhookUrl: '', checkIntervalHours: 24 });
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [gamesWithUpdates, setGamesWithUpdates] = useState<GameWithUpdate[]>([]);
+
+  useEffect(() => {
+    axios.get<DiscordSettings>('/api/v3/settings/discord')
+      .then(r => setDiscord(r.data))
+      .catch(() => { /* ignore */ });
+    axios.get<Array<{ id: number; title: string; currentVersion: string; latestVersion: string; updateAvailable: boolean }>>('/api/v3/game')
+      .then(r => setGamesWithUpdates((r.data || []).filter(g => g.updateAvailable)))
+      .catch(() => { /* ignore */ });
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMsg('');
+    try {
+      await axios.post('/api/v3/settings/discord', discord);
+      setSaveMsg('Saved');
+    } catch {
+      setSaveMsg('Error saving');
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMsg(''), 3000);
+    }
+  };
+
+  const handleCheckAll = async () => {
+    setChecking(true);
+    try {
+      await axios.post('/api/v3/game/check-update');
+      setSaveMsg('Update check started');
+    } catch {
+      setSaveMsg('Error starting check');
+    } finally {
+      setChecking(false);
+      setTimeout(() => setSaveMsg(''), 4000);
+    }
+  };
+
+  return (
+    <div className="settings-section" id="updates">
+      <h2 className="section-title">Updates</h2>
+      <p style={{ color: '#a6adc8', fontSize: '0.85rem', marginBottom: '16px' }}>
+        Playerr periodically searches your indexers for newer versions of installed games and notifies you via Discord.
+      </p>
+
+      <div className="settings-row">
+        <label className="settings-label">Check interval</label>
+        <select
+          value={discord.checkIntervalHours}
+          onChange={e => setDiscord(prev => ({ ...prev, checkIntervalHours: Number(e.target.value) }))}
+          style={{ padding: '6px 10px', background: '#313244', border: '1px solid #45475a', borderRadius: '4px', color: '#cdd6f4', fontSize: '14px' }}
+        >
+          <option value={6}>Every 6 hours</option>
+          <option value={12}>Every 12 hours</option>
+          <option value={24}>Every 24 hours</option>
+          <option value={48}>Every 48 hours</option>
+        </select>
+      </div>
+
+      <div className="settings-row" style={{ marginTop: '12px' }}>
+        <label className="settings-label">Discord webhook URL</label>
+        <input
+          type="text"
+          value={discord.webhookUrl}
+          onChange={e => setDiscord(prev => ({ ...prev, webhookUrl: e.target.value }))}
+          placeholder="https://discord.com/api/webhooks/..."
+          style={{ flex: 1, padding: '6px 10px', background: '#313244', border: '1px solid #45475a', borderRadius: '4px', color: '#cdd6f4', fontSize: '14px' }}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', marginTop: '14px', alignItems: 'center' }}>
+        <button className="btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button className="btn-secondary" onClick={handleCheckAll} disabled={checking}>
+          {checking ? 'Checking…' : 'Check all now'}
+        </button>
+        {saveMsg && <span style={{ color: '#a6e3a1', fontSize: '0.85rem' }}>{saveMsg}</span>}
+      </div>
+
+      {gamesWithUpdates.length > 0 && (
+        <div style={{ marginTop: '20px' }}>
+          <h3 style={{ fontSize: '0.9rem', color: '#cdd6f4', marginBottom: '10px' }}>Games with pending updates</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {gamesWithUpdates.map(g => (
+              <div key={g.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 12px',
+                background: 'rgba(251, 146, 60, 0.06)',
+                border: '1px solid rgba(251, 146, 60, 0.15)',
+                borderRadius: '6px',
+              }}>
+                <span style={{ color: '#cdd6f4' }}>{g.title}</span>
+                <span style={{ color: '#a6adc8', fontSize: '0.8rem' }}>
+                  v{g.currentVersion || '?'} → v{g.latestVersion || '?'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -202,6 +409,7 @@ const Settings: React.FC = () => {
 
   const [igdbClientId, setIgdbClientId] = useState('');
   const [igdbClientSecret, setIgdbClientSecret] = useState('');
+  const [sgdbApiKey, setSgdbApiKey] = useState('');
   const [steamApiKey, setSteamApiKey] = useState('');
   const [steamId, setSteamId] = useState('');
   const [steamTesting, setSteamTesting] = useState(false);
@@ -354,6 +562,9 @@ const Settings: React.FC = () => {
       setIgdbClientId(igdbResponse.data.clientId);
       setIgdbClientSecret(igdbResponse.data.clientSecret);
 
+      const sgdbResponse = await axios.get('/api/v3/settings/steamgriddb').catch(() => ({ data: {} }));
+      setSgdbApiKey(sgdbResponse.data.apiKey || '');
+
       const mediaResponse = await axios.get('/api/v3/media');
       setFolderPath(mediaResponse.data.folderPath);
       setDownloadPath(mediaResponse.data.downloadPath || '');
@@ -447,6 +658,26 @@ const Settings: React.FC = () => {
     } catch (error: any) {
       console.error('Error disconnecting IGDB:', error);
       alert(`${t('error')}: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
+  const handleSaveSteamGridDB = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await axios.post('/api/v3/settings/steamgriddb', { apiKey: sgdbApiKey });
+      alert('SteamGridDB settings saved');
+    } catch (error: any) {
+      alert(`Error: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
+  const handleDisconnectSteamGridDB = async () => {
+    if (!window.confirm(t('disconnectConfirm'))) return;
+    try {
+      await axios.delete('/api/v3/settings/steamgriddb');
+      setSgdbApiKey('');
+    } catch (error: any) {
+      alert(`Error: ${error.response?.data?.error || error.message}`);
     }
   };
 
@@ -1226,6 +1457,41 @@ const Settings: React.FC = () => {
               </div>
             </form>
           </div>
+
+          <div className="settings-section">
+            <div className="section-header-with-logo">
+              <span style={{ fontSize: '18px', fontWeight: 700, color: '#cdd6f4' }}>SteamGridDB</span>
+            </div>
+            <p className="settings-description">
+              Automatically downloads grid, hero, and logo artwork for Steam shortcuts from SteamGridDB.
+              Get your API key at <a href="https://www.steamgriddb.com/profile/preferences/api" target="_blank" rel="noopener noreferrer">steamgriddb.com</a>.
+            </p>
+            <form onSubmit={handleSaveSteamGridDB}>
+              <div className="form-group">
+                <label htmlFor="sgdb-api-key">API Key</label>
+                <input
+                  type="password"
+                  id="sgdb-api-key"
+                  placeholder="SteamGridDB API Key"
+                  value={sgdbApiKey}
+                  onChange={(e) => setSgdbApiKey(e.target.value)}
+                />
+              </div>
+              <div className="button-group">
+                <button type="submit" className="btn-primary">{t('save')}</button>
+                {sgdbApiKey && (
+                  <button
+                    type="button"
+                    className="btn-delete"
+                    onClick={handleDisconnectSteamGridDB}
+                    style={{ marginLeft: '10px' }}
+                  >
+                    {t('disconnect')}
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
         </>
       )}
 
@@ -1716,6 +1982,8 @@ const Settings: React.FC = () => {
       }
 
       {currentTab === 'agents' && <AgentsTab />}
+
+      {currentTab === 'updates' && <UpdatesTab />}
 
       {/* Modals */}
       <HydraSourceModal

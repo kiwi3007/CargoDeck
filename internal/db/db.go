@@ -26,7 +26,19 @@ func Open(dbPath string) (*sql.DB, error) {
 	if err := runMigrations(db); err != nil {
 		return nil, fmt.Errorf("migrations: %w", err)
 	}
+	addColumnIfMissing(db, "Games", "save_path", "TEXT")
+	addColumnIfMissing(db, "Games", "current_version", "TEXT")
+	addColumnIfMissing(db, "Games", "latest_version", "TEXT")
+	addColumnIfMissing(db, "Games", "update_available", "INTEGER NOT NULL DEFAULT 0")
 	return db, nil
+}
+
+// addColumnIfMissing runs ALTER TABLE to add a column, silently ignoring "duplicate column name".
+func addColumnIfMissing(db *sql.DB, table, col, def string) {
+	_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, col, def))
+	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		log.Printf("[DB] addColumnIfMissing %s.%s: %v", table, col, err)
+	}
 }
 
 func runMigrations(db *sql.DB) error {

@@ -7,7 +7,7 @@ import GameCorrectionModal from '../components/GameCorrectionModal';
 import UninstallModal from '../components/UninstallModal';
 import SwitchInstallerModal from '../components/SwitchInstallerModal';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSearch, faPen, faFolderOpen, faDownload, faGamepad, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown, faTrash, faMicrochip } from '@fortawesome/free-solid-svg-icons';
+import { faSearch, faPen, faFolderOpen, faDownload, faGamepad, faMagnet, faSpinner, faSort, faSortUp, faSortDown, faArrowUp, faArrowDown, faTrash, faMicrochip, faDatabase } from '@fortawesome/free-solid-svg-icons';
 import './GameDetails.css';
 import VersionSelectorModal, { VersionOption } from '../components/VersionSelectorModal';
 
@@ -32,11 +32,16 @@ interface Game {
   availablePlatforms?: string[];
   steamId?: number;
   path?: string;
+  installPath?: string;
+  sizeOnDisk?: number;
   uninstallerPath?: string;
   downloadPath?: string;
   executablePath?: string;
   canPlay?: boolean;
   gameFiles?: GameFile[];
+  currentVersion?: string;
+  latestVersion?: string;
+  updateAvailable?: boolean;
 }
 
 interface GameFile {
@@ -45,6 +50,29 @@ interface GameFile {
   releaseGroup?: string;
   quality?: string;
   size: number;
+}
+
+interface SaveSnapshot {
+  id: string;      // "{agentId}/{timestamp}"
+  agentId: string;
+  timestamp: string;
+  sizeBytes: number;
+}
+
+interface ServerFile {
+  relativePath: string;
+  name: string;
+  size: number;
+  gameFileId?: number;
+  quality?: string;
+  releaseGroup?: string;
+}
+
+interface SavePathsInfo {
+  source: 'custom' | 'manifest' | 'fallback' | 'none';
+  paths: string[];
+  savePath?: string; // custom path if source=custom
+  steamId?: number;
 }
 
 interface TorrentResult {
@@ -83,6 +111,14 @@ interface TorrentResult {
   provider: string; // Added provider field
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + '\u00a0' + sizes[i];
+}
+
 const GameDetails: React.FC = () => {
   useTranslation(); // Subscribe to language changes
   const { id } = useParams<{ id: string }>();
@@ -111,7 +147,7 @@ const GameDetails: React.FC = () => {
       }
     }
   }, [id, getCacheForGame]);
-  const [sortField, setSortField] = useState<keyof TorrentResult | null>('seeders');
+  const [sortField, setSortField] = useState<keyof TorrentResult | null>('publishDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [downloadingUrl, setDownloadingUrl] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null);
@@ -122,16 +158,45 @@ const GameDetails: React.FC = () => {
   const [showVersionModal, setShowVersionModal] = useState(false);
   const [versionOptions, setVersionOptions] = useState<VersionOption[]>([]);
   const [actionType, setActionType] = useState<'install' | 'play' | null>(null);
-  const [activeTab, setActiveTab] = useState<'search' | 'files' | 'none'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'files' | 'saves' | 'none'>('search');
+  const [serverFiles, setServerFiles] = useState<ServerFile[]>([]);
+  const [serverFilesLoading, setServerFilesLoading] = useState(false);
+  const [deletingFile, setDeletingFile] = useState<Record<string, boolean>>({});
+  const [saveSnapshots, setSaveSnapshots] = useState<SaveSnapshot[]>([]);
+  const [savesLoading, setSavesLoading] = useState(false);
+  const [savePathsInfo, setSavePathsInfo] = useState<SavePathsInfo | null>(null);
+  const [customPathInput, setCustomPathInput] = useState('');
+  const [savingCustomPath, setSavingCustomPath] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
 
   // ---- Remote agent install ----
   interface InstallPath { path: string; label: string; freeBytes: number; }
   interface ActiveJob { jobId: string; gameTitle: string; status: string; message: string; percent: number; }
-  interface AgentInfo { id: string; name: string; platform: string; status: string; installPaths?: InstallPath[]; currentJob?: ActiveJob; }
+  interface InstalledGameOnAgent { title: string; installPath: string; exePath?: string; exeCandidates?: string[]; scriptPath?: string; sizeBytes: number; hasShortcut: boolean; version?: string; }
+  interface AgentInfo { id: string; name: string; platform: string; status: string; installPaths?: InstallPath[]; currentJob?: ActiveJob; installedGames?: InstalledGameOnAgent[]; }
+  // Agent scan reports directory names as titles; safeName replaces path-unsafe chars with '-'.
+  // Normalize both sides so "Story of Seasons: Grand Bazaar" matches "Story of Seasons- Grand Bazaar".
+  const agentTitleMatches = (agentTitle: string, libraryTitle: string) => {
+    const norm = (s: string) => s.replace(/[/\\:*?"<>|]/g, '-');
+    return agentTitle === libraryTitle || agentTitle === norm(libraryTitle);
+  };
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [agentJobProgress, setAgentJobProgress] = useState<{ status: string; message: string; percent: number } | null>(null);
+  const [deletingFromAgent, setDeletingFromAgent] = useState<Record<string, boolean>>({});
+  const [exeDropdownOpen, setExeDropdownOpen] = useState<Record<string, boolean>>({});
+  const [restoringOnAgent, setRestoringOnAgent] = useState<Record<string, boolean>>({});
+  const [requestingLog, setRequestingLog] = useState<Record<string, boolean>>({});
+  const [logModal, setLogModal] = useState<{ agentName: string; gameTitle: string; content: string } | null>(null);
+  const pendingLogRequest = React.useRef<string | null>(null);
+
+  // Exe picker modal state
+  const [exeCandidates, setExeCandidates] = useState<{ name: string; relPath: string; type: 'installer' | 'game'; fromArchive?: string }[]>([]);
+  const [showExePicker, setShowExePicker] = useState(false);
+  const [selectedExeName, setSelectedExeName] = useState('');
+  const [pendingInstall, setPendingInstall] = useState<{ agentId: string; installDir?: string } | null>(null);
 
   useEffect(() => {
     const applyAgentList = (list: AgentInfo[]) => {
@@ -162,11 +227,44 @@ const GameDetails: React.FC = () => {
     return () => window.removeEventListener('AGENT_PROGRESS_EVENT', handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const payload = JSON.parse((e as CustomEvent).detail);
+        if (payload.requestId && payload.requestId === pendingLogRequest.current) {
+          const agentName = agents.find(a => a.installedGames?.some(g => agentTitleMatches(g.title, payload.gameTitle)))?.name ?? 'Agent';
+          setLogModal({ agentName, gameTitle: payload.gameTitle, content: payload.content });
+          setRequestingLog(prev => {
+            const next = { ...prev };
+            delete next[payload.gameTitle];
+            return next;
+          });
+          pendingLogRequest.current = null;
+        }
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('AGENT_LOG_DATA_EVENT', handler);
+    return () => window.removeEventListener('AGENT_LOG_DATA_EVENT', handler);
+  }, [agents]);
+
   const formatFreeSpace = (bytes: number): string => {
     if (bytes < 0) return '';
     const gb = bytes / (1024 ** 3);
     if (gb >= 1) return gb.toFixed(0) + '\u00a0GB';
     return (bytes / (1024 ** 2)).toFixed(0) + '\u00a0MB';
+  };
+
+  const dispatchInstall = async (agentId: string, installDir?: string, selectedExe?: string) => {
+    try {
+      await axios.post(`/api/v3/agent/${agentId}/install`, {
+        gameId: parseInt(id!),
+        installDir,
+        ...(selectedExe ? { selectedExe } : {}),
+      });
+      setNotification({ message: 'Install job sent to agent', type: 'success' });
+    } catch (err: any) {
+      setNotification({ message: err.response?.data?.message || 'Failed to dispatch install job', type: 'error' });
+    }
   };
 
   const handleRemoteInstall = async (agentId: string, installDir?: string) => {
@@ -177,10 +275,57 @@ const GameDetails: React.FC = () => {
       return;
     }
     try {
-      await axios.post(`/api/v3/agent/${agentId}/install`, { gameId: parseInt(id), installDir });
-      setNotification({ message: 'Install job sent to agent', type: 'success' });
+      const r = await axios.get<{ candidates: { name: string; relPath: string; type: 'installer' | 'game'; fromArchive?: string }[] }>(
+        `/api/v3/agent/${agentId}/install-preview?gameId=${id}`
+      );
+      const cands = r.data.candidates ?? [];
+      if (cands.length > 1) {
+        setExeCandidates(cands);
+        setPendingInstall({ agentId, installDir });
+        setSelectedExeName(cands.find(c => c.type === 'installer')?.name ?? cands[0].name);
+        setShowExePicker(true);
+        return;
+      }
+      await dispatchInstall(agentId, installDir, cands[0]?.name);
+    } catch {
+      await dispatchInstall(agentId, installDir);
+    }
+  };
+
+  const handleViewLog = async (agentId: string, gameTitle: string) => {
+    setRequestingLog(prev => ({ ...prev, [gameTitle]: true }));
+    try {
+      const r = await axios.post<{ requestId: string }>(`/api/v3/agent/${agentId}/readlog`, { gameTitle });
+      pendingLogRequest.current = r.data.requestId;
     } catch (err: any) {
-      setNotification({ message: err.response?.data?.message || 'Failed to dispatch install job', type: 'error' });
+      alert(`Failed to request log: ${err.response?.data?.error || err.message}`);
+      setRequestingLog(prev => { const next = { ...prev }; delete next[gameTitle]; return next; });
+    }
+  };
+
+  const handleChangeExe = async (agentId: string, title: string, exePath: string) => {
+    try {
+      await axios.post(`/api/v3/agent/${agentId}/change-exe`, { title, exePath });
+      setNotification({ message: 'Exe change sent to agent', type: 'success' });
+    } catch (err: any) {
+      setNotification({ message: err.response?.data?.error || 'Failed to change exe', type: 'error' });
+    }
+  };
+
+  const handleDeleteFromAgent = async (agentId: string, ig: InstalledGameOnAgent) => {
+    const agentName = agents.find(a => a.id === agentId)?.name || 'device';
+    if (!window.confirm(`Delete "${ig.title}" from ${agentName}?${ig.hasShortcut ? '\nSteam shortcut will also be removed.' : ''}`)) return;
+    const key = `${agentId}:${ig.installPath}`;
+    setDeletingFromAgent(prev => ({ ...prev, [key]: true }));
+    try {
+      await axios.delete(`/api/v3/agent/${agentId}/game`, {
+        data: { title: ig.title, installPath: ig.installPath, removeShortcut: ig.hasShortcut }
+      });
+      setNotification({ message: `Deleted from ${agentName}`, type: 'success' });
+    } catch (err: any) {
+      setNotification({ message: `Delete failed: ${err.response?.data?.error || err.message}`, type: 'error' });
+    } finally {
+      setDeletingFromAgent(prev => ({ ...prev, [key]: false }));
     }
   };
 
@@ -201,6 +346,7 @@ const GameDetails: React.FC = () => {
       try {
         const response = await axios.get(`/api/v3/game/${id}?lang=${language}`);
         setGame(response.data);
+        setSearchTerm(prev => prev || response.data.title);
       } catch (err: any) {
         setError(err.response?.data?.message || t('error'));
       } finally {
@@ -466,12 +612,104 @@ const GameDetails: React.FC = () => {
     return { detectedPlatform, confidence, tags };
   };
 
-  const handleSearchTorrents = async () => {
+  const loadSaveSnapshots = async () => {
+    if (!game) return;
+    setSavesLoading(true);
+    try {
+      const r = await axios.get<SaveSnapshot[]>(`/api/v3/save/${game.id}`);
+      setSaveSnapshots(r.data || []);
+    } catch {
+      setSaveSnapshots([]);
+    } finally {
+      setSavesLoading(false);
+    }
+  };
+
+  const loadSavePathsInfo = async () => {
+    if (!game) return;
+    try {
+      const r = await axios.get<SavePathsInfo>(`/api/v3/save/paths-info?gameId=${game.id}`);
+      setSavePathsInfo(r.data);
+      setCustomPathInput(r.data.savePath ?? '');
+    } catch {
+      setSavePathsInfo(null);
+    }
+  };
+
+  const loadServerFiles = async () => {
+    if (!game) return;
+    setServerFilesLoading(true);
+    try {
+      const r = await axios.get<ServerFile[]>(`/api/v3/game/${game.id}/server-files`);
+      setServerFiles(r.data || []);
+    } catch {
+      setServerFiles([]);
+    } finally {
+      setServerFilesLoading(false);
+    }
+  };
+
+  const handleDeleteServerFile = async (file: ServerFile) => {
+    if (!game) return;
+    if (!window.confirm(`Delete "${file.name}" from the server?`)) return;
+    setDeletingFile(prev => ({ ...prev, [file.relativePath]: true }));
+    try {
+      await axios.delete(`/api/v3/game/${game.id}/server-file`, { data: { relativePath: file.relativePath } });
+      setServerFiles(prev => prev.filter(f => f.relativePath !== file.relativePath));
+    } catch (err: any) {
+      alert('Delete failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setDeletingFile(prev => { const n = { ...prev }; delete n[file.relativePath]; return n; });
+    }
+  };
+
+  const handleSetCustomPath = async () => {
+    if (!game) return;
+    setSavingCustomPath(true);
+    try {
+      await axios.patch(`/api/v3/save/${game.id}/path`, { savePath: customPathInput.trim() });
+      await loadSavePathsInfo();
+      setNotification({ message: customPathInput.trim() ? 'Custom save path set.' : 'Custom save path cleared.', type: 'success' });
+    } catch (err: any) {
+      setNotification({ message: 'Failed to set path: ' + (err.response?.data?.error || err.message), type: 'error' });
+    } finally {
+      setSavingCustomPath(false);
+    }
+  };
+
+  const handleDeleteSnapshot = async (snapshotId: string) => {
+    if (!game) return;
+    if (!window.confirm('Delete this save snapshot?')) return;
+    try {
+      await axios.delete(`/api/v3/save/${game.id}/${snapshotId}`);
+      setSaveSnapshots(prev => prev.filter(s => s.id !== snapshotId));
+    } catch (err: any) {
+      alert(`Delete failed: ${err.response?.data?.error || err.message}`);
+    }
+  };
+
+  const handleRestoreOnAgent = async (agentId: string) => {
+    if (!game) return;
+    if (!window.confirm(`Restore the latest save for "${game.title}" on this device?\n\nThis will overwrite current save files.`)) return;
+    setRestoringOnAgent(prev => ({ ...prev, [agentId]: true }));
+    try {
+      await axios.post(`/api/v3/agent/${agentId}/restore-save`, { gameId: game.id, title: game.title });
+      setNotification({ message: 'Restore requested — the agent will apply the latest save.', type: 'success' });
+    } catch (err: any) {
+      setNotification({ message: 'Restore failed: ' + (err.response?.data?.error || err.message), type: 'error' });
+    } finally {
+      setRestoringOnAgent(prev => { const n = { ...prev }; delete n[agentId]; return n; });
+    }
+  };
+
+  const handleSearchTorrents = async (overrideTerm?: string) => {
     if (!game) return;
     setSearching(true);
     setResults([]);
     setError(null);
     setHasSearched(false);
+
+    const query = overrideTerm ?? (searchTerm || game.title);
 
     // Get categories based on platform
     let cats = '';
@@ -485,7 +723,7 @@ const GameDetails: React.FC = () => {
 
     try {
       const response = await axios.get('/api/v3/search', {
-        params: { query: game.title, categories: cats }
+        params: { query, categories: cats }
       });
       setResults(response.data);
       if (id) {
@@ -750,6 +988,22 @@ const GameDetails: React.FC = () => {
               <span>{t('search')}</span>
             </button>
             <button
+              className={`action-btn ${activeTab === 'saves' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('saves'); loadSaveSnapshots(); loadSavePathsInfo(); }}
+              title="Save backups"
+            >
+              <FontAwesomeIcon icon={faFolderOpen} />
+              <span>Saves</span>
+            </button>
+            <button
+              className={`action-btn ${activeTab === 'files' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('files'); loadServerFiles(); }}
+              title="Files & Devices"
+            >
+              <FontAwesomeIcon icon={faDatabase} />
+              <span>Files</span>
+            </button>
+            <button
               className="action-btn"
               onClick={() => setShowCorrectionModal(true)}
               title={t('correctMetadata')}
@@ -835,7 +1089,7 @@ const GameDetails: React.FC = () => {
                 );
               }
               return (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <React.Fragment>
                   <button
                     className={`action-btn ${game.isInstallable && !game.canPlay ? 'install-ready' : ''}`}
                     onClick={handleInstallClick}
@@ -847,12 +1101,13 @@ const GameDetails: React.FC = () => {
                   <a
                     href={`/api/v3/game/${id}/install-script`}
                     download
+                    className="action-btn"
                     title="Download install script"
-                    style={{ color: '#89b4fa', fontSize: '1rem', lineHeight: 1, opacity: 0.7 }}
                   >
-                    📄
+                    <span>📄</span>
+                    <span>Script</span>
                   </a>
-                </div>
+                </React.Fragment>
               );
             })()}
 
@@ -931,6 +1186,37 @@ const GameDetails: React.FC = () => {
         </div>
       </div>
 
+      {game.updateAvailable && !updateBannerDismissed && (
+        <div className="update-banner">
+          <div className="update-banner-info">
+            <span className="update-banner-icon">⬆</span>
+            <span>
+              <strong>Update Available</strong>
+              {game.currentVersion && <span className="update-banner-version"> Installed: v{game.currentVersion}</span>}
+              {game.latestVersion && <span className="update-banner-version"> → Found: v{game.latestVersion}</span>}
+            </span>
+          </div>
+          <div className="update-banner-actions">
+            <button
+              className="update-banner-btn primary"
+              onClick={() => {
+                setSearchTerm(game.title);
+                setActiveTab('search');
+                handleSearchTorrents(game.title);
+              }}
+            >
+              Search Now
+            </button>
+            <button
+              className="update-banner-btn"
+              onClick={() => setUpdateBannerDismissed(true)}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {
         game && (
           <UninstallModal
@@ -964,6 +1250,23 @@ const GameDetails: React.FC = () => {
       {
         activeTab === 'search' && (results.length > 0 || error || searching || hasSearched) && (
           <div className="torrent-search">
+
+            <div className="search-term-row" style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSearchTorrents(); }}
+                style={{ flex: 1, padding: '6px 10px', background: '#313244', border: '1px solid #45475a', borderRadius: '4px', color: '#cdd6f4', fontSize: '14px' }}
+              />
+              <button
+                onClick={() => handleSearchTorrents()}
+                disabled={searching}
+                style={{ padding: '6px 14px', background: '#89b4fa', color: '#1e1e2e', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 600 }}
+              >
+                <FontAwesomeIcon icon={faSearch} />
+              </button>
+            </div>
 
             {searching && (
               <div className="search-loading">
@@ -1000,6 +1303,7 @@ const GameDetails: React.FC = () => {
                     <div className="col-platform">{t('platform')}</div>
                     <div className="col-size sortable" onClick={() => handleSort('size')}>{t('size')} {getSortIcon('size')}</div>
                     <div className="col-peers sortable" onClick={() => handleSort('seeders')}>{t('peers')} {getSortIcon('seeders')}</div>
+                    <div className="col-date sortable" onClick={() => handleSort('publishDate')}>Date {getSortIcon('publishDate')}</div>
                     <div className="col-actions">{t('download')}</div>
                   </div>
 
@@ -1117,6 +1421,13 @@ const GameDetails: React.FC = () => {
 
 
 
+                        <div className="col-date">
+                          {result.publishDate ? (() => {
+                            const d = new Date(result.publishDate);
+                            return isNaN(d.getTime()) ? '-' : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+                          })() : '-'}
+                        </div>
+
                         <div className="col-actions">
                           <div className="download-buttons">
                             {result.magnetUrl && (
@@ -1163,6 +1474,336 @@ const GameDetails: React.FC = () => {
           />
         )
       }
+
+      {activeTab === 'saves' && (
+        <div className="saves-panel">
+          {/* Save Locations */}
+          <div className="saves-locations">
+            <div className="saves-header">
+              <span className="saves-title">Save Locations</span>
+              {savePathsInfo && (
+                <span className={`saves-source-badge saves-source-${savePathsInfo.source}`}>
+                  {savePathsInfo.source === 'custom' ? 'Custom' :
+                   savePathsInfo.source === 'manifest' ? 'Ludusavi Manifest' :
+                   savePathsInfo.source === 'fallback' ? 'Fallback (guessed)' : 'None detected'}
+                </span>
+              )}
+            </div>
+            {savePathsInfo && savePathsInfo.paths.length > 0 && (
+              <ul className="saves-paths-list">
+                {savePathsInfo.paths.map(p => (
+                  <li key={p} className="saves-path-item">{p}</li>
+                ))}
+              </ul>
+            )}
+            {savePathsInfo && savePathsInfo.paths.length === 0 && (
+              <div className="saves-empty">No save paths detected.</div>
+            )}
+            <div className="saves-custom-row">
+              <input
+                className="saves-custom-input"
+                type="text"
+                placeholder="Custom override path (overrides detected paths)"
+                value={customPathInput}
+                onChange={e => setCustomPathInput(e.target.value)}
+              />
+              <button
+                className="saves-custom-btn"
+                onClick={handleSetCustomPath}
+                disabled={savingCustomPath}
+              >
+                {savingCustomPath ? '...' : 'Set'}
+              </button>
+              {customPathInput && (
+                <button
+                  className="saves-custom-clear-btn"
+                  onClick={() => { setCustomPathInput(''); }}
+                  title="Clear"
+                >✕</button>
+              )}
+            </div>
+          </div>
+
+          {/* Restore to Device */}
+          {agents.filter(a => a.status === 'connected').length > 0 && saveSnapshots.length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <div className="saves-header">
+                <span className="saves-title">Restore Latest to Device</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+                {agents.filter(a => a.status === 'connected').map(agent => (
+                  <button
+                    key={agent.id}
+                    className="saves-restore-btn"
+                    disabled={!!restoringOnAgent[agent.id]}
+                    onClick={() => handleRestoreOnAgent(agent.id)}
+                    title={`Restore latest save to ${agent.name}`}
+                  >
+                    {restoringOnAgent[agent.id] ? '...' : `↩ ${agent.name}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Snapshots */}
+          <div className="saves-header" style={{ marginTop: '1rem' }}>
+            <span className="saves-title">Snapshots</span>
+            <button className="saves-refresh-btn" onClick={() => { loadSaveSnapshots(); loadSavePathsInfo(); }} disabled={savesLoading} title="Refresh">
+              ↺
+            </button>
+          </div>
+          {savesLoading && <div className="saves-empty">Loading...</div>}
+          {!savesLoading && saveSnapshots.length === 0 && (
+            <div className="saves-empty">
+              No save backups yet. The agent uploads saves automatically when games exit.
+            </div>
+          )}
+          {!savesLoading && saveSnapshots.length > 0 && (
+            <div className="saves-table">
+              <div className="saves-row saves-row-header">
+                <div className="saves-col saves-col-time">Timestamp</div>
+                <div className="saves-col saves-col-agent">Device</div>
+                <div className="saves-col saves-col-size">Size</div>
+                <div className="saves-col saves-col-actions"></div>
+              </div>
+              {saveSnapshots.map(snap => (
+                <div key={snap.id} className="saves-row">
+                  <div className="saves-col saves-col-time">
+                    {new Date(snap.timestamp).toLocaleString(undefined, {
+                      year: 'numeric', month: 'short', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit'
+                    })}
+                  </div>
+                  <div className="saves-col saves-col-agent">{snap.agentId.slice(0, 8)}</div>
+                  <div className="saves-col saves-col-size">{formatBytes(snap.sizeBytes)}</div>
+                  <div className="saves-col saves-col-actions">
+                    <button
+                      className="saves-delete-btn"
+                      title="Delete snapshot"
+                      onClick={() => handleDeleteSnapshot(snap.id)}
+                    >🗑</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'files' && (
+        <div className="files-panel">
+          <div className="files-section">
+            <div className="files-section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Server Files</span>
+              <button className="saves-refresh-btn" onClick={loadServerFiles} disabled={serverFilesLoading} title="Refresh">↺</button>
+            </div>
+            {game.path && (
+              <div style={{ fontSize: '0.75rem', color: '#6c7086', fontFamily: 'monospace', marginBottom: '0.5rem', wordBreak: 'break-all' }}>
+                {game.path}
+              </div>
+            )}
+            {serverFilesLoading && <div className="files-empty">Loading...</div>}
+            {!serverFilesLoading && serverFiles.length === 0 && (
+              <div className="files-empty">
+                {game.path ? 'No files found at the game path.' : 'No path set for this game.'}
+              </div>
+            )}
+            {!serverFilesLoading && serverFiles.length > 0 && (
+              <div className="files-table">
+                <div className="files-row files-row-header">
+                  <div className="files-col files-col-path">File</div>
+                  <div className="files-col files-col-group">Group</div>
+                  <div className="files-col files-col-quality">Quality</div>
+                  <div className="files-col files-col-size">Size</div>
+                  <div className="files-col files-col-actions"></div>
+                </div>
+                {serverFiles.map(f => (
+                  <div key={f.relativePath} className="files-row">
+                    <div className="files-col files-col-path" title={f.relativePath}>{f.name}</div>
+                    <div className="files-col files-col-group">{f.releaseGroup || '—'}</div>
+                    <div className="files-col files-col-quality">{f.quality || '—'}</div>
+                    <div className="files-col files-col-size">{formatBytes(f.size)}</div>
+                    <div className="files-col files-col-actions">
+                      <button
+                        className="saves-delete-btn"
+                        title="Delete from server"
+                        disabled={!!deletingFile[f.relativePath]}
+                        onClick={() => handleDeleteServerFile(f)}
+                      >{deletingFile[f.relativePath] ? '⟳' : '✕'}</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="files-section">
+            <div className="files-section-title">Installed On</div>
+            {game.installPath && (
+              <div className="files-device-row">
+                <div className="files-device-info">
+                  <div className="files-device-top">
+                    <span className="files-device-dot online" />
+                    <span className="files-device-name">This server</span>
+                  </div>
+                  <div className="files-device-meta">
+                    <span className="files-device-path" title={game.installPath}>{game.installPath}</span>
+                    {game.sizeOnDisk != null && <span className="files-device-size">{formatBytes(game.sizeOnDisk)}</span>}
+                    {game.executablePath && <span className="files-device-tag installed">installed</span>}
+                  </div>
+                </div>
+              </div>
+            )}
+            {(() => {
+              const installedAgents = agents.filter(a => a.installedGames?.some(g => agentTitleMatches(g.title, game.title)));
+              if (installedAgents.length === 0 && !game.installPath) {
+                return <div className="files-empty">Not installed on any registered device.</div>;
+              }
+              if (installedAgents.length === 0) return null;
+              return installedAgents.map(agent => {
+                const ig = agent.installedGames!.find(g => agentTitleMatches(g.title, game.title))!;
+                const key = `${agent.id}:${ig.installPath}`;
+                const isDeleting = deletingFromAgent[key];
+                return (
+                  <div key={agent.id} className="files-device-row">
+                    <div className="files-device-info">
+                      <div className="files-device-top">
+                        <span className={`files-device-dot ${agent.status}`} />
+                        <span className="files-device-name">{agent.name}</span>
+                        <span className="files-device-platform">{agent.platform}</span>
+                      </div>
+                      <div className="files-device-meta">
+                        <span className="files-device-path" title={ig.installPath}>{ig.installPath}</span>
+                        <span className="files-device-size">{formatBytes(ig.sizeBytes)}</span>
+                        {ig.version && <span className="files-device-tag">v{ig.version}</span>}
+                        {ig.hasShortcut && <span className="files-device-tag steam">Steam</span>}
+                        {(ig.exePath || ig.scriptPath) && <span className="files-device-tag installed">installed</span>}
+                      </div>
+                      {ig.exeCandidates && ig.exeCandidates.length > 1 && (
+                        <div className="files-device-exe-row">
+                          <span className="files-device-exe-label">Launch exe:</span>
+                          <select
+                            className="exe-selector"
+                            value={ig.exePath ?? ''}
+                            disabled={agent.status !== 'online'}
+                            title="Switch which executable run.sh launches"
+                            onChange={e => handleChangeExe(agent.id, ig.title, e.target.value)}
+                          >
+                            {ig.exeCandidates.map(p => (
+                              <option key={p} value={p}>{p.split('/').pop() || p.split('\\').pop() || p}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                    <div className="files-device-actions">
+                      {agent.status === 'online' && (ig.scriptPath || ig.exePath) && (
+                        <button
+                          className="files-device-btn"
+                          title="View launch log"
+                          disabled={!!requestingLog[ig.title]}
+                          onClick={() => handleViewLog(agent.id, ig.title)}
+                        >
+                          {requestingLog[ig.title] ? '⟳' : '📋'}
+                        </button>
+                      )}
+                      <button
+                        className="files-device-btn"
+                        title="Delete from device"
+                        disabled={isDeleting}
+                        onClick={() => handleDeleteFromAgent(agent.id, ig)}
+                      >
+                        {isDeleting ? '⟳' : '✕'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </div>
+      )}
+
+      {logModal && (
+        <div className="modal-overlay" onClick={() => setLogModal(null)}>
+          <div className="modal" style={{ maxWidth: '780px', width: '90vw' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Launch Log — {logModal.gameTitle}</h3>
+              <button className="modal-close" onClick={() => setLogModal(null)}>×</button>
+            </div>
+            <div className="modal-content">
+              <div style={{ fontSize: '0.75rem', color: '#a6adc8', marginBottom: '0.5rem' }}>
+                {logModal.agentName} · ~/Games/{logModal.gameTitle}/run.log
+              </div>
+              <pre style={{
+                background: '#11111b',
+                color: '#cdd6f4',
+                padding: '1rem',
+                borderRadius: '6px',
+                fontSize: '0.72rem',
+                lineHeight: '1.5',
+                overflowY: 'auto',
+                maxHeight: '60vh',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                fontFamily: 'monospace',
+              }}>
+                {logModal.content}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showExePicker && (
+        <div className="modal-overlay" onClick={() => setShowExePicker(false)}>
+          <div className="modal exe-picker-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Choose Executable</h3>
+              <button className="modal-close" onClick={() => setShowExePicker(false)}>✕</button>
+            </div>
+            <div className="modal-content">
+              <p className="exe-picker-hint">Multiple executables found — select which one to use:</p>
+              <div className="exe-picker-list">
+                {exeCandidates.map(c => (
+                  <button
+                    key={c.relPath}
+                    className={`exe-picker-item${selectedExeName === c.name ? ' selected' : ''}`}
+                    onClick={() => setSelectedExeName(c.name)}
+                  >
+                    <span className={`exe-type-badge ${c.type}`}>
+                      {c.type === 'installer' ? 'Installer' : 'Game'}
+                    </span>
+                    <div className="exe-info">
+                      <span className="exe-name">{c.name}</span>
+                      <span className="exe-path">
+                        {c.fromArchive ? `inside ${c.fromArchive} · ` : ''}{c.relPath}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button onClick={() => { setShowExePicker(false); setPendingInstall(null); }}>Cancel</button>
+              <button
+                className="action-btn install-ready"
+                disabled={!selectedExeName}
+                onClick={async () => {
+                  setShowExePicker(false);
+                  if (pendingInstall) {
+                    await dispatchInstall(pendingInstall.agentId, pendingInstall.installDir, selectedExeName);
+                    setPendingInstall(null);
+                  }
+                }}
+              >
+                Install
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {
         showInstallWarning && (

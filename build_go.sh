@@ -10,7 +10,7 @@ export CGO_ENABLED=0
 GOROOT_PATH="${GOROOT:-/home/kieran/go}"
 export PATH="$GOROOT_PATH/bin:${PATH}"
 
-VERSION=$(grep '"version"' package.json 2>/dev/null | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/' || echo "dev")
+VERSION=$(grep '"version"' package.json 2>/dev/null | head -1 | sed 's/.*"version": *"\([^"]*\)".*/\1/' || git rev-parse --short HEAD 2>/dev/null || echo "dev")
 LDFLAGS="-s -w -X main.version=${VERSION}"
 
 echo "Building Playerr Go backend v${VERSION}..."
@@ -49,6 +49,9 @@ build_agent linux  arm64 linux-arm64
 build_agent windows amd64 win-x64 .exe
 build_agent darwin amd64 osx-x64
 build_agent darwin arm64 osx-arm64
+
+# Write version sidecar so the server can report the hosted agent version
+echo "${VERSION}" > _output/version.txt
 
 echo ""
 echo "Build complete. Binary sizes:"

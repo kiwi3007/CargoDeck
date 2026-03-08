@@ -60,6 +60,12 @@ function useSSE() {
         es.addEventListener('DOWNLOAD_QUEUE_UPDATED', (e: MessageEvent) => {
           window.dispatchEvent(new CustomEvent('DOWNLOAD_QUEUE_UPDATED_EVENT', { detail: e.data }));
         });
+        es.addEventListener('AGENT_LOG_DATA', (e: MessageEvent) => {
+          window.dispatchEvent(new CustomEvent('AGENT_LOG_DATA_EVENT', { detail: e.data }));
+        });
+        es.addEventListener('GAME_UPDATE_AVAILABLE', (e: MessageEvent) => {
+          window.dispatchEvent(new CustomEvent('GAME_UPDATE_AVAILABLE_EVENT', { detail: e.data }));
+        });
         es.onerror = () => {
           es?.close();
           // Reconnect after 5 seconds on error

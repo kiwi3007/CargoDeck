@@ -37,13 +37,14 @@ type ActiveJob struct {
 
 // InstallJob is the payload pushed to an agent's SSE stream.
 type InstallJob struct {
-	JobID      string   `json:"jobId"`
-	AgentID    string   `json:"agentId"`
-	GameID     int      `json:"gameId"`
-	GameTitle  string   `json:"gameTitle"`
-	Files      []string `json:"files"` // relative paths within game.Path
-	ServerURL  string   `json:"serverUrl"`
-	InstallDir string   `json:"installDir,omitempty"` // override default ~/Games/
+	JobID       string   `json:"jobId"`
+	AgentID     string   `json:"agentId"`
+	GameID      int      `json:"gameId"`
+	GameTitle   string   `json:"gameTitle"`
+	Files       []string `json:"files"` // relative paths within game.Path
+	ServerURL   string   `json:"serverUrl"`
+	InstallDir  string   `json:"installDir,omitempty"`  // override default ~/Games/
+	SelectedExe string   `json:"selectedExe,omitempty"` // basename; empty = auto-detect
 }
 
 // JobProgress is reported back by the agent via POST.
@@ -52,6 +53,32 @@ type JobProgress struct {
 	Status  JobStatus `json:"status"`
 	Message string    `json:"message"`
 	Percent int       `json:"percent"` // 0-100
+}
+
+// InstalledGame describes a game installed on an agent device.
+type InstalledGame struct {
+	Title         string   `json:"title"`
+	InstallPath   string   `json:"installPath"` // full path to the game directory
+	ExePath       string   `json:"exePath,omitempty"`
+	ExeCandidates []string `json:"exeCandidates,omitempty"` // all selectable game exes
+	ScriptPath    string   `json:"scriptPath,omitempty"`
+	SizeBytes     int64    `json:"sizeBytes"`
+	HasShortcut   bool     `json:"hasShortcut"`
+	Version       string   `json:"version,omitempty"`
+}
+
+// ReadLogJob is pushed to the agent to fetch the run.log for a game.
+type ReadLogJob struct {
+	RequestID string `json:"requestId"`
+	GameTitle string `json:"gameTitle"`
+}
+
+// DeleteGameJob is pushed to agent via SSE to delete a game from a device.
+type DeleteGameJob struct {
+	JobID          string `json:"jobId"`
+	Title          string `json:"title"`
+	InstallPath    string `json:"installPath"` // full path to game directory
+	RemoveShortcut bool   `json:"removeShortcut"`
 }
 
 // JobQueue holds a buffered channel per agent for pending install jobs.

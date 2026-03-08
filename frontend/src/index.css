@@ -1,4 +1,59 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ── Core backgrounds ── */
+  --bg-base:      #0b0a12;
+  --bg-surface:   #12101e;
+  --bg-elevated:  #1a1829;
+  --bg-overlay:   #201e30;
+
+  /* ── Purple palette ── */
+  --purple-300:   #d8b4fe;
+  --purple-400:   #c084fc;
+  --purple-500:   #a855f7;
+  --purple-600:   #9333ea;
+  --purple-700:   #7c3aed;
+  --purple-900:   #3b0764;
+
+  /* ── Amber/gold palette ── */
+  --amber-300:    #fcd34d;
+  --amber-400:    #fbbf24;
+  --amber-500:    #f59e0b;
+
+  /* ── Status colors ── */
+  --green-400:    #4ade80;
+  --green-500:    #22c55e;
+  --red-400:      #f87171;
+  --red-500:      #ef4444;
+  --sky-400:      #38bdf8;
+  --orange-400:   #fb923c;
+
+  /* ── Text ── */
+  --text-primary:   #e8e4f8;
+  --text-secondary: #9890b8;
+  --text-muted:     #564e72;
+
+  /* ── Borders ── */
+  --border-subtle:  rgba(168, 85, 247, 0.1);
+  --border-normal:  rgba(168, 85, 247, 0.2);
+  --border-strong:  rgba(168, 85, 247, 0.4);
+
+  /* ── Glows ── */
+  --glow-purple:    0 0 20px rgba(168, 85, 247, 0.25);
+  --glow-purple-sm: 0 0 10px rgba(168, 85, 247, 0.15);
+  --glow-amber:     0 0 20px rgba(251, 191, 36, 0.2);
+
+  /* ── Typography ── */
+  --font-display: 'Syne', sans-serif;
+  --font-body:    'Outfit', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  /* ── Radius ── */
+  --radius-sm:  4px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+}
 
 * {
   margin: 0;
@@ -7,14 +62,11 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #1e1e2e;
-  color: #cdd6f4;
-  /* Support for modern mobile screens with notches */
+  background-color: var(--bg-base);
+  color: var(--text-primary);
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
@@ -30,7 +82,7 @@ body {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background-color: #1e1e2e;
+  background-color: var(--bg-base);
 }
 
 .tab-container {
@@ -40,14 +92,16 @@ body {
   padding: 2rem;
 }
 
-/* For virtualized components, we might want to remove padding from tab-container 
-   and handle it inside the component to avoid overlapping scrollbars or alignment issues */
 .tab-container.no-padding {
   padding: 0;
 }
 
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.25); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(168, 85, 247, 0.45); }
+
 @media (max-width: 768px) {
-  .main-content {
-    padding: 1rem;
-  }
+  .tab-container { padding: 1rem; }
 }

@@ -17,15 +17,18 @@ const maxRecentJobs = 10
 
 // AgentInfo describes a connected remote agent.
 type AgentInfo struct {
-	ID           string        `json:"id"`
-	Name         string        `json:"name"`
-	Platform     string        `json:"platform"`
-	SteamPath    string        `json:"steamPath"`
-	Status       AgentStatus   `json:"status"`
-	LastSeen     time.Time     `json:"lastSeen"`
-	InstallPaths []InstallPath `json:"installPaths,omitempty"`
-	CurrentJob   *ActiveJob    `json:"currentJob,omitempty"`
-	RecentJobs   []ActiveJob   `json:"recentJobs,omitempty"`
+	ID             string          `json:"id"`
+	Name           string          `json:"name"`
+	Platform       string          `json:"platform"`
+	SteamPath      string          `json:"steamPath"`
+	Version        string          `json:"version,omitempty"`
+	Status         AgentStatus     `json:"status"`
+	LastSeen       time.Time       `json:"lastSeen"`
+	InstallPaths   []InstallPath   `json:"installPaths,omitempty"`
+	CurrentJob     *ActiveJob      `json:"currentJob,omitempty"`
+	RecentJobs     []ActiveJob     `json:"recentJobs,omitempty"`
+	InstalledGames []InstalledGame `json:"installedGames,omitempty"`
+	LastScanned    *time.Time      `json:"lastScanned,omitempty"`
 }
 
 // jobMeta links a job ID to the agent and game title.
@@ -115,6 +118,17 @@ func (r *Registry) OnlineCount() int {
 		}
 	}
 	return count
+}
+
+// SetInstalledGames stores the scan result for an agent.
+func (r *Registry) SetInstalledGames(agentID string, games []InstalledGame) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if a, ok := r.agents[agentID]; ok {
+		a.InstalledGames = games
+		now := time.Now()
+		a.LastScanned = &now
+	}
 }
 
 // TrackJob records that a job has been dispatched to an agent.

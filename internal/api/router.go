@@ -8,10 +8,12 @@ import (
 
 	"github.com/kiwi3007/playerr/internal/agent"
 	"github.com/kiwi3007/playerr/internal/config"
+	"github.com/kiwi3007/playerr/internal/manifest"
 	"github.com/kiwi3007/playerr/internal/monitor"
 	"github.com/kiwi3007/playerr/internal/repository"
 	"github.com/kiwi3007/playerr/internal/scanner"
 	"github.com/kiwi3007/playerr/internal/sse"
+	"github.com/kiwi3007/playerr/internal/updater"
 )
 
 // Handler holds all dependencies for the API layer.
@@ -24,6 +26,8 @@ type Handler struct {
 	agentRegistry *agent.Registry
 	agentJobs     *agent.JobQueue
 	agentBroker   *agent.AgentBroker
+	manifest      *manifest.Service
+	checker       *updater.Checker
 }
 
 func NewHandler(
@@ -35,6 +39,8 @@ func NewHandler(
 	agentRegistry *agent.Registry,
 	agentJobs *agent.JobQueue,
 	agentBroker *agent.AgentBroker,
+	manifestSvc *manifest.Service,
+	checker *updater.Checker,
 ) *Handler {
 	return &Handler{
 		repo:          repo,
@@ -45,6 +51,8 @@ func NewHandler(
 		agentRegistry: agentRegistry,
 		agentJobs:     agentJobs,
 		agentBroker:   agentBroker,
+		manifest:      manifestSvc,
+		checker:       checker,
 	}
 }
 
@@ -80,11 +88,21 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Post("/{id}/uninstall", h.UninstallGame)
 		r.Post("/{id}/shortcut", h.AddSteamShortcut)
 
+		// Server-side file management (files physically on this server's game.Path)
+		r.Get("/{id}/server-files", h.GetServerFiles)
+		r.Delete("/{id}/server-file", h.DeleteServerFile)
+
 		// File serving for agent downloads (requires agent auth)
 		r.With(h.agentAuthMiddleware).Get("/{id}/file", h.ServeGameFile)
 
 		// Install script download (browser, no auth needed)
 		r.Get("/{id}/install-script", h.ServeInstallScript)
+
+		// Manual update check for a single game
+		r.Post("/{id}/check-update", h.CheckGameUpdate)
+
+		// Bulk update check for all games with a known version
+		r.Post("/check-update", h.CheckAllUpdates)
 	})
 
 	// Platforms
@@ -104,6 +122,10 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Post("/steam/test", h.TestSteam)
 		r.Post("/steam/sync", h.SyncSteam)
 
+		r.Get("/steamgriddb", h.GetSteamGridDB)
+		r.Post("/steamgriddb", h.SaveSteamGridDB)
+		r.Delete("/steamgriddb", h.DeleteSteamGridDB)
+
 		r.Get("/prowlarr", h.GetProwlarr)
 		r.Post("/prowlarr", h.SaveProwlarr)
 
@@ -118,6 +140,9 @@ func (h *Handler) NewRouter() http.Handler {
 
 		// Agent settings (masked token, browser-accessible)
 		r.Get("/agent", h.GetAgentSettings)
+
+		r.Get("/discord", h.GetDiscord)
+		r.Post("/discord", h.SaveDiscord)
 	})
 
 	// Media (scan)
@@ -162,18 +187,55 @@ func (h *Handler) NewRouter() http.Handler {
 	r.Get("/api/v3/filesystem", h.FilesystemList)
 	r.Get("/api/v3/filesystem/folder", h.ListFolder)
 
+	// Save snapshots
+	r.Route("/api/v3/save", func(r chi.Router) {
+		// Save path lookup (agent uses this to know what to watch/upload)
+		r.Get("/paths", h.GetSavePaths)
+		// Path info for browser display (includes source + detected paths)
+		r.Get("/paths-info", h.GetSavePathsInfo)
+		// Agent uploads snapshot (bearer token required)
+		r.With(h.agentAuthMiddleware).Post("/snapshot", h.UploadSaveSnapshot)
+		// Browser: list and delete snapshots
+		r.Get("/{gameId}", h.ListSaveSnapshots)
+		r.Delete("/{gameId}/{*}", h.DeleteSaveSnapshot)
+		// Latest save across all agents (agent restore + browser info)
+		r.With(h.agentAuthMiddleware).Get("/{gameId}/latest", h.ServeLatestSave)
+		r.Get("/{gameId}/latest-info", h.GetLatestSaveInfo)
+		// Custom save path override (supports agentId in body for per-device)
+		r.Patch("/{gameId}/path", h.SetSavePath)
+		// Per-device save path overrides (map of agentId → path)
+		r.Get("/{gameId}/agent-paths", h.GetAgentSavePaths)
+	})
+
 	// Agent API
 	r.Route("/api/v3/agent", func(r chi.Router) {
 		// Browser-accessible (no agent auth required)
 		r.Get("/", h.ListAgents)
+		r.Get("/binary", h.ServeAgentBinary)
+		r.Get("/version", h.AgentVersion)
+		r.Get("/setup.sh", h.ServeAgentSetupScript)
 
 		// Agent-authenticated endpoints
 		r.With(h.agentAuthMiddleware).Post("/register", h.RegisterAgent)
 		r.With(h.agentAuthMiddleware).Get("/events", h.AgentEvents)
 		r.With(h.agentAuthMiddleware).Post("/progress", h.AgentProgress)
+		r.With(h.agentAuthMiddleware).Get("/artwork", h.GetArtworkURLs)
 
 		// Browser dispatches install (no agent auth — same as all other browser endpoints)
+		r.Get("/{agentId}/install-preview", h.GetInstallPreview)
 		r.Post("/{agentId}/install", h.DispatchInstall)
+		r.Post("/{agentId}/scan", h.DispatchScan)
+		r.Post("/{agentId}/refresh-shortcuts", h.DispatchRefreshShortcuts)
+		r.Delete("/{agentId}/game", h.DispatchDeleteGame)
+		r.Post("/{agentId}/readlog", h.DispatchReadLog)
+		r.Post("/{agentId}/regen-scripts", h.DispatchRegenScripts)
+		r.Post("/{agentId}/change-exe", h.DispatchChangeExe)
+		r.Post("/{agentId}/restart-steam", h.DispatchRestartSteam)
+		r.Post("/{agentId}/restore-save", h.DispatchRestoreSave)
+
+		// Agent-authenticated callbacks
+		r.With(h.agentAuthMiddleware).Post("/{agentId}/games", h.ReportInstalledGames)
+		r.With(h.agentAuthMiddleware).Post("/log", h.ReceiveAgentLog)
 	})
 
 	return r

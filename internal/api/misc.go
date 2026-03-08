@@ -113,17 +113,35 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Deduplicate by title+size
-	type key struct{ title string; size int64 }
+	// Deduplicate by title+size+indexer — same release cross-posted across
+	// multiple NZB indexers is intentionally kept (different sources).
+	type key struct {
+		title   string
+		size    int64
+		indexer string
+	}
 	seen := map[key]struct{}{}
 	unique := make([]indexer.SearchResult, 0, len(all))
 	for _, res := range all {
-		k := key{res.Title, res.Size}
+		k := key{res.Title, res.Size, res.IndexerName}
 		if _, ok := seen[k]; ok {
 			continue
 		}
 		seen[k] = struct{}{}
 		unique = append(unique, res)
+	}
+
+	// Filter by category if requested.
+	// Newznab categories are hierarchical: 4000 = PC, 4010/4020/4050 are sub-categories.
+	// Two categories match if they share the same parent (same thousands digit).
+	if len(categories) > 0 {
+		filtered := unique[:0]
+		for _, res := range unique {
+			if matchesAnyCategory(res.Categories, categories) {
+				filtered = append(filtered, res)
+			}
+		}
+		unique = filtered
 	}
 
 	log.Printf("[Search] Returning %d unique results for %q", len(unique), query)
@@ -314,6 +332,25 @@ func trimSpace(s string) string {
 		end--
 	}
 	return s[start:end]
+}
+
+// matchesAnyCategory returns true if any result category shares the same Newznab
+// parent (thousands digit) as any of the requested category IDs.
+// e.g. requesting 4000 matches result categories 4010, 4050, etc., and vice versa.
+func matchesAnyCategory(resultCats []indexer.Category, requested []int) bool {
+	if len(resultCats) == 0 {
+		return true // no category info — don't filter out
+	}
+	for _, req := range requested {
+		reqParent := (req / 1000) * 1000
+		for _, rc := range resultCats {
+			rcParent := (rc.ID / 1000) * 1000
+			if reqParent == rcParent {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func parseInt(s string, out *int) (int, error) {

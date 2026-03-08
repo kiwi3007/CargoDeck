@@ -28,6 +28,14 @@ func ShortcutAppID(name, exe string) uint32 {
 	return crc32.ChecksumIEEE([]byte(exe+name)) | 0x80000000
 }
 
+// TitleAppID computes a platform-independent AppID from the game title alone.
+// Using this instead of ShortcutAppID ensures the same AppID is written on
+// Linux, Windows, and macOS, so dual-boot / shared Steam installs produce a
+// single shortcut entry that is updated in-place rather than duplicated.
+func TitleAppID(name string) uint32 {
+	return crc32.ChecksumIEEE([]byte("playerr:"+name)) | 0x80000000
+}
+
 // FindSteamUserConfigDir returns the first <userdata>/<id>/config dir found.
 func FindSteamUserConfigDir() string {
 	home, _ := os.UserHomeDir()
@@ -56,9 +64,31 @@ func FindSteamUserConfigDir() string {
 	return ""
 }
 
+// FindSteamGridDir returns the grid artwork directory next to the shortcuts.vdf.
+func FindSteamGridDir() string {
+	cfgDir := FindSteamUserConfigDir()
+	if cfgDir == "" {
+		return ""
+	}
+	return filepath.Join(cfgDir, "grid")
+}
+
+// quoteExe wraps a path in double quotes if it isn't already quoted.
+// Steam requires quoted paths for Exe/LaunchOptions fields with spaces.
+func quoteExe(s string) string {
+	if s == "" || strings.HasPrefix(s, "\"") {
+		return s
+	}
+	return `"` + s + `"`
+}
+
 // AddSteamShortcut writes (or replaces) a non-Steam shortcut in shortcuts.vdf.
 // Returns the appid of the added shortcut.
 func AddSteamShortcut(entry ShortcutEntry) (uint32, error) {
+	entry.Exe = quoteExe(entry.Exe)
+	if entry.LaunchOptions != "" {
+		entry.LaunchOptions = quoteExe(entry.LaunchOptions)
+	}
 	cfgDir := FindSteamUserConfigDir()
 	if cfgDir == "" {
 		return 0, fmt.Errorf("Steam userdata directory not found")
@@ -77,7 +107,7 @@ func AddSteamShortcut(entry ShortcutEntry) (uint32, error) {
 
 	replaced := false
 	for i, e := range existing {
-		if e.AppName == entry.AppName || e.Exe == entry.Exe {
+		if e.AppName == entry.AppName || (entry.AppID != 0 && e.AppID == entry.AppID) {
 			existing[i] = entry
 			replaced = true
 			break
@@ -93,6 +123,52 @@ func AddSteamShortcut(entry ShortcutEntry) (uint32, error) {
 	}
 	log.Printf("[Shortcut] Wrote shortcut %q (appid=%d) to %s", entry.AppName, entry.AppID, vdfPath)
 	return entry.AppID, nil
+}
+
+// ShortcutEntryMatches reports whether the stored shortcut for appName already
+// has the given exe and launchOptions (both after quoting). Checking both fields
+// prevents write→watch→write loops and also catches stale LaunchOptions paths
+// (e.g. pointing to another user's home directory on a different machine).
+func ShortcutEntryMatches(appName, exe, launchOptions string) bool {
+	cfgDir := FindSteamUserConfigDir()
+	if cfgDir == "" {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(cfgDir, "shortcuts.vdf"))
+	if err != nil {
+		return false
+	}
+	wantExe := quoteExe(exe)
+	wantOpts := quoteExe(launchOptions)
+	for _, e := range parseShortcutsVDF(data) {
+		if strings.EqualFold(e.AppName, appName) {
+			return e.Exe == wantExe && e.LaunchOptions == wantOpts
+		}
+	}
+	return false
+}
+
+// ShortcutExists reports whether a shortcut with the given app name already exists.
+func ShortcutExists(appName string) bool {
+	cfgDir := FindSteamUserConfigDir()
+	if cfgDir == "" {
+		return false
+	}
+	data, err := os.ReadFile(filepath.Join(cfgDir, "shortcuts.vdf"))
+	if err != nil {
+		return false
+	}
+	for _, e := range parseShortcutsVDF(data) {
+		if strings.EqualFold(e.AppName, appName) {
+			return true
+		}
+	}
+	return false
+}
+
+// ParseShortcutsVDF parses a shortcuts.vdf binary blob into ShortcutEntry records.
+func ParseShortcutsVDF(data []byte) []ShortcutEntry {
+	return parseShortcutsVDF(data)
 }
 
 // ---- Binary VDF parser ----

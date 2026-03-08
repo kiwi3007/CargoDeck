@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -41,38 +42,20 @@ func (c *ProwlarrClient) TestConnection() bool {
 	return resp.StatusCode < 300
 }
 
-// expandCategories mirrors the .NET category expansion logic.
-func expandCategories(cats []int) []int {
-	set := map[int]struct{}{}
-	for _, c := range cats {
-		set[c] = struct{}{}
-		switch c {
-		case 4000:
-			for _, s := range []int{4010, 4020, 4030, 4040, 4050} {
-				set[s] = struct{}{}
-			}
-		case 1000:
-			for _, s := range []int{1010, 1020, 1030, 1040, 1050, 1060, 1070, 1080, 1090, 1110, 1120, 1130, 1140, 1180} {
-				set[s] = struct{}{}
-			}
-		}
-	}
-	out := make([]int, 0, len(set))
-	for k := range set {
-		out = append(out, k)
-	}
-	return out
-}
 
 // Search queries the Prowlarr /api/v1/search endpoint.
-func (c *ProwlarrClient) Search(query string, categories []int) ([]SearchResult, error) {
+// Categories are intentionally NOT forwarded to Prowlarr — passing them causes
+// Prowlarr to skip any indexer whose configured categories don't match exactly
+// (e.g. NZB indexers mapped to "all" or different sub-categories).
+// Prowlarr itself is already scoped to the right indexers by its own configuration.
+func (c *ProwlarrClient) Search(query string, _ []int) ([]SearchResult, error) {
 	params := url.Values{}
 	params.Set("query", query)
-	for _, cat := range expandCategories(categories) {
-		params.Add("categories", fmt.Sprintf("%d", cat))
-	}
+	params.Set("type", "search")
+	params.Set("limit", "1000")
 
 	reqURL := c.baseURL + "/api/v1/search?" + params.Encode()
+	log.Printf("[Prowlarr] Search URL: %s", reqURL)
 	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
@@ -127,7 +110,16 @@ type prowlarrCatJSON struct {
 func parseProwlarrJSON(data []byte) ([]SearchResult, error) {
 	var raw []prowlarrJSONResult
 	if err := json.Unmarshal(data, &raw); err != nil {
+		log.Printf("[Prowlarr] JSON decode error: %v — body snippet: %.200s", err, data)
 		return nil, fmt.Errorf("prowlarr json decode: %w", err)
+	}
+	log.Printf("[Prowlarr] Raw results: %d", len(raw))
+	indexerCounts := map[string]int{}
+	for _, r := range raw {
+		indexerCounts[r.IndexerName]++
+	}
+	for idx, cnt := range indexerCounts {
+		log.Printf("[Prowlarr]   indexer=%q count=%d", idx, cnt)
 	}
 
 	results := make([]SearchResult, 0, len(raw))
@@ -160,7 +152,8 @@ func parseProwlarrJSON(data []byte) ([]SearchResult, error) {
 }
 
 func normalizeProtocol(proto, dlURL, guid, indexer string) string {
-	if strings.EqualFold(proto, "nzb") {
+	p := strings.ToLower(proto)
+	if p == "nzb" || p == "usenet" {
 		return "nzb"
 	}
 	// Detect NZB by URL or indexer name

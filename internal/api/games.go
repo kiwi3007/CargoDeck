@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/kiwi3007/playerr/internal/domain"
 	"github.com/kiwi3007/playerr/internal/launcher"
 	"github.com/kiwi3007/playerr/internal/metadata/igdb"
+	"github.com/kiwi3007/playerr/internal/steamgriddb"
 )
 
 func (h *Handler) GetAllGames(w http.ResponseWriter, r *http.Request) {
@@ -397,6 +399,23 @@ func (h *Handler) AddSteamShortcut(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 500, err.Error())
 		return
 	}
+
+	// Fetch SteamGridDB artwork in the background — non-fatal.
+	sgdbCfg := h.cfg.LoadSteamGridDB()
+	if sgdbCfg.IsConfigured() {
+		gridDir := launcher.FindSteamGridDir()
+		if gridDir != "" {
+			go func() {
+				client := steamgriddb.NewClient(sgdbCfg.ApiKey)
+				if err := client.FetchImages(game.Title, appID, gridDir); err != nil {
+					log.Printf("[SteamGridDB] Image fetch failed for %q: %v", game.Title, err)
+				} else {
+					log.Printf("[SteamGridDB] Images downloaded for %q (appid=%d)", game.Title, appID)
+				}
+			}()
+		}
+	}
+
 	jsonOK(w, map[string]any{
 		"message": fmt.Sprintf("Steam shortcut added for %q. Restart Steam to see it.", game.Title),
 		"appId":   appID,
@@ -569,6 +588,160 @@ func isCriticalPath(path string) bool {
 		}
 	}
 	return false
+}
+
+// GetServerFiles walks game.Path and returns actual files on disk with sizes.
+// Each entry includes metadata from the matching GameFile DB record if one exists.
+// GET /api/v3/game/{id}/server-files
+func (h *Handler) GetServerFiles(w http.ResponseWriter, r *http.Request) {
+	id, err := paramInt(r, "id")
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+	game, err := h.repo.GetGameByID(id)
+	if err != nil || game == nil {
+		jsonErr(w, 404, "game not found")
+		return
+	}
+	if game.Path == nil || *game.Path == "" {
+		jsonOK(w, []any{})
+		return
+	}
+	root := *game.Path
+	if !dirExists(root) {
+		jsonOK(w, []any{})
+		return
+	}
+
+	// Build a lookup of relativePath → GameFile for DB metadata
+	dbFiles := map[string]domain.GameFile{}
+	for _, f := range game.GameFiles {
+		dbFiles[filepath.ToSlash(f.RelativePath)] = f
+	}
+
+	type serverFile struct {
+		RelativePath string  `json:"relativePath"`
+		Name         string  `json:"name"`
+		Size         int64   `json:"size"`
+		GameFileID   *int    `json:"gameFileId,omitempty"`
+		Quality      *string `json:"quality,omitempty"`
+		ReleaseGroup *string `json:"releaseGroup,omitempty"`
+	}
+
+	var files []serverFile
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		relSlash := filepath.ToSlash(rel)
+		sf := serverFile{
+			RelativePath: relSlash,
+			Name:         info.Name(),
+			Size:         info.Size(),
+		}
+		if dbf, ok := dbFiles[relSlash]; ok {
+			sf.GameFileID = &dbf.ID
+			sf.Quality = dbf.Quality
+			sf.ReleaseGroup = dbf.ReleaseGroup
+		}
+		files = append(files, sf)
+		return nil
+	})
+	if files == nil {
+		files = []serverFile{}
+	}
+	jsonOK(w, files)
+}
+
+// DeleteServerFile deletes a physical file from game.Path and any matching DB record.
+// DELETE /api/v3/game/{id}/server-file
+// Body: {"relativePath": "some/file.iso"}
+func (h *Handler) DeleteServerFile(w http.ResponseWriter, r *http.Request) {
+	id, err := paramInt(r, "id")
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+	game, err := h.repo.GetGameByID(id)
+	if err != nil || game == nil {
+		jsonErr(w, 404, "game not found")
+		return
+	}
+	if game.Path == nil || *game.Path == "" {
+		jsonErr(w, 400, "game has no path")
+		return
+	}
+
+	var body struct {
+		RelativePath string `json:"relativePath"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.RelativePath == "" {
+		jsonErr(w, 400, "relativePath required")
+		return
+	}
+
+	// Security: ensure resolved path stays within game.Path
+	root := filepath.Clean(*game.Path)
+	target := filepath.Clean(filepath.Join(root, filepath.FromSlash(body.RelativePath)))
+	if !strings.HasPrefix(target, root+string(filepath.Separator)) && target != root {
+		jsonErr(w, 400, "invalid path")
+		return
+	}
+
+	// Delete the physical file
+	if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+		jsonErr(w, 500, "delete failed: "+err.Error())
+		return
+	}
+
+	// Remove matching GameFile DB record if one exists
+	relSlash := filepath.ToSlash(body.RelativePath)
+	for _, f := range game.GameFiles {
+		if filepath.ToSlash(f.RelativePath) == relSlash {
+			_ = h.repo.DeleteGameFile(f.ID)
+			break
+		}
+	}
+
+	jsonOK(w, map[string]bool{"ok": true})
+}
+
+// CheckGameUpdate triggers an immediate update check for a single game.
+func (h *Handler) CheckGameUpdate(w http.ResponseWriter, r *http.Request) {
+	id, err := paramInt(r, "id")
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+	game, err := h.repo.GetGameByID(id)
+	if err != nil || game == nil {
+		jsonErr(w, 404, "game not found")
+		return
+	}
+	if game.CurrentVersion == "" {
+		jsonErr(w, 400, "game has no detected version")
+		return
+	}
+	if err := h.checker.CheckGame(*game); err != nil {
+		log.Printf("[API] CheckGameUpdate %d: %v", id, err)
+	}
+	// Re-fetch to get updated fields
+	updated, _ := h.repo.GetGameByID(id)
+	if updated == nil {
+		updated = game
+	}
+	jsonOK(w, map[string]any{
+		"latestVersion":   updated.LatestVersion,
+		"updateAvailable": updated.UpdateAvailable,
+	})
+}
+
+// CheckAllUpdates triggers an immediate update check for all games with a known version.
+func (h *Handler) CheckAllUpdates(w http.ResponseWriter, r *http.Request) {
+	go h.checker.CheckAll()
+	jsonOK(w, map[string]string{"message": "update check started"})
 }
 
 func fileExists(path string) bool {

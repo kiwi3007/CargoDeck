@@ -16,9 +16,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/kiwi3007/playerr/internal/agent"
 	"github.com/kiwi3007/playerr/internal/launcher"
 )
@@ -30,15 +32,19 @@ type Config struct {
 	ServerURL string
 	Token     string
 	Name      string
+	Version   string
 }
 
 // Client is the agent runtime.
 type Client struct {
-	cfg     Config
-	agentID string
-	stopped atomic.Bool
-	stopCh  chan struct{}
-	http    *http.Client
+	cfg           Config
+	agentID       string
+	stopped       atomic.Bool
+	stopCh        chan struct{}
+	http          *http.Client
+	saveWatcher   *SaveWatcher
+	scriptPaths   map[string]string // title -> run script path, updated by scan
+	scriptPathsMu sync.Mutex
 }
 
 // New creates a new agent client, loading or generating a stable agent ID.
@@ -47,12 +53,20 @@ func New(cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("agent ID: %w", err)
 	}
-	return &Client{
-		cfg:     cfg,
-		agentID: id,
-		stopCh:  make(chan struct{}),
-		http:    &http.Client{Timeout: 30 * time.Second},
-	}, nil
+	c := &Client{
+		cfg:         cfg,
+		agentID:     id,
+		stopCh:      make(chan struct{}),
+		http:        &http.Client{Timeout: 30 * time.Second},
+		scriptPaths: make(map[string]string),
+	}
+	c.saveWatcher = newSaveWatcher(c)
+	return c, nil
+}
+
+// TestConnection attempts a single register call and returns any error.
+func (c *Client) TestConnection() error {
+	return c.register()
 }
 
 // Stop signals the agent to stop reconnecting.
@@ -64,6 +78,15 @@ func (c *Client) Stop() {
 // Run registers with the server and maintains the SSE connection with exponential backoff.
 // This is the only long-running goroutine in idle state.
 func (c *Client) Run() {
+	// Start save watcher event loop
+	if c.saveWatcher != nil {
+		go c.saveWatcher.Run()
+		defer c.saveWatcher.Close()
+	}
+
+	// Watch shortcuts.vdf so Steam Cloud syncs from other OSes are corrected immediately.
+	go c.watchShortcuts()
+
 	backoff := time.Second
 	maxBackoff := 60 * time.Second
 
@@ -77,6 +100,12 @@ func (c *Client) Run() {
 
 		log.Printf("[Agent] Connected to %s as %q (id=%s)", c.cfg.ServerURL, c.cfg.Name, c.agentID)
 		backoff = time.Second // reset on successful connect
+
+		// Check for agent update on each (re)connect; exits+restarts if a new version is available.
+		c.checkAndUpdate()
+
+		// Report current installed games on (re)connect
+		go c.scanInstalledGames()
 
 		if err := c.listenSSE(); err != nil && !c.stopped.Load() {
 			log.Printf("[Agent] SSE disconnected: %v — reconnecting in %s", err, backoff)
@@ -96,6 +125,7 @@ func (c *Client) register() error {
 		"name":         c.cfg.Name,
 		"platform":     runtime.GOOS + "/" + runtime.GOARCH,
 		"steamPath":    launcher.FindSteamRoot(),
+		"version":      c.cfg.Version,
 		"installPaths": discoverInstallPaths(),
 	})
 
@@ -163,12 +193,67 @@ func (c *Client) listenSSE() error {
 			dataLine = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		case line == "":
 			// End of event — dispatch if we have an event type and data
-			if eventType == "INSTALL_JOB" && dataLine != "" {
-				var job agent.InstallJob
-				if err := json.Unmarshal([]byte(dataLine), &job); err != nil {
-					log.Printf("[Agent] Bad job JSON: %v", err)
-				} else {
-					go c.executeJob(job)
+			switch eventType {
+			case "INSTALL_JOB":
+				if dataLine != "" {
+					var job agent.InstallJob
+					if err := json.Unmarshal([]byte(dataLine), &job); err != nil {
+						log.Printf("[Agent] Bad INSTALL_JOB JSON: %v", err)
+					} else {
+						go c.executeJob(job)
+					}
+				}
+			case "SCAN_GAMES":
+				go c.scanInstalledGames()
+			case "REFRESH_SHORTCUTS":
+				go c.refreshKnownShortcuts()
+			case "REGEN_SCRIPTS":
+				go c.regenerateScripts()
+			case "RESTART_STEAM":
+				go restartSteam()
+			case "CHECK_UPDATE":
+				go c.checkAndUpdate()
+			case "DELETE_GAME":
+				if dataLine != "" {
+					var job agent.DeleteGameJob
+					if err := json.Unmarshal([]byte(dataLine), &job); err != nil {
+						log.Printf("[Agent] Bad DELETE_GAME JSON: %v", err)
+					} else {
+						go c.deleteGame(job)
+					}
+				}
+			case "READ_LOG":
+				if dataLine != "" {
+					var job agent.ReadLogJob
+					if err := json.Unmarshal([]byte(dataLine), &job); err != nil {
+						log.Printf("[Agent] Bad READ_LOG JSON: %v", err)
+					} else {
+						go c.sendLog(job)
+					}
+				}
+			case "RESTORE_SAVE":
+				if dataLine != "" {
+					var req struct {
+						GameID int    `json:"gameId"`
+						Title  string `json:"title"`
+					}
+					if err := json.Unmarshal([]byte(dataLine), &req); err != nil {
+						log.Printf("[Agent] Bad RESTORE_SAVE JSON: %v", err)
+					} else {
+						go c.restoreLatestSave(req.GameID, req.Title)
+					}
+				}
+			case "CHANGE_EXE":
+				if dataLine != "" {
+					var req struct {
+						Title   string `json:"title"`
+						ExePath string `json:"exePath"`
+					}
+					if err := json.Unmarshal([]byte(dataLine), &req); err != nil {
+						log.Printf("[Agent] Bad CHANGE_EXE JSON: %v", err)
+					} else {
+						go c.changeGameExe(req.Title, req.ExePath)
+					}
 				}
 			}
 			eventType = ""
@@ -261,46 +346,100 @@ func (c *Client) executeJob(job agent.InstallJob) {
 
 	// ---- Find and run installer ----
 	c.reportProgress(job, agent.JobInstalling, "Looking for installer...", 85)
-	installer := findInstaller(downloadDir)
 
 	var gameExe string
 
-	if installer != "" {
-		c.reportProgress(job, agent.JobInstalling, "Running installer: "+filepath.Base(installer), 87)
-		if err := runInstallerSilent(installer, wineprefix, job.GameTitle); err != nil {
-			log.Printf("[Agent] Installer error (non-fatal): %v", err)
+	if job.SelectedExe != "" {
+		base := filepath.Base(job.SelectedExe)
+		lower := strings.ToLower(base)
+		isInstaller := strings.HasPrefix(lower, "setup") || strings.HasPrefix(lower, "install")
+		selectedPath := findFileByBasename(downloadDir, base)
+
+		if selectedPath == "" {
+			log.Printf("[Agent] Selected exe %q not found after extraction, falling back to auto-detect", job.SelectedExe)
+			goto autoDetect
 		}
-		// Try known install dir first, then search entire prefix
-		gameExe = findMainExe(gameInstallDir)
-		if gameExe == "" {
-			gameExe = findGameExeInPrefix(wineprefix)
+		if isInstaller {
+			c.reportProgress(job, agent.JobInstalling, "Running installer: "+base, 87)
+			if err := runInstallerSilent(selectedPath, wineprefix, job.GameTitle); err != nil {
+				log.Printf("[Agent] Installer error (non-fatal): %v", err)
+			}
+			gameExe = findMainExe(gameInstallDir)
+			if gameExe == "" {
+				gameExe = findGameExeInPrefix(wineprefix)
+			}
+			if gameExe != "" {
+				applyCrack(downloadDir, filepath.Dir(gameExe))
+			}
+		} else {
+			gameExe = selectedPath
 		}
-		// Apply crack files: copy from Crack/SKIDROW/etc dirs to wherever game was installed
-		if gameExe != "" {
-			applyCrack(downloadDir, filepath.Dir(gameExe))
-		}
-	} else {
-		// No installer — portable game already in download dir
-		gameExe = findMainExe(downloadDir)
+		goto shortcut
 	}
 
+autoDetect:
+	{
+		installer := findInstaller(downloadDir)
+		if installer != "" {
+			c.reportProgress(job, agent.JobInstalling, "Running installer: "+filepath.Base(installer), 87)
+			if err := runInstallerSilent(installer, wineprefix, job.GameTitle); err != nil {
+				log.Printf("[Agent] Installer error (non-fatal): %v", err)
+			}
+			// Try known install dir first, then search entire prefix
+			gameExe = findMainExe(gameInstallDir)
+			if gameExe == "" {
+				gameExe = findGameExeInPrefix(wineprefix)
+			}
+			// Apply crack files: copy from Crack/SKIDROW/etc dirs to wherever game was installed
+			if gameExe != "" {
+				applyCrack(downloadDir, filepath.Dir(gameExe))
+			}
+		} else {
+			// No installer — portable game already in download dir
+			gameExe = findMainExe(downloadDir)
+		}
+	}
+
+shortcut:
+
 	// ---- Create local Steam shortcut via wrapper script ----
+	// The run.sh path is always ~/Games/{title}/run.sh — identical on every Linux device,
+	// so the Steam AppID is the same regardless of which agent installs the game.
+	// If a shortcut already exists (e.g. created by another device), skip adding a duplicate.
 	c.reportProgress(job, agent.JobCreatingShortcut, "Creating Steam shortcut...", 95)
 	if gameExe != "" {
 		scriptPath := createRunScript(job.GameTitle, gameExe, wineprefix)
-		exeForShortcut := gameExe
-		if scriptPath != "" {
-			exeForShortcut = scriptPath
-		}
 		entry := launcher.ShortcutEntry{
+			// Title-based AppID is identical on all platforms (Linux, Windows, macOS)
+			// so dual-boot / shared Steam installs produce one shortcut updated in-place.
+			AppID:    launcher.TitleAppID(job.GameTitle),
 			AppName:  job.GameTitle,
-			Exe:      exeForShortcut,
-			StartDir: filepath.Dir(exeForShortcut),
+			StartDir: filepath.Dir(gameExe),
+		}
+		if scriptPath != "" {
+			entry.Exe = currentOSExe()
+			entry.LaunchOptions = shortcutLaunchOptions(job.GameTitle, scriptPath)
+			entry.StartDir = filepath.Dir(scriptPath)
+		} else {
+			entry.Exe = gameExe
 		}
 		if _, err := launcher.AddSteamShortcut(entry); err != nil {
 			log.Printf("[Agent] Steam shortcut error: %v", err)
 		} else {
-			log.Printf("[Agent] Steam shortcut created for %q → %s", job.GameTitle, exeForShortcut)
+			log.Printf("[Agent] Steam shortcut written for %q (appID=%d)", job.GameTitle, entry.AppID)
+			go c.fetchArtwork(job.GameTitle, entry.AppID)
+			runner := launcher.FindRunner()
+			if runner != nil {
+				toolName := launcher.ProtonToolName(runner)
+				cfgDir := launcher.FindSteamUserConfigDir()
+				if toolName != "" && cfgDir != "" {
+					if err := launcher.SetCompatTool(cfgDir, entry.AppID, toolName); err != nil {
+						log.Printf("[Agent] localconfig.vdf update failed: %v", err)
+					} else {
+						log.Printf("[Agent] Set compat tool %q for appID %d", toolName, entry.AppID)
+					}
+				}
+			}
 		}
 	} else {
 		log.Printf("[Agent] No game exe found, skipping shortcut")
@@ -312,6 +451,9 @@ func (c *Client) executeJob(job agent.InstallJob) {
 	}
 	c.reportProgress(job, agent.JobDone, doneMsg, 100)
 	log.Printf("[Agent] Job %s: done", job.JobID)
+
+	// Re-scan so server immediately reflects the new installation
+	go c.scanInstalledGames()
 }
 
 // runInstallerSilent runs a Windows installer silently.
@@ -395,6 +537,36 @@ func applyCrack(srcDir, gameInstallDir string) {
 	})
 }
 
+// findAllGameExes returns all game-like exe files in dir (same filter as isGameExe).
+func findAllGameExes(dir string) []string {
+	var found []string
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if isGameExe(strings.ToLower(info.Name())) {
+			found = append(found, path)
+		}
+		return nil
+	})
+	return found
+}
+
+// findFileByBasename finds a file with exact base name (case-insensitive) anywhere under dir.
+func findFileByBasename(dir, basename string) string {
+	var found string
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || found != "" {
+			return nil
+		}
+		if strings.EqualFold(info.Name(), basename) {
+			found = path
+		}
+		return nil
+	})
+	return found
+}
+
 // findInstaller finds setup*.exe or install*.exe recursively in dir.
 func findInstaller(dir string) string {
 	var found string
@@ -432,7 +604,7 @@ func isGameExe(lower string) bool {
 	if !strings.HasSuffix(lower, ".exe") {
 		return false
 	}
-	excludePrefixes := []string{"setup", "install", "unins", "redist", "dxsetup", "vcredist", "directx", "config", "crashreport", "crashpad", "bugsplat", "quicksfv"}
+	excludePrefixes := []string{"setup", "install", "unins", "redist", "dxsetup", "vcredist", "directx", "config", "crashreport", "crashpad", "crashhandler", "unitycrashandler", "bugsplat", "quicksfv"}
 	for _, p := range excludePrefixes {
 		if strings.HasPrefix(lower, p) {
 			return false
@@ -468,6 +640,9 @@ func createRunScript(gameTitle, gameExe, wineprefix string) string {
 
 	logFile := filepath.Join(scriptDir, "run.log")
 
+	// exitMarker is written after the game closes so the save watcher uploads immediately.
+	exitMarker := filepath.Join(scriptDir, exitMarkerName)
+
 	switch runner.Type {
 	case launcher.RunnerUMU:
 		content = fmt.Sprintf(
@@ -478,15 +653,14 @@ func createRunScript(gameTitle, gameExe, wineprefix string) string {
 				"export WINEPREFIX=%q\n"+
 				"export PROTONPATH=%q\n"+
 				"export GAMEID=0\n"+
-				"exec %q %q \"$@\" >> \"$LOG\" 2>&1\n",
-			logFile, wineprefix,
-			wineprefix, runner.ProtonPath, runner.BinPath, gameExe)
+				"%q %q \"$@\" >> \"$LOG\" 2>&1\n"+
+				"touch %q\n",
+			logFile, filepath.Join(wineprefix, "pfx"),
+			wineprefix, runner.ProtonPath, runner.BinPath, gameExe, exitMarker)
 	case launcher.RunnerProton:
-		// GE-Proton needs STEAM_COMPAT_CLIENT_INSTALL_PATH to point at the real Steam
-		// installation so it can find the Steam Linux Runtime container.
 		steamRoot := launcher.FindSteamRoot()
 		if steamRoot == "" {
-			steamRoot = filepath.Dir(filepath.Dir(runner.BinPath)) // proton is in <steamroot>/compatibilitytools.d/<ver>/proton
+			steamRoot = filepath.Dir(filepath.Dir(runner.BinPath))
 		}
 		content = fmt.Sprintf(
 			"#!/bin/bash\n"+
@@ -495,9 +669,11 @@ func createRunScript(gameTitle, gameExe, wineprefix string) string {
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
 				"export STEAM_COMPAT_DATA_PATH=%q\n"+
 				"export STEAM_COMPAT_CLIENT_INSTALL_PATH=%q\n"+
-				"exec %q run %q \"$@\" >> \"$LOG\" 2>&1\n",
-			logFile, wineprefix,
-			wineprefix, steamRoot, runner.BinPath, gameExe)
+				"export PROTON_LOG=1\n"+
+				"%q run %q \"$@\" >> \"$LOG\" 2>&1\n"+
+				"touch %q\n",
+			logFile, filepath.Join(wineprefix, "pfx"),
+			wineprefix, steamRoot, runner.BinPath, gameExe, exitMarker)
 	case launcher.RunnerWine:
 		content = fmt.Sprintf(
 			"#!/bin/bash\n"+
@@ -505,9 +681,10 @@ func createRunScript(gameTitle, gameExe, wineprefix string) string {
 				"mkdir -p %q\n"+
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
 				"export WINEPREFIX=%q\n"+
-				"exec %q %q \"$@\" >> \"$LOG\" 2>&1\n",
+				"%q %q \"$@\" >> \"$LOG\" 2>&1\n"+
+				"touch %q\n",
 			logFile, wineprefix,
-			wineprefix, runner.BinPath, gameExe)
+			wineprefix, runner.BinPath, gameExe, exitMarker)
 	default:
 		return ""
 	}
@@ -679,25 +856,14 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// downloadFile downloads a URL to destPath, resuming if the file already exists.
+// downloadFile downloads a URL to destPath.
 // onProgress is called periodically with (bytesRead, totalBytes); totalBytes may be -1.
 func (c *Client) downloadFile(rawURL, destPath string, onProgress func(read, total int64)) error {
-	tmpPath := destPath + ".tmp"
-
-	// Check for existing partial download
-	var offset int64
-	if fi, err := os.Stat(tmpPath); err == nil {
-		offset = fi.Size()
-	}
-
 	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
-	if offset > 0 {
-		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
-	}
 
 	dlClient := &http.Client{} // no timeout for file downloads
 	resp, err := dlClient.Do(req)
@@ -706,32 +872,20 @@ func (c *Client) downloadFile(rawURL, destPath string, onProgress func(read, tot
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 && resp.StatusCode != 206 {
+	if resp.StatusCode != 200 {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	flags := os.O_CREATE | os.O_WRONLY
-	if resp.StatusCode == 206 {
-		flags |= os.O_APPEND
-		offset = 0 // already appending; don't add to read count
-	}
-	f, err := os.OpenFile(tmpPath, flags, 0644)
+	f, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
-	}
-
-	// Total bytes: Content-Length of this response + already-downloaded offset
-	total := resp.ContentLength
-	if total > 0 && resp.StatusCode == 200 {
-		total += offset
 	}
 
 	var reader io.Reader = resp.Body
 	if onProgress != nil {
 		reader = &progressReader{
 			r:          resp.Body,
-			read:       offset,
-			total:      total,
+			total:      resp.ContentLength,
 			onProgress: onProgress,
 		}
 	}
@@ -740,9 +894,650 @@ func (c *Client) downloadFile(rawURL, destPath string, onProgress func(read, tot
 		f.Close()
 		return err
 	}
-	f.Close()
+	return f.Close()
+}
 
-	return os.Rename(tmpPath, destPath)
+// scanInstalledGames walks all known install paths, collects InstalledGame records,
+// and POSTs the list back to the server.
+func (c *Client) scanInstalledGames() {
+	log.Println("[Agent] Scanning installed games...")
+
+	paths := discoverInstallPaths()
+	shortcuts := loadShortcutEntries()
+
+	var games []agent.InstalledGame
+
+	for _, ip := range paths {
+		entries, err := os.ReadDir(ip.Path)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			gameDir := filepath.Join(ip.Path, e.Name())
+			title := e.Name()
+			exePath := ""
+			var exeCandidates []string
+
+			// Detect launcher script (run.sh / run.bat)
+			scriptPath := ""
+			for _, name := range []string{"run.sh", "run.bat"} {
+				candidate := filepath.Join(gameDir, name)
+				if _, err := os.Stat(candidate); err == nil {
+					scriptPath = candidate
+					break
+				}
+			}
+
+			// Resolve the active exe and all candidates.
+			// For Wine/Proton installs the real exe is inside the prefix, not gameDir.
+			if scriptPath != "" {
+				_, parsedExe := parseRunScript(scriptPath)
+				if parsedExe != "" {
+					exePath = parsedExe
+					exeCandidates = findAllGameExes(filepath.Dir(parsedExe))
+				}
+			}
+			if exePath == "" {
+				exePath = findMainExe(gameDir)
+				exeCandidates = findAllGameExes(gameDir)
+			}
+
+			size := dirSize(gameDir)
+
+			// Ensure shortcut points to the current OS launcher.
+			// Steam Cloud syncs shortcuts.vdf across dual-boot installs, so the
+			// shortcut written by the other OS may be present but unusable here.
+			// Refreshing on every scan fixes it automatically on boot.
+			// After refreshShortcut the entry is guaranteed to exist, so we set
+			// hasShortcut = true directly rather than re-reading the stale
+			// shortcuts list that was loaded before this loop started.
+			hasShortcut := false
+			if scriptPath != "" {
+				refreshShortcut(title, scriptPath)
+				hasShortcut = true
+			} else {
+				for _, s := range shortcuts {
+					if strings.EqualFold(s.AppName, title) {
+						hasShortcut = true
+						break
+					}
+				}
+			}
+
+			// Simple version detection: look for a version file
+			version := ""
+			for _, vf := range []string{"version.txt", "VERSION", ".version"} {
+				data, err := os.ReadFile(filepath.Join(gameDir, vf))
+				if err == nil {
+					version = strings.TrimSpace(string(data))
+					break
+				}
+			}
+
+			games = append(games, agent.InstalledGame{
+				Title:         title,
+				InstallPath:   gameDir,
+				ExePath:       exePath,
+				ExeCandidates: exeCandidates,
+				ScriptPath:    scriptPath,
+				SizeBytes:     size,
+				HasShortcut:   hasShortcut,
+				Version:       version,
+			})
+		}
+	}
+
+	body, _ := json.Marshal(games)
+	postURL := fmt.Sprintf("%s/api/v3/agent/%s/games", c.cfg.ServerURL, c.agentID)
+	req, err := http.NewRequest("POST", postURL, bytes.NewReader(body))
+	if err != nil {
+		log.Printf("[Agent] Scan report request error: %v", err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		log.Printf("[Agent] Scan report POST error: %v", err)
+		return
+	}
+	resp.Body.Close()
+	log.Printf("[Agent] Reported %d installed games", len(games))
+
+	// Keep scriptPaths up to date for the shortcut watcher.
+	c.scriptPathsMu.Lock()
+	c.scriptPaths = make(map[string]string, len(games))
+	for _, g := range games {
+		if g.ScriptPath != "" {
+			c.scriptPaths[g.Title] = g.ScriptPath
+		}
+	}
+	c.scriptPathsMu.Unlock()
+
+	// Update save watcher with new game list
+	if c.saveWatcher != nil {
+		titles := make([]string, 0, len(games))
+		scriptDirMap := make(map[string]string)
+		for _, g := range games {
+			titles = append(titles, g.Title)
+			if g.ScriptPath != "" {
+				scriptDirMap[safeName(g.Title)] = filepath.Dir(g.ScriptPath)
+			} else {
+				// Default script dir: ~/Games/{safeName}/
+				scriptDirMap[safeName(g.Title)] = filepath.Join(homeDir(), "Games", safeName(g.Title))
+			}
+		}
+		go c.saveWatcher.UpdateGames(titles, scriptDirMap)
+	}
+}
+
+// deleteGame removes a game directory and optionally its Steam shortcut,
+// then triggers a re-scan so the server state stays current.
+func (c *Client) deleteGame(job agent.DeleteGameJob) {
+	log.Printf("[Agent] Deleting %q from %s", job.Title, job.InstallPath)
+
+	// Remove game directory
+	if err := os.RemoveAll(job.InstallPath); err != nil {
+		log.Printf("[Agent] Delete failed: %v", err)
+		c.reportDeleteProgress(job.JobID, "failed", "Delete failed: "+err.Error())
+		return
+	}
+	log.Printf("[Agent] Deleted game directory: %s", job.InstallPath)
+
+	// Remove launcher script directory (~/Games/{title}/) if it exists separately
+	scriptDir := filepath.Join(homeDir(), "Games", safeName(job.Title))
+	if scriptDir != job.InstallPath {
+		_ = os.RemoveAll(scriptDir)
+	}
+
+	// Remove wineprefix if present
+	wineprefix := filepath.Join(homeDir(), ".local", "share", "playerr", fmt.Sprintf("prefix_%s", safeName(job.Title)))
+	_ = os.RemoveAll(wineprefix)
+
+	// Optionally remove Steam shortcut
+	if job.RemoveShortcut {
+		removeShortcut(job.Title)
+	}
+
+	c.reportDeleteProgress(job.JobID, "done", "Deleted successfully")
+
+	// Re-scan so server reflects the removal
+	c.scanInstalledGames()
+}
+
+// currentOSExe returns the system executable used to launch game scripts on this OS.
+func currentOSExe() string {
+	if runtime.GOOS == "windows" {
+		if c := os.Getenv("COMSPEC"); c != "" {
+			return c
+		}
+		return filepath.Join(os.Getenv("SystemRoot"), "System32", "cmd.exe")
+	}
+	return "/bin/bash"
+}
+
+// shortcutLaunchOptions returns the LaunchOptions for the current OS.
+// On Windows we use %USERPROFILE% so the shortcut is portable across all
+// Windows accounts — cmd.exe expands it at launch time. On Linux we use
+// the absolute path (bash does not expand $HOME in positional arguments).
+func shortcutLaunchOptions(title, scriptPath string) string {
+	if runtime.GOOS == "windows" {
+		return `%USERPROFILE%\Games\` + safeName(title) + `\run.bat`
+	}
+	return scriptPath
+}
+
+// refreshShortcut ensures the Steam shortcut for a game points to the current
+// OS launcher with the correct path. Skips the write if both Exe and
+// LaunchOptions already match, which terminates the watch→write→watch loop.
+func refreshShortcut(title, scriptPath string) {
+	exe := currentOSExe()
+	opts := shortcutLaunchOptions(title, scriptPath)
+	if launcher.ShortcutEntryMatches(title, exe, opts) {
+		return
+	}
+	entry := launcher.ShortcutEntry{
+		AppID:         launcher.TitleAppID(title),
+		AppName:       title,
+		StartDir:      filepath.Dir(scriptPath),
+		Exe:           exe,
+		LaunchOptions: opts,
+	}
+	if _, err := launcher.AddSteamShortcut(entry); err != nil {
+		log.Printf("[Agent] Shortcut refresh failed for %q: %v", title, err)
+	} else {
+		log.Printf("[Agent] Shortcut corrected for %q → %s", title, exe)
+	}
+}
+
+// refreshKnownShortcuts corrects Steam shortcuts for all known installed games,
+// fetches missing SteamGridDB artwork, then re-scans so the server reflects
+// the updated hasShortcut state immediately.
+func (c *Client) refreshKnownShortcuts() {
+	c.scriptPathsMu.Lock()
+	paths := make(map[string]string, len(c.scriptPaths))
+	for k, v := range c.scriptPaths {
+		paths[k] = v
+	}
+	c.scriptPathsMu.Unlock()
+	for title, scriptPath := range paths {
+		refreshShortcut(title, scriptPath)
+		go c.fetchArtwork(title, launcher.TitleAppID(title))
+	}
+	log.Printf("[Agent] Refreshed shortcuts for %d games", len(paths))
+	c.scanInstalledGames()
+}
+
+// watchShortcuts monitors shortcuts.vdf for external changes (e.g. Steam Cloud
+// syncing the other OS's shortcuts) and immediately corrects any entries that
+// have the wrong Exe for the current OS.
+func (c *Client) watchShortcuts() {
+	cfgDir := launcher.FindSteamUserConfigDir()
+	if cfgDir == "" {
+		return
+	}
+	vdfPath := filepath.Join(cfgDir, "shortcuts.vdf")
+
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Printf("[Agent] Cannot create shortcuts watcher: %v", err)
+		return
+	}
+	defer w.Close()
+
+	// Watch the file if it exists, otherwise watch the directory so we catch creation.
+	if _, err := os.Stat(vdfPath); err == nil {
+		_ = w.Add(vdfPath)
+	} else {
+		_ = w.Add(cfgDir)
+	}
+
+	debounce := time.NewTimer(0)
+	<-debounce.C // drain initial tick
+
+	for {
+		select {
+		case event, ok := <-w.Events:
+			if !ok {
+				return
+			}
+			if filepath.Base(event.Name) == "shortcuts.vdf" {
+				debounce.Reset(500 * time.Millisecond)
+			}
+		case err, ok := <-w.Errors:
+			if !ok {
+				return
+			}
+			log.Printf("[Agent] shortcuts.vdf watcher error: %v", err)
+		case <-debounce.C:
+			c.refreshKnownShortcuts()
+		case <-c.stopCh:
+			return
+		}
+	}
+}
+
+// fetchArtwork resolves SteamGridDB artwork URLs via the server (which holds
+// the API key) and downloads each image to the local Steam grid directory.
+// Images that already exist are skipped. Non-fatal: errors are only logged.
+func (c *Client) fetchArtwork(title string, appID uint32) {
+	gridDir := launcher.FindSteamGridDir()
+	if gridDir == "" {
+		return
+	}
+
+	reqURL := fmt.Sprintf("%s/api/v3/agent/artwork?game=%s", c.cfg.ServerURL, url.QueryEscape(title))
+	req, err := http.NewRequest("GET", reqURL, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		log.Printf("[Agent] Artwork lookup failed for %q: %v", title, err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 503 {
+		log.Printf("[Agent] SteamGridDB not configured on server — skipping artwork for %q", title)
+		return
+	}
+	if resp.StatusCode != 200 {
+		log.Printf("[Agent] Artwork lookup for %q: HTTP %d", title, resp.StatusCode)
+		return
+	}
+
+	var urls struct {
+		Portrait  string `json:"portrait"`
+		Landscape string `json:"landscape"`
+		Hero      string `json:"hero"`
+		Logo      string `json:"logo"`
+		Icon      string `json:"icon"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&urls); err != nil {
+		return
+	}
+
+	if err := os.MkdirAll(gridDir, 0755); err != nil {
+		log.Printf("[Agent] Cannot create grid dir %s: %v", gridDir, err)
+		return
+	}
+
+	idStr := fmt.Sprintf("%d", appID)
+	saved := 0
+	save := func(imgURL, suffix string) string {
+		if imgURL == "" {
+			return ""
+		}
+		e := artworkExt(imgURL)
+		dest := filepath.Join(gridDir, idStr+suffix+e)
+		if _, err := os.Stat(dest); err == nil {
+			return dest // already present
+		}
+		dlResp, err := http.Get(imgURL) //nolint:noctx
+		if err != nil {
+			log.Printf("[Agent] Artwork download failed (%s%s): %v", idStr, suffix, err)
+			return ""
+		}
+		defer dlResp.Body.Close()
+		f, err := os.Create(dest)
+		if err != nil {
+			log.Printf("[Agent] Artwork create failed (%s): %v", dest, err)
+			return ""
+		}
+		if _, err := io.Copy(f, dlResp.Body); err != nil {
+			log.Printf("[Agent] Artwork write failed (%s): %v", dest, err)
+			f.Close()
+			return ""
+		}
+		f.Close()
+		saved++
+		return dest
+	}
+
+	save(urls.Portrait, "p")
+	save(urls.Landscape, "")
+	save(urls.Hero, "_hero")
+	save(urls.Logo, "_logo")
+	iconPath := save(urls.Icon, "_icon")
+
+	// Update the shortcut's icon field if we got an icon and it isn't already set
+	if iconPath != "" {
+		updateShortcutIcon(title, iconPath)
+	}
+
+	log.Printf("[Agent] Artwork for %q: %d image(s) saved to %s", title, saved, gridDir)
+}
+
+// updateShortcutIcon sets the icon field on an existing shortcut entry if it is blank.
+func updateShortcutIcon(title, iconPath string) {
+	cfgDir := launcher.FindSteamUserConfigDir()
+	if cfgDir == "" {
+		return
+	}
+	data, err := os.ReadFile(cfgDir + "/shortcuts.vdf")
+	if err != nil {
+		return
+	}
+	for _, e := range launcher.ParseShortcutsVDF(data) {
+		if strings.EqualFold(e.AppName, title) && e.Icon == "" {
+			e.Icon = iconPath
+			_, _ = launcher.AddSteamShortcut(e)
+			log.Printf("[Agent] Set icon for %q → %s", title, iconPath)
+			return
+		}
+	}
+}
+
+func artworkExt(imageURL string) string {
+	u := strings.Split(imageURL, "?")[0]
+	if e := filepath.Ext(u); e != "" {
+		return e
+	}
+	return ".png"
+}
+
+// regenerateScripts rewrites run.sh for all installed games using the current
+// runner and log-redirect format, without touching the game files themselves.
+// Called on REGEN_SCRIPTS SSE event or implicitly when needed.
+func (c *Client) regenerateScripts() {
+	gamesDir := filepath.Join(homeDir(), "Games")
+	entries, err := os.ReadDir(gamesDir)
+	if err != nil {
+		log.Printf("[Agent] regenerateScripts: cannot read %s: %v", gamesDir, err)
+		return
+	}
+	n := 0
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		gameDir := filepath.Join(gamesDir, e.Name())
+		scriptPath := filepath.Join(gameDir, "run.sh")
+		if _, err := os.Stat(scriptPath); err != nil {
+			continue // no run.sh, skip
+		}
+		// Parse wineprefix and exe from existing script
+		wineprefix, gameExe := parseRunScript(scriptPath)
+		// Validate the parsed exe — it may be stale/wrong (e.g. UnityCrashHandler64.exe)
+		if gameExe == "" || !isGameExe(strings.ToLower(filepath.Base(gameExe))) {
+			if gameExe != "" {
+				log.Printf("[Agent] regenerateScripts: rejecting %q for %q, re-scanning", filepath.Base(gameExe), e.Name())
+			}
+			gameExe = findMainExe(gameDir)
+		}
+		if gameExe == "" {
+			log.Printf("[Agent] regenerateScripts: cannot find exe for %s, skipping", e.Name())
+			continue
+		}
+		// If wineprefix is still empty (old broken script), generate a title-based one
+		if wineprefix == "" {
+			wineprefix = filepath.Join(homeDir(), ".local", "share", "playerr", "prefix_"+safeName(e.Name()))
+			log.Printf("[Agent] regenerateScripts: no wineprefix found for %q, using %s", e.Name(), wineprefix)
+		}
+		newPath := createRunScript(e.Name(), gameExe, wineprefix)
+		if newPath != "" {
+			n++
+			log.Printf("[Agent] Regenerated run.sh for %q", e.Name())
+		}
+	}
+	log.Printf("[Agent] Regenerated %d run scripts", n)
+	c.scanInstalledGames()
+}
+
+// changeGameExe rewrites the run.sh launcher script to use a different exe
+// and updates the Steam shortcut to point at it.
+func (c *Client) changeGameExe(title, exePath string) {
+	scriptDir := filepath.Join(homeDir(), "Games", safeName(title))
+	scriptPath := filepath.Join(scriptDir, "run.sh")
+	wineprefix, _ := parseRunScript(scriptPath)
+
+	newScript := createRunScript(title, exePath, wineprefix)
+	if newScript == "" {
+		log.Printf("[Agent] changeGameExe: no runner available for %q", title)
+		return
+	}
+
+	entry := launcher.ShortcutEntry{
+		AppID:         launcher.TitleAppID(title),
+		AppName:       title,
+		Exe:           currentOSExe(),
+		LaunchOptions: shortcutLaunchOptions(title, newScript),
+		StartDir:      filepath.Dir(newScript),
+	}
+	if _, err := launcher.AddSteamShortcut(entry); err != nil {
+		log.Printf("[Agent] changeGameExe: shortcut error: %v", err)
+	} else {
+		log.Printf("[Agent] changeGameExe: updated %q → %q", title, exePath)
+	}
+
+	go c.scanInstalledGames()
+}
+
+// parseRunScript extracts the WINEPREFIX path and game exe path from a run.sh.
+// Returns ("", "") if the script cannot be parsed.
+func parseRunScript(scriptPath string) (wineprefix, gameExe string) {
+	data, err := os.ReadFile(scriptPath)
+	if err != nil {
+		return "", ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		// WINEPREFIX is used by UMU and Wine runners
+		if strings.HasPrefix(line, "export WINEPREFIX=") {
+			wineprefix = strings.Trim(strings.TrimPrefix(line, "export WINEPREFIX="), `"`)
+		}
+		// STEAM_COMPAT_DATA_PATH is used by the Proton runner
+		if strings.HasPrefix(line, "export STEAM_COMPAT_DATA_PATH=") {
+			v := strings.Trim(strings.TrimPrefix(line, "export STEAM_COMPAT_DATA_PATH="), `"`)
+			if v != "" {
+				wineprefix = v
+			}
+		}
+		// Runner invocation lines end with: "exe" "$@" >> ... or "exe" "$@"
+		// The exe is the last double-quoted token before "$@"
+		if strings.Contains(line, `"$@"`) && !strings.HasPrefix(line, "#") && !strings.HasPrefix(line, "export") {
+			parts := strings.Split(line, `"`)
+			for i := len(parts) - 1; i >= 1; i-- {
+				if parts[i] == "$@" {
+					continue
+				}
+				candidate := parts[i]
+				if strings.HasSuffix(candidate, ".exe") || strings.HasSuffix(candidate, ".EXE") {
+					gameExe = candidate
+					break
+				}
+			}
+		}
+	}
+	return wineprefix, gameExe
+}
+
+// restartSteam gracefully shuts down Steam. In Game Mode (Steam Deck) the
+// gamescope session manager relaunches Steam automatically after shutdown.
+func restartSteam() {
+	log.Println("[Agent] Restarting Steam...")
+	// Try the graceful shutdown signal first
+	if err := exec.Command("steam", "-shutdown").Run(); err != nil {
+		log.Printf("[Agent] steam -shutdown failed (%v), falling back to pkill", err)
+		_ = exec.Command("pkill", "-SIGTERM", "-f", "steam").Run()
+	}
+	log.Println("[Agent] Steam shutdown signal sent")
+}
+
+// sendLog reads the run.log for a game and POSTs its content back to the server.
+func (c *Client) sendLog(job agent.ReadLogJob) {
+	logPath := filepath.Join(homeDir(), "Games", safeName(job.GameTitle), "run.log")
+	content := readLastLines(logPath, 200)
+	payload := map[string]string{
+		"requestId": job.RequestID,
+		"gameTitle": job.GameTitle,
+		"content":   content,
+	}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequest("POST", c.cfg.ServerURL+"/api/v3/agent/log", bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	resp, err := c.http.Do(req)
+	if err == nil {
+		resp.Body.Close()
+	}
+	log.Printf("[Agent] Sent log for %q (%d bytes)", job.GameTitle, len(content))
+}
+
+// readLastLines returns the last n lines of a file, or an error message if unreadable.
+func readLastLines(path string, n int) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Sprintf("Log not found at: %s\n\nThe game may not have been launched yet.", path)
+	}
+	if len(data) == 0 {
+		return fmt.Sprintf("Log is empty: %s", path)
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(lines) > n {
+		lines = append([]string{fmt.Sprintf("... (showing last %d of %d lines)", n, len(lines))}, lines[len(lines)-n:]...)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// removeShortcut removes the Steam shortcut entry for the given game title.
+func removeShortcut(title string) {
+	cfgDir := launcher.FindSteamUserConfigDir()
+	if cfgDir == "" {
+		return
+	}
+	vdfPath := filepath.Join(cfgDir, "shortcuts.vdf")
+	data, err := os.ReadFile(vdfPath)
+	if err != nil {
+		return
+	}
+	entries := launcher.ParseShortcutsVDF(data)
+	filtered := entries[:0]
+	for _, e := range entries {
+		if !strings.EqualFold(e.AppName, title) {
+			filtered = append(filtered, e)
+		}
+	}
+	if len(filtered) == len(entries) {
+		return // nothing removed
+	}
+	// Re-use AddSteamShortcut's internal builder by writing back manually
+	// Since buildShortcutsVDF is unexported, we call AddSteamShortcut with a dummy to
+	// trigger the write — instead, we'll write the filtered list by re-adding each entry.
+	// Simplest: just delete the file and re-add remaining entries.
+	_ = os.Remove(vdfPath)
+	for _, e := range filtered {
+		_, _ = launcher.AddSteamShortcut(e)
+	}
+	log.Printf("[Agent] Removed shortcut for %q", title)
+}
+
+func (c *Client) reportDeleteProgress(jobID, status, message string) {
+	prog := map[string]any{"jobId": jobID, "status": status, "message": message, "percent": 100}
+	body, _ := json.Marshal(prog)
+	req, err := http.NewRequest("POST", c.cfg.ServerURL+"/api/v3/agent/progress", bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	resp, err := c.http.Do(req)
+	if err == nil {
+		resp.Body.Close()
+	}
+}
+
+// loadShortcutEntries reads shortcuts.vdf and returns all entries.
+func loadShortcutEntries() []launcher.ShortcutEntry {
+	cfgDir := launcher.FindSteamUserConfigDir()
+	if cfgDir == "" {
+		return nil
+	}
+	data, err := os.ReadFile(filepath.Join(cfgDir, "shortcuts.vdf"))
+	if err != nil {
+		return nil
+	}
+	return launcher.ParseShortcutsVDF(data)
+}
+
+// dirSize returns the total size of all files under dir.
+func dirSize(dir string) int64 {
+	var total int64
+	_ = filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total
 }
 
 // reportProgress POSTs a JobProgress to the server.
@@ -836,4 +1631,110 @@ func agentIDPath() string {
 	default:
 		return filepath.Join(home, ".config", "playerr-agent", "id")
 	}
+}
+
+// ---- Self-update ----
+
+// platformString returns the platform identifier used by the server's binary endpoint.
+func platformString() string {
+	switch runtime.GOOS + "/" + runtime.GOARCH {
+	case "linux/amd64":
+		return "linux-x64"
+	case "linux/arm64":
+		return "linux-arm64"
+	case "windows/amd64":
+		return "win-x64"
+	case "darwin/amd64":
+		return "osx-x64"
+	case "darwin/arm64":
+		return "osx-arm64"
+	default:
+		return ""
+	}
+}
+
+// checkAndUpdate fetches the server's current agent version and self-updates if it differs.
+// On success it replaces the binary on disk and exits with code 1 so the service
+// manager (systemd Restart=on-failure / launchd KeepAlive) restarts with the new binary.
+func (c *Client) checkAndUpdate() {
+	platform := platformString()
+	if platform == "" {
+		return // unsupported platform
+	}
+
+	// Fetch server's current agent version
+	resp, err := c.http.Get(c.cfg.ServerURL + "/api/v3/agent/version")
+	if err != nil || resp.StatusCode != 200 {
+		return
+	}
+	defer resp.Body.Close()
+	var vr struct {
+		Version string `json:"version"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&vr); err != nil {
+		return
+	}
+	// If the server is a dev build, don't push updates.
+	// If the agent is dev but the server has a real version, update it.
+	if vr.Version == "" || vr.Version == "dev" {
+		return // server is dev build, skip
+	}
+	if vr.Version == c.cfg.Version {
+		return // already up to date
+	}
+
+	log.Printf("[Agent] Update available: %s → %s — downloading...", c.cfg.Version, vr.Version)
+
+	// Download new binary
+	dlResp, err := c.http.Get(c.cfg.ServerURL + "/api/v3/agent/binary?os=" + platform)
+	if err != nil || dlResp.StatusCode != 200 {
+		log.Printf("[Agent] Update download failed: status %d, err %v", dlResp.StatusCode, err)
+		return
+	}
+	defer dlResp.Body.Close()
+
+	// Write to a temp file alongside the current binary
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Printf("[Agent] Update: cannot determine executable path: %v", err)
+		return
+	}
+	exePath, _ = filepath.EvalSymlinks(exePath)
+	tmpPath := exePath + ".new"
+
+	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	if err != nil {
+		log.Printf("[Agent] Update: cannot write temp binary: %v", err)
+		return
+	}
+	if _, err := io.Copy(f, dlResp.Body); err != nil {
+		f.Close()
+		os.Remove(tmpPath)
+		log.Printf("[Agent] Update: download write failed: %v", err)
+		return
+	}
+	f.Close()
+
+	// Verify the new binary is functional before committing
+	testCmd := exec.Command(tmpPath,
+		"--server", c.cfg.ServerURL,
+		"--token", c.cfg.Token,
+		"--name", "update-check",
+		"--test-connection",
+	)
+	if err := testCmd.Run(); err != nil {
+		os.Remove(tmpPath)
+		log.Printf("[Agent] Update: new binary failed self-test (%v) — keeping current version", err)
+		return
+	}
+
+	// Atomically replace the current binary
+	if err := os.Rename(tmpPath, exePath); err != nil {
+		os.Remove(tmpPath)
+		log.Printf("[Agent] Update: replace failed: %v", err)
+		return
+	}
+
+	log.Printf("[Agent] Updated to %s — restarting...", vr.Version)
+	os.Exit(1) // systemd Restart=on-failure will restart with the new binary
 }
