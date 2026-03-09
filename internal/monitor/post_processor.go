@@ -14,6 +14,7 @@ import (
 
 	"github.com/kiwi3007/playerr/internal/config"
 	"github.com/kiwi3007/playerr/internal/domain"
+	"github.com/kiwi3007/playerr/internal/indexer"
 	"github.com/kiwi3007/playerr/internal/metadata/igdb"
 	"github.com/kiwi3007/playerr/internal/repository"
 	"github.com/kiwi3007/playerr/internal/sse"
@@ -230,6 +231,8 @@ func (p *Processor) autoMove(d domain.DownloadStatus) {
 
 	// Resolve a clean game name (try IGDB, fall back to release name)
 	containerName, igdbID := p.resolveGameName(d.Name)
+	// Parse version from the raw release name before cleaning strips it.
+	version := indexer.ParseVersionFromTitle(d.Name)
 
 	isDir := false
 	if fi, err := os.Stat(d.DownloadPath); err == nil {
@@ -237,9 +240,9 @@ func (p *Processor) autoMove(d domain.DownloadStatus) {
 	}
 
 	if isDir {
-		p.moveDirectory(d, libraryRoot, containerName, igdbID)
+		p.moveDirectory(d, libraryRoot, containerName, igdbID, version)
 	} else {
-		p.moveSingleFile(d, libraryRoot, containerName, igdbID)
+		p.moveSingleFile(d, libraryRoot, containerName, igdbID, version)
 	}
 }
 
@@ -263,7 +266,7 @@ func (p *Processor) resolveGameName(releaseName string) (string, *int) {
 	return sanitizeFilename(games[0].Name), &id
 }
 
-func (p *Processor) moveDirectory(d domain.DownloadStatus, libraryRoot, containerName string, igdbID *int) {
+func (p *Processor) moveDirectory(d domain.DownloadStatus, libraryRoot, containerName string, igdbID *int, version string) {
 	srcDir := d.DownloadPath
 	originalName := filepath.Base(srcDir)
 
@@ -294,12 +297,12 @@ func (p *Processor) moveDirectory(d domain.DownloadStatus, libraryRoot, containe
 	_ = os.RemoveAll(srcDir)
 
 	if firstGameFile != "" {
-		p.addGameToLibrary(containerName, firstGameFile, igdbID)
+		p.addGameToLibrary(containerName, firstGameFile, igdbID, version)
 		p.broker.Publish("LIBRARY_UPDATED", "{}")
 	}
 }
 
-func (p *Processor) moveSingleFile(d domain.DownloadStatus, libraryRoot, containerName string, igdbID *int) {
+func (p *Processor) moveSingleFile(d domain.DownloadStatus, libraryRoot, containerName string, igdbID *int, version string) {
 	src := d.DownloadPath
 	ext := strings.ToLower(filepath.Ext(src))
 	if !validGameExts[ext] {
@@ -313,13 +316,14 @@ func (p *Processor) moveSingleFile(d domain.DownloadStatus, libraryRoot, contain
 		return
 	}
 
-	p.addGameToLibrary(containerName, dest, igdbID)
+	p.addGameToLibrary(containerName, dest, igdbID, version)
 	p.broker.Publish("LIBRARY_UPDATED", "{}")
 }
 
 // addGameToLibrary associates the downloaded file with an existing game (matched by IGDB ID)
 // or creates a new Game record if no match is found.
-func (p *Processor) addGameToLibrary(title, filePath string, igdbID *int) {
+// version is the release version parsed from the torrent/NZB name (may be empty).
+func (p *Processor) addGameToLibrary(title, filePath string, igdbID *int, version string) {
 	dir := filepath.Dir(filePath)
 
 	baseLower := strings.ToLower(filepath.Base(filePath))
@@ -344,6 +348,10 @@ func (p *Processor) addGameToLibrary(title, filePath string, igdbID *int) {
 			log.Printf("[PostDownload] Failed to update %q (id:%d): %v", existing.Title, existing.ID, err)
 		} else {
 			log.Printf("[PostDownload] Associated download with existing game %q (id:%d)", existing.Title, existing.ID)
+		}
+		if version != "" {
+			_ = p.repo.UpdateGameVersion(existing.ID, version)
+			log.Printf("[PostDownload] Set version %q for %q", version, existing.Title)
 		}
 		return
 	}
@@ -395,10 +403,14 @@ func (p *Processor) addGameToLibrary(title, filePath string, igdbID *int) {
 		}
 	}
 
-	if _, err := p.repo.CreateGame(&game); err != nil {
+	if created, err := p.repo.CreateGame(&game); err != nil {
 		log.Printf("[PostDownload] Failed to add %q to library: %v", title, err)
 	} else {
 		log.Printf("[PostDownload] Added %q to library", title)
+		if version != "" && created != nil {
+			_ = p.repo.UpdateGameVersion(created.ID, version)
+			log.Printf("[PostDownload] Set version %q for %q", version, title)
+		}
 	}
 }
 

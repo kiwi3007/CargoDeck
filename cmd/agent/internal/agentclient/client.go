@@ -1200,13 +1200,23 @@ func (c *Client) scanInstalledGames() {
 				}
 			}
 
-			// Simple version detection: look for a version file
+			// Simple version detection: look for a version file in the launcher dir
+			// and in the actual game install dir (e.g. inside the Wine prefix).
 			version := ""
-			for _, vf := range []string{"version.txt", "VERSION", ".version"} {
-				data, err := os.ReadFile(filepath.Join(gameDir, vf))
-				if err == nil {
-					version = strings.TrimSpace(string(data))
-					break
+			versionSearchDirs := []string{gameDir}
+			if exePath != "" {
+				versionSearchDirs = append(versionSearchDirs, filepath.Dir(exePath))
+			}
+			outer:
+			for _, searchDir := range versionSearchDirs {
+				for _, vf := range []string{"version.txt", "VERSION", ".version"} {
+					data, err := os.ReadFile(filepath.Join(searchDir, vf))
+					if err == nil {
+						if v := strings.TrimSpace(string(data)); v != "" {
+							version = v
+							break outer
+						}
+					}
 				}
 			}
 
