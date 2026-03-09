@@ -715,9 +715,12 @@ func isGameExe(lower string) bool {
 	// Exclude well-known Wine/Windows system executables that are never the game.
 	systemExes := map[string]bool{
 		"iexplore.exe": true, "explorer.exe": true, "wmplayer.exe": true,
+		"wordpad.exe": true, "write.exe": true, "charmap.exe": true,
 		"notepad.exe": true, "msiexec.exe": true, "rundll32.exe": true,
 		"regsvr32.exe": true, "cmd.exe": true, "powershell.exe": true,
 		"werfault.exe": true, "wineboot.exe": true, "wineconsole.exe": true,
+		"taskmgr.exe": true, "regedit.exe": true, "control.exe": true,
+		"winhlp32.exe": true, "winemine.exe": true, "winedbg.exe": true,
 	}
 	return !systemExes[lower]
 }
