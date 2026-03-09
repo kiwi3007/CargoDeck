@@ -1219,6 +1219,10 @@ func (c *Client) scanInstalledGames() {
 					}
 				}
 			}
+			// Fallback: read FileVersion from the exe's PE resource block.
+			if version == "" && exePath != "" {
+				version = readExeVersion(exePath)
+			}
 
 			games = append(games, agent.InstalledGame{
 				Title:         title,
