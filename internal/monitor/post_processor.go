@@ -328,21 +328,24 @@ func (p *Processor) addGameToLibrary(title, filePath string, igdbID *int) {
 		status = domain.GameStatusInstallerDetected
 	}
 
-	// If we resolved an IGDB ID, check whether this game is already in the library.
+	// Try to find an existing library entry: first by IGDB ID, then by title.
+	var existing *domain.Game
 	if igdbID != nil {
-		existing, err := p.repo.GetGameByIgdbID(*igdbID)
-		if err == nil && existing != nil {
-			// Update the existing game with the downloaded file path.
-			existing.Path = &dir
-			existing.ExecutablePath = &filePath
-			existing.Status = status
-			if _, err := p.repo.UpdateGame(existing.ID, existing); err != nil {
-				log.Printf("[PostDownload] Failed to update %q (id:%d): %v", existing.Title, existing.ID, err)
-			} else {
-				log.Printf("[PostDownload] Associated download with existing game %q (id:%d)", existing.Title, existing.ID)
-			}
-			return
+		existing, _ = p.repo.GetGameByIgdbID(*igdbID)
+	}
+	if existing == nil {
+		existing, _ = p.repo.GetGameByTitle(title)
+	}
+	if existing != nil {
+		existing.Path = &dir
+		existing.ExecutablePath = &filePath
+		existing.Status = status
+		if _, err := p.repo.UpdateGame(existing.ID, existing); err != nil {
+			log.Printf("[PostDownload] Failed to update %q (id:%d): %v", existing.Title, existing.ID, err)
+		} else {
+			log.Printf("[PostDownload] Associated download with existing game %q (id:%d)", existing.Title, existing.ID)
 		}
+		return
 	}
 
 	// Skip if this exact path is already tracked.
@@ -447,6 +450,10 @@ var noiseWords = map[string]bool{
 	"goty": true, "remastered": true, "remake": true, "definitive": true,
 	"nsp": true, "xci": true, "nsz": true, "xcz": true, "pkg": true,
 	"zip": true, "rar": true, "7z": true,
+	// Language codes used in GOG / scene release names
+	"eng": true, "enu": true, "multi": true, "multi2": true, "multi3": true,
+	"en": true, "de": true, "fr": true, "ru": true, "pl": true,
+	"es": true, "it": true, "pt": true, "nl": true, "cs": true,
 }
 
 // versionTagRE strips dotted version strings like v1.63, v2.0.1 before the dot→space pass,
@@ -458,13 +465,19 @@ func cleanReleaseName(s string) string {
 	s = bracketRE.ReplaceAllString(s, " ")
 	// Strip version tags while dots are still intact so "v1.63" is removed as a unit.
 	s = versionTagRE.ReplaceAllString(s, " ")
-	// Replace remaining separators with spaces.
-	s = strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(s)
+	// Replace separators with spaces; + is used in GOG-style names (e.g. "Game + ENG + 1]").
+	s = strings.NewReplacer(".", " ", "_", " ", "-", " ", "+", " ").Replace(s)
 
 	words := strings.Fields(s)
 	kept := words[:0]
 	for _, w := range words {
-		if noiseWords[strings.ToLower(w)] {
+		// Strip any residual bracket chars left by incomplete pairs (e.g. "1]" → "1").
+		w = strings.Trim(w, "[](){}")
+		if w == "" {
+			continue
+		}
+		lower := strings.ToLower(w)
+		if noiseWords[lower] {
 			continue // skip noise words but keep scanning
 		}
 		kept = append(kept, w)
