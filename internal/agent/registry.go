@@ -34,6 +34,7 @@ type AgentInfo struct {
 // jobMeta links a job ID to the agent and game title.
 type jobMeta struct {
 	AgentID   string
+	GameID    int
 	GameTitle string
 }
 
@@ -131,12 +132,25 @@ func (r *Registry) SetInstalledGames(agentID string, games []InstalledGame) {
 	}
 }
 
+// HasActiveJobForGame returns true if the agent already has a queued or
+// in-progress job for the given game, preventing duplicate dispatches.
+func (r *Registry) HasActiveJobForGame(agentID string, gameID int) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, m := range r.jobIndex {
+		if m.AgentID == agentID && m.GameID == gameID {
+			return true
+		}
+	}
+	return false
+}
+
 // TrackJob records that a job has been dispatched to an agent.
 // This lets UpdateJobProgress look up which agent owns a given job ID.
-func (r *Registry) TrackJob(agentID, jobID, gameTitle string) {
+func (r *Registry) TrackJob(agentID, jobID, gameTitle string, gameID int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.jobIndex[jobID] = jobMeta{AgentID: agentID, GameTitle: gameTitle}
+	r.jobIndex[jobID] = jobMeta{AgentID: agentID, GameID: gameID, GameTitle: gameTitle}
 	if a, ok := r.agents[agentID]; ok {
 		job := &ActiveJob{
 			JobID:     jobID,

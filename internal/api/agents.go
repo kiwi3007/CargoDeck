@@ -307,7 +307,12 @@ func (h *Handler) DispatchInstall(w http.ResponseWriter, r *http.Request) {
 		SelectedExe: req.SelectedExe,
 	}
 
-	h.agentRegistry.TrackJob(agentID, jobID, game.Title)
+	if h.agentRegistry.HasActiveJobForGame(agentID, req.GameID) {
+		jsonErr(w, 409, "a job for this game is already queued or in progress on this agent")
+		return
+	}
+
+	h.agentRegistry.TrackJob(agentID, jobID, game.Title, req.GameID)
 
 	if !h.agentJobs.Enqueue(job) {
 		jsonErr(w, 503, "agent job queue full")
