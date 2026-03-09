@@ -454,6 +454,7 @@ func (c *Client) fetchSavePaths(title, scriptDir string) ([]string, int) {
 	q.Set("title", title)
 	q.Set("os", targetOS)
 	q.Set("agentId", c.agentID)
+	q.Set("home", homeDir()) // agent's home dir — server resolves path templates relative to this
 	if wineprefix != "" {
 		q.Set("wineprefix", wineprefix)
 	}

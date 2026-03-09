@@ -161,21 +161,23 @@ func (s *Service) FindBySteamID(steamID int) (ManifestEntry, bool) {
 
 // ResolvePaths returns the list of save directories for a game.
 // targetOS should be "linux", "windows", or "mac".
+// home is the user's home directory on the target machine (the agent's home, not the server's).
 // wineprefix is used to resolve Windows paths when running under Wine/Proton on Linux;
 // when non-empty and targetOS != "windows", Windows-tagged paths are also resolved via the prefix.
-func ResolvePaths(entry ManifestEntry, targetOS, wineprefix string) []string {
-	paths := resolveForOS(entry, targetOS, wineprefix)
+func ResolvePaths(entry ManifestEntry, targetOS, wineprefix, home string) []string {
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	paths := resolveForOS(entry, targetOS, wineprefix, home)
 	if wineprefix != "" && targetOS != "windows" {
 		// Also resolve Windows-tagged paths via the Wine prefix
-		paths = append(paths, resolveForOS(entry, "windows", wineprefix)...)
+		paths = append(paths, resolveForOS(entry, "windows", wineprefix, home)...)
 	}
 	return deduplicate(paths)
 }
 
 // resolveForOS resolves save paths for a single OS pass.
-func resolveForOS(entry ManifestEntry, targetOS, wineprefix string) []string {
-	home, _ := os.UserHomeDir()
-
+func resolveForOS(entry ManifestEntry, targetOS, wineprefix, home string) []string {
 	var paths []string
 	seen := map[string]bool{}
 
@@ -248,9 +250,14 @@ func pathAppliesToOS(rule FileRule, targetOS string) bool {
 }
 
 // WinUserInPrefix finds the Wine/Proton user directory inside a prefix.
-// Checks pfx/drive_c/users/ for the first non-Public directory; defaults to "steamuser".
+// Supports both Proton-style ({prefix}/pfx/drive_c) and Wine-style ({prefix}/drive_c).
+// Returns the first non-Public user directory found, or "steamuser" as fallback.
 func WinUserInPrefix(wineprefix string) string {
+	// Try Proton-style first, then plain Wine-style
 	pfxUsers := filepath.Join(wineprefix, "pfx", "drive_c", "users")
+	if _, err := os.Stat(pfxUsers); os.IsNotExist(err) {
+		pfxUsers = filepath.Join(wineprefix, "drive_c", "users")
+	}
 	winUser := "steamuser"
 	if entries, err := os.ReadDir(pfxUsers); err == nil {
 		for _, e := range entries {
@@ -337,17 +344,22 @@ func resolveTemplate(tmpl, home, wineprefix string) string {
 		replacements["<winDir>"] = os.Getenv("SystemRoot")
 		replacements["<winProgramData>"] = os.Getenv("PROGRAMDATA")
 	} else if wineprefix != "" {
-		// Wine/Proton: resolve Windows paths inside the prefix
-		pfxUsers := filepath.Join(wineprefix, "pfx", "drive_c", "users")
+		// Wine/Proton: resolve Windows paths inside the prefix.
+		// Support both Proton-style ({prefix}/pfx/drive_c) and Wine-style ({prefix}/drive_c).
+		driveC := filepath.Join(wineprefix, "pfx", "drive_c")
+		if _, err := os.Stat(driveC); os.IsNotExist(err) {
+			driveC = filepath.Join(wineprefix, "drive_c")
+		}
 		winUser := WinUserInPrefix(wineprefix)
+		pfxUsers := filepath.Join(driveC, "users")
 		userDir := filepath.Join(pfxUsers, winUser)
 		replacements["<winAppData>"] = filepath.Join(userDir, "AppData", "Roaming")
 		replacements["<winLocalAppData>"] = filepath.Join(userDir, "AppData", "Local")
 		replacements["<winDocuments>"] = winDocumentsPath(userDir)
 		replacements["<winSavedGames>"] = filepath.Join(userDir, "Saved Games")
 		replacements["<winPublic>"] = filepath.Join(pfxUsers, "Public")
-		replacements["<winDir>"] = filepath.Join(wineprefix, "pfx", "drive_c", "windows")
-		replacements["<winProgramData>"] = filepath.Join(wineprefix, "pfx", "drive_c", "ProgramData")
+		replacements["<winDir>"] = filepath.Join(driveC, "windows")
+		replacements["<winProgramData>"] = filepath.Join(driveC, "ProgramData")
 	}
 
 	result := tmpl

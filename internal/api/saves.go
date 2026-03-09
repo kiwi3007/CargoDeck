@@ -31,6 +31,13 @@ func (h *Handler) GetSavePaths(w http.ResponseWriter, r *http.Request) {
 	targetOS := r.URL.Query().Get("os")
 	wineprefix := r.URL.Query().Get("wineprefix")
 	agentID := r.URL.Query().Get("agentId")
+	// agentHome is the home directory on the agent's machine.
+	// Path templates (e.g. <xdgData>/godot/...) must be resolved relative to the
+	// agent's home, not the server's, so the agent sends it explicitly.
+	agentHome := r.URL.Query().Get("home")
+	if agentHome == "" {
+		agentHome, _ = os.UserHomeDir()
+	}
 
 	if title == "" {
 		http.Error(w, "title is required", http.StatusBadRequest)
@@ -48,7 +55,7 @@ func (h *Handler) GetSavePaths(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Saves] Manifest load error: %v", err)
 	} else {
 		if entry, found := h.manifest.FindByTitle(title); found {
-			if paths := manifest.ResolvePaths(entry, targetOS, wineprefix); len(paths) > 0 {
+			if paths := manifest.ResolvePaths(entry, targetOS, wineprefix, agentHome); len(paths) > 0 {
 				basePaths = append(basePaths, paths...)
 			}
 		}
@@ -59,8 +66,7 @@ func (h *Handler) GetSavePaths(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(basePaths) == 0 {
-		home, _ := os.UserHomeDir()
-		basePaths = fallbackSavePaths(title, home, wineprefix)
+		basePaths = fallbackSavePaths(title, agentHome, wineprefix)
 	}
 
 	// Prepend per-device custom path (takes priority, appears first in watch list)
@@ -478,7 +484,12 @@ func (h *Handler) postSnapshotSync(gameID int, title, uploaderID, prevLatestAgen
 // This discovers saves for games not in the Ludusavi manifest.
 func scanPrefixForGame(wineprefix, gameName string) []string {
 	winUser := manifest.WinUserInPrefix(wineprefix)
-	userDir := filepath.Join(wineprefix, "pfx", "drive_c", "users", winUser)
+	// Support both Proton-style ({prefix}/pfx/drive_c) and Wine-style ({prefix}/drive_c).
+	driveC := filepath.Join(wineprefix, "pfx", "drive_c")
+	if _, err := os.Stat(driveC); os.IsNotExist(err) {
+		driveC = filepath.Join(wineprefix, "drive_c")
+	}
+	userDir := filepath.Join(driveC, "users", winUser)
 	titleLower := strings.ToLower(gameName)
 
 	// Common locations where Windows games store saves.
@@ -493,6 +504,26 @@ func scanPrefixForGame(wineprefix, gameName string) []string {
 
 	seenInodes := map[uint64]bool{} // avoid duplicates from symlinks
 	var found []string
+
+	addIfMatch := func(p string) {
+		resolved, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			resolved = p
+		}
+		info, err := os.Stat(resolved)
+		if err != nil {
+			return
+		}
+		inode := inoOf(info)
+		if inode != 0 && seenInodes[inode] {
+			return
+		}
+		if inode != 0 {
+			seenInodes[inode] = true
+		}
+		found = append(found, p)
+	}
+
 	for _, root := range scanRoots {
 		entries, err := os.ReadDir(root)
 		if err != nil {
@@ -502,27 +533,25 @@ func scanPrefixForGame(wineprefix, gameName string) []string {
 			if !e.IsDir() {
 				continue
 			}
-			if !strings.Contains(strings.ToLower(e.Name()), titleLower) {
-				continue
+			name := strings.ToLower(e.Name())
+			if strings.Contains(name, titleLower) {
+				// Direct match: Saved Games/Cairn/
+				addIfMatch(filepath.Join(root, e.Name()))
+			} else {
+				// One level deeper: publisher-namespaced saves like Saved Games/TheGameBakers/Cairn_RETAIL/
+				subEntries, err := os.ReadDir(filepath.Join(root, e.Name()))
+				if err != nil {
+					continue
+				}
+				for _, se := range subEntries {
+					if !se.IsDir() {
+						continue
+					}
+					if strings.Contains(strings.ToLower(se.Name()), titleLower) {
+						addIfMatch(filepath.Join(root, e.Name(), se.Name()))
+					}
+				}
 			}
-			p := filepath.Join(root, e.Name())
-			// Resolve symlinks to deduplicate (e.g. My Documents → Documents)
-			resolved, err := filepath.EvalSymlinks(p)
-			if err != nil {
-				resolved = p
-			}
-			info, err := os.Stat(resolved)
-			if err != nil {
-				continue
-			}
-			inode := inoOf(info)
-			if inode != 0 && seenInodes[inode] {
-				continue
-			}
-			if inode != 0 {
-				seenInodes[inode] = true
-			}
-			found = append(found, p) // return the original (non-resolved) path for display
 		}
 	}
 	return found
@@ -718,7 +747,7 @@ func (h *Handler) GetSavePathsInfo(w http.ResponseWriter, r *http.Request) {
 
 	_ = h.manifest.EnsureLoaded()
 	if entry, found := h.manifest.FindByTitle(game.Title); found {
-		if paths := manifest.ResolvePaths(entry, targetOS, wineprefix); len(paths) > 0 {
+		if paths := manifest.ResolvePaths(entry, targetOS, wineprefix, ""); len(paths) > 0 {
 			basePaths = paths
 			source = "manifest"
 			if entry.Steam != nil {
