@@ -7,8 +7,10 @@ import (
 	"fmt"
 )
 
-// readExeVersion reads the FileVersion from a Windows PE executable's
+// readExeVersion reads the ProductVersion from a Windows PE executable's
 // VS_VERSION_INFO resource. Works on any OS by parsing the binary directly.
+// ProductVersion is preferred over FileVersion because many engines (LÖVE, Unity, etc.)
+// set FileVersion to the engine/framework version rather than the game version.
 // Returns "" if no version can be determined.
 func readExeVersion(exePath string) string {
 	f, err := pe.Open(exePath)
@@ -36,32 +38,41 @@ func readExeVersion(exePath string) string {
 }
 
 // parseVersionFromRSRC searches for the VS_FIXEDFILEINFO magic (0xFEEF04BD) within
-// a .rsrc section blob and extracts the FileVersion from the fixed info block.
+// a .rsrc section blob and extracts the ProductVersion from the fixed info block.
+//
+// VS_FIXEDFILEINFO layout (all DWORD = 4 bytes, little-endian):
+//
+//	+0  dwSignature       0xFEEF04BD
+//	+4  dwStrucVersion
+//	+8  dwFileVersionMS
+//	+12 dwFileVersionLS
+//	+16 dwProductVersionMS   major<<16 | minor
+//	+20 dwProductVersionLS   patch<<16 | build
 func parseVersionFromRSRC(data []byte) string {
 	// VS_FIXEDFILEINFO signature in little-endian
 	magic := []byte{0xBD, 0x04, 0xEF, 0xFE}
 	idx := bytes.Index(data, magic)
-	if idx < 0 {
+	if idx < 0 || idx+24 > len(data) {
 		return ""
 	}
 
-	// Layout after the magic:
-	//   +0  dwSignature       (4 bytes) ← we're here
-	//   +4  dwStrucVersion    (4 bytes)
-	//   +8  dwFileVersionMS   (4 bytes) — major<<16 | minor
-	//   +12 dwFileVersionLS   (4 bytes) — patch<<16 | build
-	const fixedInfoSize = 4 + 4 + 4 + 4 // sig + strucVer + MS + LS
-	if idx+fixedInfoSize > len(data) {
-		return ""
+	productMS := binary.LittleEndian.Uint32(data[idx+16:])
+	productLS := binary.LittleEndian.Uint32(data[idx+20:])
+
+	major := productMS >> 16
+	minor := productMS & 0xFFFF
+	patch := productLS >> 16
+	build := productLS & 0xFFFF
+
+	// Fall back to FileVersion if ProductVersion is all zeros
+	if major == 0 && minor == 0 {
+		fileMS := binary.LittleEndian.Uint32(data[idx+8:])
+		fileLS := binary.LittleEndian.Uint32(data[idx+12:])
+		major = fileMS >> 16
+		minor = fileMS & 0xFFFF
+		patch = fileLS >> 16
+		build = fileLS & 0xFFFF
 	}
-
-	ms := binary.LittleEndian.Uint32(data[idx+8:])
-	ls := binary.LittleEndian.Uint32(data[idx+12:])
-
-	major := ms >> 16
-	minor := ms & 0xFFFF
-	patch := ls >> 16
-	build := ls & 0xFFFF
 
 	if major == 0 && minor == 0 {
 		return ""
