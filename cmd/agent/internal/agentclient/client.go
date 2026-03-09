@@ -518,6 +518,14 @@ func runInstallerSilent(installerPath, wineprefix, gameTitle string, logLine fun
 		}
 		args := append(silentFlags, `/DIR=C:\Games\`+safeName(gameTitle))
 		cmd = runner.RunWith(installerPath, wineprefix, args...)
+		// Wine needs a display driver even for silent installs (explorer.exe creates windows).
+		// If XAUTHORITY is not set, auto-detect it from /run/user/<uid>/ (Steam Deck / Linux sessions).
+		if os.Getenv("XAUTHORITY") == "" {
+			if xauth := findXauthority(); xauth != "" {
+				log.Printf("[Agent] Auto-detected XAUTHORITY: %s", xauth)
+				cmd.Env = append(cmd.Env, "XAUTHORITY="+xauth)
+			}
+		}
 	}
 
 	pr, pw := io.Pipe()
@@ -1789,6 +1797,24 @@ func safeName(title string) string {
 		}
 	}
 	return b.String()
+}
+
+// findXauthority returns the path to the X authority file for the current user session.
+// On Linux, desktop sessions store a random xauth_* file in /run/user/<uid>/.
+// This allows Wine installers (which need a display driver) to connect to X from a
+// background service that doesn't inherit the session's XAUTHORITY env var.
+func findXauthority() string {
+	xauthDir := fmt.Sprintf("/run/user/%d", os.Getuid())
+	entries, err := os.ReadDir(xauthDir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "xauth") {
+			return filepath.Join(xauthDir, e.Name())
+		}
+	}
+	return ""
 }
 
 func homeDir() string {
