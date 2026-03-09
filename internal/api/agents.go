@@ -376,7 +376,10 @@ func (h *Handler) ReportInstalledGames(w http.ResponseWriter, r *http.Request) {
 	h.publishAgentList()
 	log.Printf("[Agent] Received %d installed games from %s", len(games), agentID)
 
-	// Persist detected versions to DB
+	// Persist detected versions to DB.
+	// Only update if no version is currently stored — the release-name parse
+	// at download time has higher priority and must not be overwritten by
+	// less reliable agent-side detection (PE exe, version files).
 	for _, ig := range games {
 		if ig.Version == "" {
 			continue
@@ -385,7 +388,7 @@ func (h *Handler) ReportInstalledGames(w http.ResponseWriter, r *http.Request) {
 		if err != nil || game == nil {
 			continue
 		}
-		if game.CurrentVersion != ig.Version {
+		if game.CurrentVersion == "" {
 			_ = h.repo.UpdateGameVersion(game.ID, ig.Version)
 		}
 	}
