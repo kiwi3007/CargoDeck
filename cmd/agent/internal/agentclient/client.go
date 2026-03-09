@@ -1219,7 +1219,11 @@ func (c *Client) scanInstalledGames() {
 					}
 				}
 			}
-			// Fallback: read FileVersion from the exe's PE resource block.
+			// Engine-specific metadata files (GOG, Ren'Py, RPG Maker, Electron/ASAR).
+			if version == "" && exePath != "" {
+				version = readEngineVersion(filepath.Dir(exePath))
+			}
+			// Fallback: read ProductVersion from the exe's PE resource block.
 			if version == "" && exePath != "" {
 				version = readExeVersion(exePath)
 			}

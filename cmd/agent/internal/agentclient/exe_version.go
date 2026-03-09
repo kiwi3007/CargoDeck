@@ -10,6 +10,206 @@ import (
 	"strings"
 )
 
+// readEngineVersion attempts version detection using engine-specific metadata files.
+// This is called before the PE exe fallback and covers GOG, Ren'Py, RPG Maker, Electron.
+func readEngineVersion(dir string) string {
+	if v := readGOGVersion(dir); v != "" {
+		return v
+	}
+	if v := readRenpyVersion(dir); v != "" {
+		return v
+	}
+	if v := readRPGMakerVersion(dir); v != "" {
+		return v
+	}
+	if v := readPackageJSONVersion(dir); v != "" {
+		return v
+	}
+	return ""
+}
+
+// readGOGVersion reads version from GOG's goggame-*.info JSON file.
+func readGOGVersion(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasPrefix(name, "goggame-") && strings.HasSuffix(name, ".info") {
+			data, err := os.ReadFile(filepath.Join(dir, name))
+			if err != nil {
+				continue
+			}
+			if v := jsonStringField(data, "version"); v != "" {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
+// readRenpyVersion reads version from Ren'Py game/version.txt or renpy/version.txt.
+func readRenpyVersion(dir string) string {
+	for _, rel := range []string{
+		filepath.Join("game", "version.txt"),
+		filepath.Join("renpy", "version.txt"),
+	} {
+		data, err := os.ReadFile(filepath.Join(dir, rel))
+		if err != nil {
+			continue
+		}
+		// Format: "Ren'Py 8.1.3.23091102" or just "1.0.0"
+		line := strings.TrimSpace(strings.SplitN(string(data), "\n", 2)[0])
+		if line != "" {
+			// Strip "Ren'Py <enginever>" prefix if present — that's the engine, not game
+			if strings.HasPrefix(line, "Ren'Py ") || strings.HasPrefix(line, "RenPy ") {
+				return ""
+			}
+			return line
+		}
+	}
+	return ""
+}
+
+// readRPGMakerVersion reads gameVersion from RPG Maker MV/MZ Data/System.json.
+func readRPGMakerVersion(dir string) string {
+	for _, rel := range []string{
+		filepath.Join("Data", "System.json"),
+		filepath.Join("www", "data", "System.json"),
+	} {
+		data, err := os.ReadFile(filepath.Join(dir, rel))
+		if err != nil {
+			continue
+		}
+		if v := jsonStringField(data, "gameVersion"); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// readPackageJSONVersion reads version from an Electron/Node app's package.json.
+// Checks resources/app/package.json, www/package.json, and root package.json.
+// Also checks resources/app.asar if present.
+func readPackageJSONVersion(dir string) string {
+	for _, rel := range []string{
+		filepath.Join("resources", "app", "package.json"),
+		filepath.Join("www", "package.json"),
+		"package.json",
+	} {
+		data, err := os.ReadFile(filepath.Join(dir, rel))
+		if err != nil {
+			continue
+		}
+		if v := jsonStringField(data, "version"); v != "" {
+			return v
+		}
+	}
+	// Try ASAR archive
+	asarPath := filepath.Join(dir, "resources", "app.asar")
+	if v := readASARVersion(asarPath); v != "" {
+		return v
+	}
+	return ""
+}
+
+// readASARVersion extracts package.json from an Electron ASAR archive and reads "version".
+// ASAR format: [uint32=4][uint32=H][uint32=H][H bytes: JSON file index][file data...]
+// The JSON file index is {"files":{"package.json":{"offset":"0","size":N},...}}
+func readASARVersion(asarPath string) string {
+	f, err := os.Open(asarPath)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	// Read 16-byte header: 4×uint32 little-endian
+	var hdr [16]byte
+	if _, err := f.Read(hdr[:]); err != nil {
+		return ""
+	}
+	// hdr[0..3] = 4 (pickle header size marker)
+	// hdr[4..7] = archive header size (includes the next 2 uint32s)
+	// hdr[8..11] = same value again
+	// hdr[12..15] = JSON header size
+	jsonSize := binary.LittleEndian.Uint32(hdr[12:])
+	if jsonSize == 0 || jsonSize > 4*1024*1024 {
+		return "" // sanity limit 4MB
+	}
+	jsonData := make([]byte, jsonSize)
+	if _, err := f.Read(jsonData); err != nil {
+		return ""
+	}
+
+	// Find package.json entry: {"offset":"<N>","size":<M>}
+	needle := []byte(`"package.json"`)
+	idx := bytes.Index(jsonData, needle)
+	if idx < 0 {
+		return ""
+	}
+	entry := jsonData[idx+len(needle):]
+
+	offsetStr := jsonStringField(entry, "offset")
+	sizeVal := jsonIntField(entry, "size")
+	if offsetStr == "" || sizeVal <= 0 || sizeVal > 1024*1024 {
+		return ""
+	}
+	fileOffset := int64(0)
+	for _, ch := range offsetStr {
+		if ch < '0' || ch > '9' {
+			return ""
+		}
+		fileOffset = fileOffset*10 + int64(ch-'0')
+	}
+
+	// Data section starts after 16-byte header + jsonSize bytes
+	dataStart := int64(16) + int64(jsonSize)
+	pkgData := make([]byte, sizeVal)
+	if _, err := f.ReadAt(pkgData, dataStart+fileOffset); err != nil {
+		return ""
+	}
+	return jsonStringField(pkgData, "version")
+}
+
+// jsonStringField extracts a simple string value from JSON like {"key": "value"}.
+// Returns "" if the key is not found or value is not a string.
+func jsonStringField(data []byte, key string) string {
+	needle := []byte(`"` + key + `"`)
+	idx := bytes.Index(data, needle)
+	if idx < 0 {
+		return ""
+	}
+	rest := data[idx+len(needle):]
+	// Skip whitespace and colon
+	i := 0
+	for i < len(rest) && (rest[i] == ' ' || rest[i] == '\t' || rest[i] == ':' || rest[i] == '\n' || rest[i] == '\r') {
+		i++
+	}
+	if i >= len(rest) || rest[i] != '"' {
+		return ""
+	}
+	i++ // skip opening quote
+	var buf []byte
+	for i < len(rest) {
+		ch := rest[i]
+		if ch == '"' {
+			break
+		}
+		if ch == '\\' && i+1 < len(rest) {
+			i++
+			buf = append(buf, rest[i])
+		} else {
+			buf = append(buf, ch)
+		}
+		i++
+	}
+	return strings.TrimSpace(string(buf))
+}
+
 // readExeVersion attempts to determine a game version from an installed game exe.
 // It first tries engine-specific known-safe locations, then falls back to the
 // PE ProductVersion resource (skipped for engines where it reflects the runtime,
