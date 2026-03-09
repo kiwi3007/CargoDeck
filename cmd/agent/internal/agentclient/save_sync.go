@@ -172,6 +172,7 @@ type SaveWatcher struct {
 
 type watchedSaveGame struct {
 	title     string
+	gameID    int
 	scriptDir string   // ~/Games/{safeName}/ — watched for exit marker
 	saveDirs  []string // resolved from Ludusavi manifest
 }
@@ -244,11 +245,11 @@ func (sw *SaveWatcher) UpdateGames(titles []string, scriptDirs map[string]string
 
 		// Fetch latest save paths from server (releases the lock during HTTP call)
 		sw.mu.Unlock()
-		saveDirs := sw.client.fetchSavePaths(title, scriptDir)
+		saveDirs, gameID := sw.client.fetchSavePaths(title, scriptDir)
 		sw.mu.Lock()
 
 		existing := sw.games[sn]
-		game := &watchedSaveGame{title: title, scriptDir: scriptDir, saveDirs: saveDirs}
+		game := &watchedSaveGame{title: title, gameID: gameID, scriptDir: scriptDir, saveDirs: saveDirs}
 		sw.games[sn] = game
 
 		// Remove watches for directories that are no longer in the list
@@ -268,16 +269,20 @@ func (sw *SaveWatcher) UpdateGames(titles []string, scriptDirs map[string]string
 			}
 		}
 
-		// Watch each save directory (fsnotify.Add is idempotent for already-watched paths)
+		// Watch each save directory recursively (fsnotify.Add is idempotent).
+		// We must recurse because fsnotify does not watch subdirectories automatically.
 		for _, dir := range saveDirs {
 			_ = os.MkdirAll(dir, 0755)
-			if err := sw.watcher.Add(dir); err != nil {
-				log.Printf("[Saves] Cannot watch save dir %s: %v", dir, err)
-			}
+			sw.addWatchRecursive(dir)
 		}
 
 		if existing == nil && len(saveDirs) > 0 {
 			log.Printf("[Saves] Watching %q: %v", title, saveDirs)
+			// Newly discovered game: restore latest save from server if local dirs are empty.
+			// This ensures saves are present before the first launch.
+			if gameID > 0 {
+				go sw.client.tryPreRestoreSave(gameID, title, saveDirs)
+			}
 		} else if existing != nil && !equalStringSlices(existing.saveDirs, saveDirs) {
 			log.Printf("[Saves] Updated watches for %q: %v", title, saveDirs)
 		}
@@ -293,10 +298,33 @@ func (sw *SaveWatcher) unwatchLocked(g *watchedSaveGame) {
 	}
 }
 
+// addWatchRecursive adds a watch for dir and all existing subdirectories.
+// fsnotify does not recurse automatically, so saves nested in subdirectories
+// would be missed without this.
+func (sw *SaveWatcher) addWatchRecursive(dir string) {
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || !info.IsDir() {
+			return nil
+		}
+		if err := sw.watcher.Add(path); err != nil {
+			log.Printf("[Saves] Cannot watch %s: %v", path, err)
+		}
+		return nil
+	})
+}
+
 // handleEvent processes an inotify event.
 func (sw *SaveWatcher) handleEvent(event fsnotify.Event) {
 	if event.Op == fsnotify.Remove || event.Op == fsnotify.Rename {
 		return
+	}
+
+	// If a new directory appeared, add it to the watcher immediately so that
+	// save files written inside it are captured (fsnotify is non-recursive).
+	if event.Op&fsnotify.Create != 0 {
+		if fi, err := os.Stat(event.Name); err == nil && fi.IsDir() {
+			_ = sw.watcher.Add(event.Name)
+		}
 	}
 
 	sw.mu.Lock()
@@ -322,6 +350,21 @@ func (sw *SaveWatcher) handleEvent(event fsnotify.Event) {
 			}
 		}
 	}
+}
+
+// TriggerUpload schedules an immediate save upload for the named game.
+// Used when the server sends an UPLOAD_SAVE event.
+func (sw *SaveWatcher) TriggerUpload(title string) {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+
+	sn := safeName(title)
+	if sw.games[sn] == nil {
+		log.Printf("[Saves] TriggerUpload: %q not in watch list — ignoring", title)
+		return
+	}
+	log.Printf("[Saves] TriggerUpload: queuing immediate upload for %q", title)
+	sw.scheduleUploadLocked(sn, 0)
 }
 
 // scheduleUploadLocked resets the debounce timer. delay=0 fires immediately.
@@ -360,7 +403,7 @@ func (sw *SaveWatcher) scheduleUploadLocked(sn string, delay time.Duration) {
 
 // ---- fetchSavePaths asks the server for save directories for a game ----
 
-func (c *Client) fetchSavePaths(title, scriptDir string) []string {
+func (c *Client) fetchSavePaths(title, scriptDir string) ([]string, int) {
 	targetOS := runtime.GOOS
 	if targetOS == "darwin" {
 		targetOS = "mac"
@@ -383,25 +426,58 @@ func (c *Client) fetchSavePaths(title, scriptDir string) []string {
 	reqURL := c.cfg.ServerURL + "/api/v3/save/paths?" + q.Encode()
 	req, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
-		return nil
+		return nil, 0
 	}
 	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil
+		return nil, 0
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil
+		return nil, 0
 	}
 
-	var paths []string
-	if err := json.NewDecoder(resp.Body).Decode(&paths); err != nil {
-		return nil
+	var result struct {
+		Paths  []string `json:"paths"`
+		GameID int      `json:"gameId"`
 	}
-	return paths
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, 0
+	}
+	return result.Paths, result.GameID
+}
+
+// tryPreRestoreSave restores the latest server snapshot into saveDirs if — and only if —
+// the local save directories are currently empty. This runs after a game is first
+// discovered (e.g. just installed) so that existing saves are present before launch.
+func (c *Client) tryPreRestoreSave(gameID int, title string, saveDirs []string) {
+	for _, dir := range saveDirs {
+		if dirHasFiles(dir) {
+			log.Printf("[Saves] Pre-restore skipped for %q: existing local saves found in %s", title, dir)
+			return
+		}
+	}
+	log.Printf("[Saves] Pre-restore: checking server for saves for %q (game %d)...", title, gameID)
+	c.restoreLatestSave(gameID, title)
+}
+
+// dirHasFiles reports whether dir contains any files (recursively).
+func dirHasFiles(dir string) bool {
+	found := false
+	_ = filepath.Walk(dir, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
 }
 
 // detectWineprefix parses WINEPREFIX or STEAM_COMPAT_DATA_PATH from a run.sh.

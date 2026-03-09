@@ -422,6 +422,34 @@ func (h *Handler) DispatchRestoreSave(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"message": "restore requested"})
 }
 
+// ---- Dispatch upload-save job ----
+
+// DispatchUploadSave tells an agent to immediately upload its current saves for a game.
+// POST /api/v3/agent/{agentId}/upload-save
+// Body: {"title": "Game Title"}
+func (h *Handler) DispatchUploadSave(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentId")
+	if _, ok := h.agentRegistry.Get(agentID); !ok {
+		jsonErr(w, 404, "agent not found")
+		return
+	}
+	var req struct {
+		Title string `json:"title"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	if req.Title == "" {
+		jsonErr(w, 400, "title is required")
+		return
+	}
+	data, _ := json.Marshal(req)
+	h.agentBroker.Send(agentID, "UPLOAD_SAVE", string(data))
+	log.Printf("[Agent] Dispatched UPLOAD_SAVE %q → %s", req.Title, agentID)
+	jsonOK(w, map[string]string{"message": "upload requested"})
+}
+
 // ---- Dispatch change-exe job ----
 
 func (h *Handler) DispatchChangeExe(w http.ResponseWriter, r *http.Request) {

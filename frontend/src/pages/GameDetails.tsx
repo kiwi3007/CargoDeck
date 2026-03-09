@@ -904,6 +904,17 @@ const GameDetails: React.FC = () => {
     }
   };
 
+  const handleUploadFromAgent = async (agentId: string) => {
+    if (!game) return;
+    try {
+      await axios.post(`/api/v3/agent/${agentId}/upload-save`, { title: game.title });
+      setNotification({ message: 'Upload requested — saves will appear in Snapshots shortly.', type: 'success' });
+      setTimeout(() => loadSaveSnapshots(), 5000);
+    } catch (err: any) {
+      setNotification({ message: 'Upload failed: ' + (err.response?.data?.error || err.message), type: 'error' });
+    }
+  };
+
   const handleSearchTorrents = async (overrideTerm?: string) => {
     if (!game) return;
     setSearching(true);
@@ -1612,27 +1623,55 @@ const GameDetails: React.FC = () => {
             )}
           </div>
 
-          {/* Restore to Device */}
-          {agents.filter(a => a.status === 'online').length > 0 && saveSnapshots.length > 0 && (
-            <div style={{ marginTop: '1rem' }}>
-              <div className="saves-header">
-                <span className="saves-title">Restore Latest to Device</span>
+          {/* Sync saves between devices */}
+          {(() => {
+            const agentsWithGame = agents.filter(a =>
+              a.status === 'online' && a.installedGames?.some(g => agentTitleMatches(g.title, game.title))
+            );
+            if (agentsWithGame.length === 0) return null;
+            return (
+              <div style={{ marginTop: '1rem' }}>
+                <div className="saves-header">
+                  <span className="saves-title">Sync Saves</span>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '0.5rem', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ color: 'var(--text-muted, #888)' }}>
+                      <th style={{ textAlign: 'left', padding: '0.25rem 0.5rem', fontWeight: 500 }}>Device</th>
+                      <th style={{ textAlign: 'right', padding: '0.25rem 0.5rem', fontWeight: 500 }}>Upload to server</th>
+                      <th style={{ textAlign: 'right', padding: '0.25rem 0.5rem', fontWeight: 500 }}>Restore from server</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {agentsWithGame.map(a => (
+                      <tr key={a.id}>
+                        <td style={{ padding: '0.3rem 0.5rem' }}>{a.name}</td>
+                        <td style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>
+                          <button
+                            className="saves-restore-btn"
+                            onClick={() => handleUploadFromAgent(a.id)}
+                            title={`Upload current saves from ${a.name} to the server`}
+                          >
+                            ↑ Upload
+                          </button>
+                        </td>
+                        <td style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>
+                          <button
+                            className="saves-restore-btn"
+                            disabled={!!restoringOnAgent[a.id] || saveSnapshots.length === 0}
+                            onClick={() => handleRestoreOnAgent(a.id)}
+                            title={saveSnapshots.length === 0 ? 'No snapshots on server yet' : `Restore latest save to ${a.name}`}
+                          >
+                            {restoringOnAgent[a.id] ? '...' : '↓ Restore'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
-                {agents.filter(a => a.status === 'online').map(agent => (
-                  <button
-                    key={agent.id}
-                    className="saves-restore-btn"
-                    disabled={!!restoringOnAgent[agent.id]}
-                    onClick={() => handleRestoreOnAgent(agent.id)}
-                    title={`Restore latest save to ${agent.name}`}
-                  >
-                    {restoringOnAgent[agent.id] ? '...' : `↩ ${agent.name}`}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Snapshots */}
           <div className="saves-header" style={{ marginTop: '1rem' }}>

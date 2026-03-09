@@ -72,7 +72,14 @@ func (h *Handler) GetSavePaths(w http.ResponseWriter, r *http.Request) {
 		customPath = game.SavePath // legacy global path
 	}
 
-	jsonOK(w, dedupePaths(prependIfNonEmpty(customPath, basePaths)))
+	gameID := 0
+	if game != nil {
+		gameID = game.ID
+	}
+	jsonOK(w, map[string]any{
+		"paths":  dedupePaths(prependIfNonEmpty(customPath, basePaths)),
+		"gameId": gameID,
+	})
 }
 
 // ---- POST /api/v3/save/snapshot ----

@@ -244,6 +244,17 @@ func (c *Client) listenSSE() error {
 						go c.restoreLatestSave(req.GameID, req.Title)
 					}
 				}
+			case "UPLOAD_SAVE":
+				if dataLine != "" && c.saveWatcher != nil {
+					var req struct {
+						Title string `json:"title"`
+					}
+					if err := json.Unmarshal([]byte(dataLine), &req); err != nil {
+						log.Printf("[Agent] Bad UPLOAD_SAVE JSON: %v", err)
+					} else {
+						go c.saveWatcher.TriggerUpload(req.Title)
+					}
+				}
 			case "CHANGE_EXE":
 				if dataLine != "" {
 					var req struct {

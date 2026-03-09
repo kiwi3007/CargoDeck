@@ -241,6 +241,7 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Post("/{agentId}/change-exe", h.DispatchChangeExe)
 		r.Post("/{agentId}/restart-steam", h.DispatchRestartSteam)
 		r.Post("/{agentId}/restore-save", h.DispatchRestoreSave)
+		r.Post("/{agentId}/upload-save", h.DispatchUploadSave)
 		r.Post("/{agentId}/rename-prefix", h.DispatchRenamePrefix)
 
 		// Agent-authenticated callbacks
