@@ -866,6 +866,7 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars, proton
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
 				"export STEAM_COMPAT_DATA_PATH=%q\n"+
 				"export STEAM_COMPAT_CLIENT_INSTALL_PATH=%q\n"+
+				"export STEAM_COMPAT_APP_ID=0\n"+
 				"export PROTON_LOG=1\n"+
 				envVarsBlock+
 				"%q run %q"+argsSuffix+" \"$@\" >> \"$LOG\" 2>&1\n"+
