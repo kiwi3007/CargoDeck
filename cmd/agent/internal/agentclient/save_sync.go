@@ -358,17 +358,48 @@ func (sw *SaveWatcher) handleEvent(event fsnotify.Event) {
 
 // TriggerUpload schedules an immediate save upload for the named game.
 // Used when the server sends an UPLOAD_SAVE event.
+// Always fetches save paths fresh from the server so a manual upload works
+// even if the cached save dirs are stale or empty.
 func (sw *SaveWatcher) TriggerUpload(title string) {
-	sw.mu.Lock()
-	defer sw.mu.Unlock()
-
 	sn := safeName(title)
-	if sw.games[sn] == nil {
-		log.Printf("[Saves] TriggerUpload: %q not in watch list — ignoring", title)
+
+	// Fetch fresh save paths regardless of cache state.
+	// Use the cached scriptDir if available so wineprefix detection still works.
+	sw.mu.Lock()
+	existing := sw.games[sn]
+	scriptDir := ""
+	if existing != nil {
+		scriptDir = existing.scriptDir
+	}
+	sw.mu.Unlock()
+
+	saveDirs, gameID := sw.client.fetchSavePaths(title, scriptDir)
+	log.Printf("[Saves] TriggerUpload %q: gameID=%d saveDirs=%v", title, gameID, saveDirs)
+
+	if len(saveDirs) == 0 {
+		log.Printf("[Saves] TriggerUpload: no save dirs for %q — cannot upload", title)
 		return
 	}
-	log.Printf("[Saves] TriggerUpload: queuing immediate upload for %q", title)
+
+	// Update the cached entry so the file watcher is also consistent.
+	sw.mu.Lock()
+	if existing != nil {
+		sw.games[sn] = &watchedSaveGame{
+			title:     existing.title,
+			gameID:    gameID,
+			scriptDir: existing.scriptDir,
+			saveDirs:  saveDirs,
+		}
+	} else {
+		sw.games[sn] = &watchedSaveGame{
+			title:    title,
+			gameID:   gameID,
+			scriptDir: scriptDir,
+			saveDirs: saveDirs,
+		}
+	}
 	sw.scheduleUploadLocked(sn, 0)
+	sw.mu.Unlock()
 }
 
 // scheduleUploadLocked resets the debounce timer. delay=0 fires immediately.
@@ -525,7 +556,7 @@ func (c *Client) uploadSaves(g *watchedSaveGame) {
 		return
 	}
 
-	log.Printf("[Saves] Building snapshot for %q (%d save dirs)...", g.title, len(g.saveDirs))
+	log.Printf("[Saves] Building snapshot for %q: %v", g.title, g.saveDirs)
 
 	var buf bytes.Buffer
 	gzw := gzip.NewWriter(&buf)
