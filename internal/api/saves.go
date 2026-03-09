@@ -155,6 +155,9 @@ func (h *Handler) UploadSaveSnapshot(w http.ResponseWriter, r *http.Request) {
 	size := dirSizeBytes(snapshotDir)
 	log.Printf("[Saves] Snapshot saved: game=%d agent=%s title=%q ts=%s size=%d", gameID, agentID, title, timestamp, size)
 
+	// Prune old snapshots for this agent, keeping only the most recent N.
+	pruneOldSnapshots(savesDir, 10)
+
 	// Post-upload: conflict detection + auto-sync to other agents
 	if gameID != 0 {
 		go h.postSnapshotSync(gameID, title, agentID, prevLatestAgentID)
@@ -691,6 +694,41 @@ func copySnapshotDir(src, dst string) error {
 		_, err = io.Copy(out, in)
 		return err
 	})
+}
+
+// pruneOldSnapshots deletes the oldest snapshot directories in agentSavesDir,
+// keeping only the most recent `keep` entries. Silently ignores errors.
+func pruneOldSnapshots(agentSavesDir string, keep int) {
+	entries, err := os.ReadDir(agentSavesDir)
+	if err != nil {
+		return
+	}
+	type tsEntry struct {
+		name string
+		ts   time.Time
+	}
+	var valid []tsEntry
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		ts, err := time.Parse("2006-01-02T15-04-05Z", e.Name())
+		if err != nil {
+			continue
+		}
+		valid = append(valid, tsEntry{e.Name(), ts})
+	}
+	if len(valid) <= keep {
+		return
+	}
+	// Sort oldest-first, then remove all but the newest `keep`.
+	sort.Slice(valid, func(i, j int) bool { return valid[i].ts.Before(valid[j].ts) })
+	for _, e := range valid[:len(valid)-keep] {
+		path := filepath.Join(agentSavesDir, e.name)
+		if err := os.RemoveAll(path); err == nil {
+			log.Printf("[Saves] Pruned old snapshot: %s", path)
+		}
+	}
 }
 
 // dedupePaths returns paths with empty strings removed and duplicates eliminated,

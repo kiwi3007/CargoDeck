@@ -635,7 +635,7 @@ func applyCrack(srcDir, gameInstallDir string) {
 	if gameInstallDir == "" {
 		return
 	}
-	crackNames := []string{"Crack", "crack", "SKIDROW", "CODEX", "CPY", "EMPRESS", "Crk"}
+	crackNames := []string{"Crack", "crack", "SKIDROW", "CODEX", "CPY", "EMPRESS", "Crk", "RUNE", "DODI", "FLT", "PLAZA", "RELOADED", "RAZOR", "UNLEASHED", "GOG"}
 	_ = filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || !info.IsDir() {
 			return nil

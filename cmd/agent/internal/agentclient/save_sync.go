@@ -68,6 +68,10 @@ func (c *Client) restoreLatestSave(gameID int, title string) {
 		return
 	}
 
+	// Suppress upload events for restoreSuppressDuration so that writing these
+	// files doesn't immediately trigger a new snapshot (which would cause a false conflict).
+	c.saveWatcher.SuppressUploads(title)
+
 	// Extract tar.gz into a temp directory
 	tmpDir, err := os.MkdirTemp("", "playerr-restore-*")
 	if err != nil {
@@ -200,10 +204,11 @@ type SaveWatcher struct {
 	client  *Client
 	watcher *fsnotify.Watcher
 
-	mu        sync.Mutex
-	games     map[string]*watchedSaveGame // safeName → game
-	timers    map[string]*time.Timer      // safeName → debounce timer
-	uploading map[string]bool             // safeName → in-flight upload
+	mu           sync.Mutex
+	games        map[string]*watchedSaveGame // safeName → game
+	timers       map[string]*time.Timer      // safeName → debounce timer
+	uploading    map[string]bool             // safeName → in-flight upload
+	restoredAt   map[string]time.Time        // safeName → last restore time (suppresses post-restore uploads)
 }
 
 type watchedSaveGame struct {
@@ -222,11 +227,12 @@ func newSaveWatcher(c *Client) *SaveWatcher {
 		return nil
 	}
 	return &SaveWatcher{
-		client:    c,
-		watcher:   w,
-		games:     make(map[string]*watchedSaveGame),
-		timers:    make(map[string]*time.Timer),
-		uploading: make(map[string]bool),
+		client:      c,
+		watcher:     w,
+		games:       make(map[string]*watchedSaveGame),
+		timers:      make(map[string]*time.Timer),
+		uploading:   make(map[string]bool),
+		restoredAt:  make(map[string]time.Time),
 	}
 }
 
@@ -437,6 +443,23 @@ func (sw *SaveWatcher) TriggerUpload(title string) {
 	sw.mu.Unlock()
 }
 
+// restoreSuppressDuration is how long to suppress uploads after a RESTORE_SAVE,
+// preventing the restored files from triggering a spurious upload (and false conflict).
+const restoreSuppressDuration = 120 * time.Second
+
+// SuppressUploads marks the game as recently restored so that file-change events
+// caused by the restore itself don't trigger a new upload.
+func (sw *SaveWatcher) SuppressUploads(title string) {
+	sw.mu.Lock()
+	sw.restoredAt[safeName(title)] = time.Now()
+	// Cancel any pending debounce timer so the restore writes don't fire it.
+	if t, ok := sw.timers[safeName(title)]; ok {
+		t.Stop()
+		delete(sw.timers, safeName(title))
+	}
+	sw.mu.Unlock()
+}
+
 // scheduleUploadLocked resets the debounce timer. delay=0 fires immediately.
 // Must be called with sw.mu held.
 func (sw *SaveWatcher) scheduleUploadLocked(sn string, delay time.Duration) {
@@ -447,6 +470,11 @@ func (sw *SaveWatcher) scheduleUploadLocked(sn string, delay time.Duration) {
 	if game == nil {
 		return
 	}
+	// Suppress uploads for restoreSuppressDuration after a RESTORE_SAVE to avoid
+	// false conflicts caused by fsnotify seeing the restored files as local changes.
+	if rt, ok := sw.restoredAt[sn]; ok && time.Since(rt) < restoreSuppressDuration {
+		return
+	}
 	// If an upload is in progress, back off and retry
 	if sw.uploading[sn] {
 		delay = 10 * time.Second
@@ -454,6 +482,11 @@ func (sw *SaveWatcher) scheduleUploadLocked(sn string, delay time.Duration) {
 	sw.timers[sn] = time.AfterFunc(delay, func() {
 		sw.mu.Lock()
 		if sw.uploading[sn] {
+			sw.mu.Unlock()
+			return
+		}
+		// Re-check suppression when the timer fires (restore may have arrived mid-debounce)
+		if rt, ok := sw.restoredAt[sn]; ok && time.Since(rt) < restoreSuppressDuration {
 			sw.mu.Unlock()
 			return
 		}
