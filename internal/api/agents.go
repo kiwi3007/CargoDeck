@@ -296,6 +296,8 @@ func (h *Handler) DispatchInstall(w http.ResponseWriter, r *http.Request) {
 	serverURL := resolveServerURL(r)
 	jobID := fmt.Sprintf("%d-%d", req.GameID, time.Now().UnixMilli())
 
+	launchArgs, _ := h.repo.GetAgentLaunchArgs(req.GameID, agentID)
+
 	job := agent.InstallJob{
 		JobID:       jobID,
 		AgentID:     agentID,
@@ -305,6 +307,7 @@ func (h *Handler) DispatchInstall(w http.ResponseWriter, r *http.Request) {
 		ServerURL:   serverURL,
 		InstallDir:  req.InstallDir,
 		SelectedExe: req.SelectedExe,
+		LaunchArgs:  launchArgs,
 	}
 
 	if h.agentRegistry.HasActiveJobForGame(agentID, req.GameID) {

@@ -217,6 +217,59 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, updated)
 }
 
+// GetAgentLaunchArgs returns all per-device launch arg overrides for a game.
+// GET /api/v3/game/{id}/agent-launch-args → {agentId: launchArgs}
+func (h *Handler) GetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
+	id, err := paramInt(r, "id")
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+	result, err := h.repo.GetAllAgentLaunchArgs(id)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, result)
+}
+
+// SetAgentLaunchArgs upserts the launch args for one agent+game.
+// PATCH /api/v3/game/{id}/agent-launch-args  body: {agentId, launchArgs}
+func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
+	id, err := paramInt(r, "id")
+	if err != nil {
+		jsonErr(w, 400, "invalid id")
+		return
+	}
+	var req struct {
+		AgentID    string `json:"agentId"`
+		LaunchArgs string `json:"launchArgs"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	if req.AgentID == "" {
+		jsonErr(w, 400, "agentId required")
+		return
+	}
+	if err := h.repo.SetAgentLaunchArgs(id, req.AgentID, req.LaunchArgs); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	// Push SET_LAUNCH_ARGS to the agent so run.sh is updated without reinstalling.
+	type payload struct {
+		Title      string `json:"title"`
+		LaunchArgs string `json:"launchArgs"`
+	}
+	game, _ := h.repo.GetGameByID(id)
+	if game != nil {
+		data, _ := json.Marshal(payload{Title: game.Title, LaunchArgs: req.LaunchArgs})
+		h.agentBroker.Send(req.AgentID, "SET_LAUNCH_ARGS", string(data))
+	}
+	jsonOK(w, map[string]string{"message": "ok"})
+}
+
 func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	id, err := paramInt(r, "id")
 	if err != nil {

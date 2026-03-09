@@ -108,6 +108,10 @@ func (h *Handler) NewRouter() http.Handler {
 		// Manual update check for a single game
 		r.Post("/{id}/check-update", h.CheckGameUpdate)
 
+		// Per-device launch arguments
+		r.Get("/{id}/agent-launch-args", h.GetAgentLaunchArgs)
+		r.Patch("/{id}/agent-launch-args", h.SetAgentLaunchArgs)
+
 		// Bulk update check for all games with a known version
 		r.Post("/check-update", h.CheckAllUpdates)
 	})

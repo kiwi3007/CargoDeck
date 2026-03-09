@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { t as translate } from '../i18n/translations';
 import FolderExplorerModal from './FolderExplorerModal';
@@ -28,6 +28,23 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
     const [showFileExplorer, setShowFileExplorer] = useState(false);
     const [explorerMode, setExplorerMode] = useState<'install' | 'executable'>('install');
 
+    // Per-device launch args: agentId → launchArgs string
+    const [agents, setAgents] = useState<any[]>([]);
+    const [agentLaunchArgs, setAgentLaunchArgs] = useState<Record<string, string>>({});
+    const [savedAgentLaunchArgs, setSavedAgentLaunchArgs] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        if (!game.id) return;
+        Promise.all([
+            axios.get('/api/v3/agent'),
+            axios.get(`/api/v3/game/${game.id}/agent-launch-args`),
+        ]).then(([agentsRes, argsRes]) => {
+            setAgents(agentsRes.data || []);
+            setAgentLaunchArgs(argsRes.data || {});
+            setSavedAgentLaunchArgs(argsRes.data || {});
+        }).catch(() => {});
+    }, [game.id]);
+
     const t = (key: string) => translate(key as any, language as any);
 
     const handleSearch = async () => {
@@ -45,11 +62,11 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
         }
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const updates: any = {};
         if (selectedMetadata) {
             updates.igdbId = selectedMetadata.igdbId;
-            updates.title = selectedMetadata.title; // Optional: Update title immediately
+            updates.title = selectedMetadata.title;
         }
         if (installPath !== game.installPath) {
             updates.installPath = installPath;
@@ -57,6 +74,22 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
         if (executablePath !== game.executablePath) {
             updates.executablePath = executablePath;
         }
+
+        // Save changed per-device launch args
+        const changedArgs = Object.entries(agentLaunchArgs).filter(
+            ([agentId, args]) => args !== (savedAgentLaunchArgs[agentId] ?? '')
+        );
+        const removedArgs = Object.entries(savedAgentLaunchArgs).filter(
+            ([agentId]) => agentLaunchArgs[agentId] === undefined
+        );
+        await Promise.all([
+            ...changedArgs.map(([agentId, launchArgs]) =>
+                axios.patch(`/api/v3/game/${game.id}/agent-launch-args`, { agentId, launchArgs })
+            ),
+            ...removedArgs.map(([agentId]) =>
+                axios.patch(`/api/v3/game/${game.id}/agent-launch-args`, { agentId, launchArgs: '' })
+            ),
+        ]);
 
         onSave(updates);
     };
@@ -164,6 +197,40 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                             <p className="hint">
                                 {t('playPathHint') || 'Selecciona el archivo ejecutable del juego.'}
                             </p>
+
+                            {agents.length > 0 && (
+                                <>
+                                    <label style={{ marginTop: '16px', display: 'block' }}>Launch Arguments (per device):</label>
+                                    <p className="hint">Extra arguments appended to the game exe in run.sh, before {"\"$@\""}.</p>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '4px' }}>
+                                        <thead>
+                                            <tr>
+                                                <th style={{ textAlign: 'left', padding: '4px 8px', opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>Device</th>
+                                                <th style={{ textAlign: 'left', padding: '4px 8px', opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>Arguments</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {agents.map((agent: any) => (
+                                                <tr key={agent.id}>
+                                                    <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', opacity: 0.85 }}>{agent.name}</td>
+                                                    <td style={{ padding: '4px 8px', width: '100%' }}>
+                                                        <input
+                                                            type="text"
+                                                            value={agentLaunchArgs[agent.id] ?? ''}
+                                                            onChange={(e) => setAgentLaunchArgs(prev => ({
+                                                                ...prev,
+                                                                [agent.id]: e.target.value,
+                                                            }))}
+                                                            placeholder="e.g. --rendering-driver vulkan"
+                                                            style={{ width: '100%', fontFamily: 'monospace', boxSizing: 'border-box' }}
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>

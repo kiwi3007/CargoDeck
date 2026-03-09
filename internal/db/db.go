@@ -30,6 +30,14 @@ func Open(dbPath string) (*sql.DB, error) {
 	addColumnIfMissing(db, "Games", "current_version", "TEXT")
 	addColumnIfMissing(db, "Games", "latest_version", "TEXT")
 	addColumnIfMissing(db, "Games", "update_available", "INTEGER NOT NULL DEFAULT 0")
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS AgentGameLaunchArgs (
+		GameId  INTEGER NOT NULL,
+		AgentId TEXT    NOT NULL,
+		LaunchArgs TEXT NOT NULL,
+		PRIMARY KEY (GameId, AgentId)
+	)`); err != nil {
+		return nil, fmt.Errorf("create AgentGameLaunchArgs: %w", err)
+	}
 	return db, nil
 }
 
