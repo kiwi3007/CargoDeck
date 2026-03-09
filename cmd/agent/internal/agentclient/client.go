@@ -542,6 +542,14 @@ func runInstallerSilent(installerPath, wineprefix, gameTitle string, logLine fun
 		args := append(silentFlags, `/DIR=C:\Games\`+safeName(gameTitle))
 		cmd = runner.RunWith(installerPath, wineprefix, args...)
 		// Wine needs a display driver even for silent installs (explorer.exe creates windows).
+		// If DISPLAY is not set, auto-detect from /tmp/.X11-unix/ sockets (Steam Deck runs
+		// a gamescope X server that isn't inherited by systemd user services).
+		if os.Getenv("DISPLAY") == "" {
+			if disp := findDisplay(); disp != "" {
+				log.Printf("[Agent] Auto-detected DISPLAY: %s", disp)
+				cmd.Env = append(cmd.Env, "DISPLAY="+disp)
+			}
+		}
 		// If XAUTHORITY is not set, auto-detect it from /run/user/<uid>/ (Steam Deck / Linux sessions).
 		if os.Getenv("XAUTHORITY") == "" {
 			if xauth := findXauthority(); xauth != "" {
@@ -1945,7 +1953,8 @@ func safeName(title string) string {
 }
 
 // findXauthority returns the path to the X authority file for the current user session.
-// On Linux, desktop sessions store a random xauth_* file in /run/user/<uid>/.
+// On Linux, desktop sessions store a random xauth_* or iceauth_* file in /run/user/<uid>/.
+// Steam Deck (gamescope) uses iceauth_* instead of xauth_*.
 // This allows Wine installers (which need a display driver) to connect to X from a
 // background service that doesn't inherit the session's XAUTHORITY env var.
 func findXauthority() string {
@@ -1955,8 +1964,20 @@ func findXauthority() string {
 		return ""
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), "xauth") {
+		if strings.HasPrefix(e.Name(), "xauth") || strings.HasPrefix(e.Name(), "iceauth") {
 			return filepath.Join(xauthDir, e.Name())
+		}
+	}
+	return ""
+}
+
+// findDisplay detects an X11 display from /tmp/.X11-unix/ sockets.
+// Useful when running as a systemd service that doesn't inherit DISPLAY from the session.
+// Tries :0 first (most common), then :1.
+func findDisplay() string {
+	for _, n := range []string{"X0", "X1", "X2"} {
+		if _, err := os.Stat(filepath.Join("/tmp/.X11-unix", n)); err == nil {
+			return ":" + n[1:] // "X0" → ":0"
 		}
 	}
 	return ""
