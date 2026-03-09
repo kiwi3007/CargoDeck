@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -269,19 +270,22 @@ func (sw *SaveWatcher) UpdateGames(titles []string, scriptDirs map[string]string
 			}
 		}
 
-		// Watch each save directory recursively (fsnotify.Add is idempotent).
-		// We must recurse because fsnotify does not watch subdirectories automatically.
+		// Watch each save directory recursively. Unlock during the walk: filepath.Walk
+		// can be slow for large trees (e.g. Wine prefixes) and we don't access sw.*
+		// fields inside addWatchRecursive — only watcher.Add which is thread-safe.
+		sw.mu.Unlock()
 		for _, dir := range saveDirs {
 			_ = os.MkdirAll(dir, 0755)
 			sw.addWatchRecursive(dir)
 		}
+		sw.mu.Lock()
 
 		if existing == nil && len(saveDirs) > 0 {
 			log.Printf("[Saves] Watching %q: %v", title, saveDirs)
 			// Newly discovered game: restore latest save from server if local dirs are empty.
 			// This ensures saves are present before the first launch.
 			if gameID > 0 {
-				go sw.client.tryPreRestoreSave(gameID, title, saveDirs)
+				go sw.client.tryPreRestoreSave(gameID, title)
 			}
 		} else if existing != nil && !equalStringSlices(existing.saveDirs, saveDirs) {
 			log.Printf("[Saves] Updated watches for %q: %v", title, saveDirs)
@@ -450,10 +454,18 @@ func (c *Client) fetchSavePaths(title, scriptDir string) ([]string, int) {
 	return result.Paths, result.GameID
 }
 
-// tryPreRestoreSave restores the latest server snapshot into saveDirs if — and only if —
-// the local save directories are currently empty. This runs after a game is first
+// tryPreRestoreSave restores the latest server snapshot if — and only if —
+// the game's local save directories are currently empty. This runs after a game is first
 // discovered (e.g. just installed) so that existing saves are present before launch.
-func (c *Client) tryPreRestoreSave(gameID int, title string, saveDirs []string) {
+func (c *Client) tryPreRestoreSave(gameID int, title string) {
+	c.saveWatcher.mu.Lock()
+	game := c.saveWatcher.games[safeName(title)]
+	var saveDirs []string
+	if game != nil {
+		saveDirs = game.saveDirs
+	}
+	c.saveWatcher.mu.Unlock()
+
 	for _, dir := range saveDirs {
 		if dirHasFiles(dir) {
 			log.Printf("[Saves] Pre-restore skipped for %q: existing local saves found in %s", title, dir)
@@ -509,6 +521,7 @@ func detectWineprefix(scriptPath string) string {
 
 func (c *Client) uploadSaves(g *watchedSaveGame) {
 	if len(g.saveDirs) == 0 {
+		log.Printf("[Saves] Upload skipped for %q: no save dirs configured", g.title)
 		return
 	}
 
@@ -539,6 +552,11 @@ func (c *Client) uploadSaves(g *watchedSaveGame) {
 	q := url.Values{}
 	q.Set("agentId", c.agentID)
 	q.Set("title", g.title)
+	if g.gameID > 0 {
+		// Send the library game ID directly so the server doesn't have to match
+		// by title — avoids snapshots landing under gameId=0 if titles differ.
+		q.Set("gameId", strconv.Itoa(g.gameID))
+	}
 	uploadURL := fmt.Sprintf("%s/api/v3/save/snapshot?%s", c.cfg.ServerURL, q.Encode())
 
 	req, err := http.NewRequest("POST", uploadURL, bytes.NewReader(buf.Bytes()))
@@ -588,9 +606,9 @@ func equalStringSlices(a, b []string) bool {
 	return true
 }
 
-// tarDir archives all files under dir into tw.
-// Paths in the archive are relative to dir's parent, prefixed with dir's basename.
-// Returns the number of files archived.
+// tarDir archives the full directory tree under dir into tw, including empty
+// subdirectories. Paths in the archive are relative to dir's parent, prefixed
+// with dir's basename. Returns the number of files (not dirs) archived.
 func tarDir(tw *tar.Writer, dir string) (int, error) {
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
@@ -600,12 +618,7 @@ func tarDir(tw *tar.Writer, dir string) (int, error) {
 	count := 0
 
 	err = filepath.Walk(absDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		// Skip files > 256 MB (not saves)
-		if info.Size() > 256*1024*1024 {
-			log.Printf("[Saves] Skipping oversized file: %s (%d MB)", path, info.Size()>>20)
+		if err != nil {
 			return nil
 		}
 
@@ -619,6 +632,17 @@ func tarDir(tw *tar.Writer, dir string) (int, error) {
 			return nil
 		}
 		hdr.Name = filepath.ToSlash(rel)
+
+		if info.IsDir() {
+			hdr.Name += "/"
+			return tw.WriteHeader(hdr)
+		}
+
+		// Skip files > 256 MB (not saves)
+		if info.Size() > 256*1024*1024 {
+			log.Printf("[Saves] Skipping oversized file: %s (%d MB)", path, info.Size()>>20)
+			return nil
+		}
 
 		if err := tw.WriteHeader(hdr); err != nil {
 			return err
