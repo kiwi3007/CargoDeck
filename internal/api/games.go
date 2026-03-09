@@ -246,6 +246,7 @@ func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 		AgentID    string `json:"agentId"`
 		LaunchArgs string `json:"launchArgs"`
 		EnvVars    string `json:"envVars"`
+		ProtonPath string `json:"protonPath"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		jsonErr(w, 400, err.Error())
@@ -255,7 +256,7 @@ func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "agentId required")
 		return
 	}
-	s := repository.AgentRunSettings{LaunchArgs: req.LaunchArgs, EnvVars: req.EnvVars}
+	s := repository.AgentRunSettings{LaunchArgs: req.LaunchArgs, EnvVars: req.EnvVars, ProtonPath: req.ProtonPath}
 	if err := h.repo.SetAgentRunSettings(id, req.AgentID, s); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -265,10 +266,11 @@ func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 		Title      string `json:"title"`
 		LaunchArgs string `json:"launchArgs"`
 		EnvVars    string `json:"envVars"`
+		ProtonPath string `json:"protonPath"`
 	}
 	game, _ := h.repo.GetGameByID(id)
 	if game != nil {
-		data, _ := json.Marshal(payload{Title: game.Title, LaunchArgs: req.LaunchArgs, EnvVars: req.EnvVars})
+		data, _ := json.Marshal(payload{Title: game.Title, LaunchArgs: req.LaunchArgs, EnvVars: req.EnvVars, ProtonPath: req.ProtonPath})
 		h.agentBroker.Send(req.AgentID, "SET_LAUNCH_ARGS", string(data))
 	}
 	jsonOK(w, map[string]string{"message": "ok"})

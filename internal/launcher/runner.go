@@ -215,6 +215,55 @@ func ProtonInDir(dir string) string {
 	return best
 }
 
+// ProtonInstall describes a single Proton installation found on this system.
+type ProtonInstall struct {
+	Name    string // e.g. "GE-Proton10-25"
+	BinPath string // path to the proton binary
+}
+
+// ListAllProtonVersions returns every Proton installation found on this system.
+// Scans all known directories: Steam compatibilitytools.d, Lutris, Heroic.
+func ListAllProtonVersions() []ProtonInstall {
+	home, _ := os.UserHomeDir()
+	dirs := []string{
+		filepath.Join(home, ".local", "share", "Steam", "compatibilitytools.d"),
+		filepath.Join(home, ".steam", "steam", "compatibilitytools.d"),
+		filepath.Join(home, ".local", "share", "lutris", "runners", "proton"),
+		filepath.Join(home, ".config", "heroic", "tools", "proton"),
+	}
+	if steamRoot := FindSteamRoot(); steamRoot != "" {
+		dirs = append(dirs,
+			filepath.Join(steamRoot, "compatibilitytools.d"),
+			filepath.Join(steamRoot, "steamapps", "common"),
+		)
+	}
+
+	seen := map[string]bool{}
+	var result []ProtonInstall
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			nameLower := strings.ToLower(e.Name())
+			if !strings.HasPrefix(nameLower, "proton") && !strings.Contains(nameLower, "ge-proton") {
+				continue
+			}
+			bin := filepath.Join(dir, e.Name(), "proton")
+			if !fileExists(bin) || seen[bin] {
+				continue
+			}
+			seen[bin] = true
+			result = append(result, ProtonInstall{Name: e.Name(), BinPath: bin})
+		}
+	}
+	return result
+}
+
 func fileExists(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && !fi.IsDir()

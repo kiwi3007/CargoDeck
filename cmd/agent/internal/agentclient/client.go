@@ -261,11 +261,21 @@ func (c *Client) listenSSE() error {
 						Title      string `json:"title"`
 						LaunchArgs string `json:"launchArgs"`
 						EnvVars    string `json:"envVars"`
+						ProtonPath string `json:"protonPath"`
 					}
 					if err := json.Unmarshal([]byte(dataLine), &req); err != nil {
 						log.Printf("[Agent] Bad SET_LAUNCH_ARGS JSON: %v", err)
 					} else {
-						go c.setRunScriptSettings(req.Title, req.LaunchArgs, req.EnvVars)
+						go c.setRunScriptSettings(req.Title, req.LaunchArgs, req.EnvVars, req.ProtonPath)
+					}
+				}
+			case "LIST_PROTON":
+				if dataLine != "" {
+					var job agent.ListProtonJob
+					if err := json.Unmarshal([]byte(dataLine), &job); err != nil {
+						log.Printf("[Agent] Bad LIST_PROTON JSON: %v", err)
+					} else {
+						go c.listProton(job)
 					}
 				}
 			case "CHANGE_EXE":
@@ -459,7 +469,7 @@ shortcut:
 	// If a shortcut already exists (e.g. created by another device), skip adding a duplicate.
 	c.reportProgress(job, agent.JobCreatingShortcut, "Creating Steam shortcut...", 95)
 	if gameExe != "" {
-		scriptPath := createRunScript(job.GameTitle, gameExe, wineprefix, job.LaunchArgs, job.EnvVars)
+		scriptPath := createRunScript(job.GameTitle, gameExe, wineprefix, job.LaunchArgs, job.EnvVars, job.ProtonPath)
 		entry := launcher.ShortcutEntry{
 			// Title-based AppID is identical on all platforms (Linux, Windows, macOS)
 			// so dual-boot / shared Steam installs produce one shortcut updated in-place.
@@ -750,8 +760,9 @@ func isGameExe(lower string) bool {
 // On Windows: writes run.bat. On Linux: writes run.sh using the found runner.
 // launchArgs are extra arguments appended after the exe and before "$@".
 // envVars is a newline-separated list of KEY=VALUE pairs exported before the runner.
+// protonPath overrides the auto-selected Proton binary when non-empty.
 // Returns the script path, or "" if no runner is available and not on Windows.
-func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars string) string {
+func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars, protonPath string) string {
 	scriptDir := filepath.Join(homeDir(), "Games", safeName(gameTitle))
 	_ = os.MkdirAll(scriptDir, 0755)
 
@@ -772,6 +783,11 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars string)
 	runner := launcher.FindRunner()
 	if runner == nil {
 		return ""
+	}
+
+	// If a specific Proton binary is requested, use it directly via RunnerProton.
+	if protonPath != "" && (runner.Type == launcher.RunnerProton || runner.Type == launcher.RunnerUMU) {
+		runner = &launcher.Runner{Type: launcher.RunnerProton, BinPath: protonPath}
 	}
 
 	scriptPath := filepath.Join(scriptDir, "run.sh")
@@ -803,12 +819,19 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars string)
 		envVarsBlock = buildEnvVarsBlock(envVars)
 	}
 
+	// Embed proton path override as a comment so parseRunScript can recover it on regen.
+	protonPathComment := ""
+	if protonPath != "" {
+		protonPathComment = "# PROTON_PATH: " + protonPath + "\n"
+	}
+
 	switch runner.Type {
 	case launcher.RunnerUMU:
 		content = fmt.Sprintf(
 			"#!/bin/bash\n"+
 				launchArgsComment+
 				envVarsComment+
+				protonPathComment+
 				"LOG=%q\n"+
 				"mkdir -p %q\n"+
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
@@ -829,6 +852,7 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars string)
 			"#!/bin/bash\n"+
 				launchArgsComment+
 				envVarsComment+
+				protonPathComment+
 				"LOG=%q\n"+
 				"mkdir -p %q\n"+
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
@@ -845,6 +869,7 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars string)
 			"#!/bin/bash\n"+
 				launchArgsComment+
 				envVarsComment+
+				protonPathComment+
 				"LOG=%q\n"+
 				"mkdir -p %q\n"+
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
@@ -1125,7 +1150,7 @@ func (c *Client) scanInstalledGames() {
 			// Resolve the active exe and all candidates.
 			// For Wine/Proton installs the real exe is inside the prefix, not gameDir.
 			if scriptPath != "" {
-				wineprefix, parsedExe, _, _ := parseRunScript(scriptPath)
+				wineprefix, parsedExe, _, _, _ := parseRunScript(scriptPath)
 				if parsedExe != "" {
 					exePath = parsedExe
 				}
@@ -1520,8 +1545,8 @@ func (c *Client) regenerateScripts() {
 		if _, err := os.Stat(scriptPath); err != nil {
 			continue // no run.sh, skip
 		}
-		// Parse wineprefix, exe, launch args, and env vars from existing script
-		wineprefix, gameExe, launchArgs, envVars := parseRunScript(scriptPath)
+		// Parse wineprefix, exe, launch args, env vars, and proton path from existing script
+		wineprefix, gameExe, launchArgs, envVars, protonPath := parseRunScript(scriptPath)
 		// Validate the parsed exe — it may be stale/wrong (e.g. UnityCrashHandler64.exe)
 		if gameExe == "" || !isGameExe(strings.ToLower(filepath.Base(gameExe))) {
 			if gameExe != "" {
@@ -1538,7 +1563,7 @@ func (c *Client) regenerateScripts() {
 			wineprefix = filepath.Join(homeDir(), ".local", "share", "playerr", "prefix_"+safeName(e.Name()))
 			log.Printf("[Agent] regenerateScripts: no wineprefix found for %q, using %s", e.Name(), wineprefix)
 		}
-		newPath := createRunScript(e.Name(), gameExe, wineprefix, launchArgs, envVars)
+		newPath := createRunScript(e.Name(), gameExe, wineprefix, launchArgs, envVars, protonPath)
 		if newPath != "" {
 			n++
 			log.Printf("[Agent] Regenerated run.sh for %q", e.Name())
@@ -1553,9 +1578,9 @@ func (c *Client) regenerateScripts() {
 func (c *Client) changeGameExe(title, exePath string) {
 	scriptDir := filepath.Join(homeDir(), "Games", safeName(title))
 	scriptPath := filepath.Join(scriptDir, "run.sh")
-	wineprefix, _, launchArgs, envVars := parseRunScript(scriptPath)
+	wineprefix, _, launchArgs, envVars, protonPath := parseRunScript(scriptPath)
 
-	newScript := createRunScript(title, exePath, wineprefix, launchArgs, envVars)
+	newScript := createRunScript(title, exePath, wineprefix, launchArgs, envVars, protonPath)
 	if newScript == "" {
 		log.Printf("[Agent] changeGameExe: no runner available for %q", title)
 		return
@@ -1577,25 +1602,25 @@ func (c *Client) changeGameExe(title, exePath string) {
 	go c.scanInstalledGames()
 }
 
-// setRunScriptSettings rewrites run.sh to update per-device launch arguments and env vars
+// setRunScriptSettings rewrites run.sh to update per-device launch arguments, env vars, and proton override
 // without requiring a full reinstall.
-func (c *Client) setRunScriptSettings(title, launchArgs, envVars string) {
+func (c *Client) setRunScriptSettings(title, launchArgs, envVars, protonPath string) {
 	scriptPath := filepath.Join(homeDir(), "Games", safeName(title), "run.sh")
-	wineprefix, gameExe, _, _ := parseRunScript(scriptPath)
+	wineprefix, gameExe, _, _, _ := parseRunScript(scriptPath)
 	if gameExe == "" {
 		log.Printf("[Agent] setRunScriptSettings: cannot parse exe from run.sh for %q — reinstall to apply settings", title)
 		return
 	}
-	createRunScript(title, gameExe, wineprefix, launchArgs, envVars)
-	log.Printf("[Agent] Updated run settings for %q: args=%q envVars=%q", title, launchArgs, envVars)
+	createRunScript(title, gameExe, wineprefix, launchArgs, envVars, protonPath)
+	log.Printf("[Agent] Updated run settings for %q: args=%q envVars=%q protonPath=%q", title, launchArgs, envVars, protonPath)
 }
 
-// parseRunScript extracts the WINEPREFIX path, game exe path, launch args, and env vars from a run.sh.
-// Returns ("", "", "", "") if the script cannot be parsed.
-func parseRunScript(scriptPath string) (wineprefix, gameExe, launchArgs, envVars string) {
+// parseRunScript extracts the WINEPREFIX path, game exe path, launch args, env vars, and proton path from a run.sh.
+// Returns ("", "", "", "", "") if the script cannot be parsed.
+func parseRunScript(scriptPath string) (wineprefix, gameExe, launchArgs, envVars, protonPath string) {
 	data, err := os.ReadFile(scriptPath)
 	if err != nil {
-		return "", "", "", ""
+		return "", "", "", "", ""
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
@@ -1607,6 +1632,10 @@ func parseRunScript(scriptPath string) (wineprefix, gameExe, launchArgs, envVars
 		if strings.HasPrefix(line, "# ENV_VARS:") {
 			raw := strings.TrimSpace(strings.TrimPrefix(line, "# ENV_VARS:"))
 			_ = json.Unmarshal([]byte(raw), &envVars)
+		}
+		// Embedded proton path override written by createRunScript
+		if strings.HasPrefix(line, "# PROTON_PATH:") {
+			protonPath = strings.TrimSpace(strings.TrimPrefix(line, "# PROTON_PATH:"))
 		}
 		// WINEPREFIX is used by UMU and Wine runners
 		if strings.HasPrefix(line, "export WINEPREFIX=") {
@@ -1635,7 +1664,7 @@ func parseRunScript(scriptPath string) (wineprefix, gameExe, launchArgs, envVars
 			}
 		}
 	}
-	return wineprefix, gameExe, launchArgs, envVars
+	return wineprefix, gameExe, launchArgs, envVars, protonPath
 }
 
 // restartSteam gracefully shuts down Steam. In Game Mode (Steam Deck) the
@@ -1766,12 +1795,35 @@ func (c *Client) browseDir(job agent.BrowseDirJob) {
 	resp.Body.Close()
 }
 
+// listProton scans for available Proton installations and posts the result back to the server.
+func (c *Client) listProton(job agent.ListProtonJob) {
+	installs := launcher.ListAllProtonVersions()
+	versions := make([]agent.ProtonVersionInfo, len(installs))
+	for i, p := range installs {
+		versions[i] = agent.ProtonVersionInfo{Name: p.Name, BinPath: p.BinPath}
+	}
+	result := agent.ListProtonResult{RequestID: job.RequestID, Versions: versions}
+	body, _ := json.Marshal(result)
+	req, err := http.NewRequest("POST", c.cfg.ServerURL+"/api/v3/agent/proton-result", bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		log.Printf("[Agent] proton-result POST failed: %v", err)
+		return
+	}
+	resp.Body.Close()
+}
+
 // renamePrefix renames a game's Wine prefix from the old numeric format
 // (prefix_{gameId}) to the title-based format (prefix_{safeTitle}) and
 // updates the WINEPREFIX / STEAM_COMPAT_DATA_PATH line in run.sh to match.
 func (c *Client) renamePrefix(job agent.RenamePrefixJob) {
 	scriptPath := filepath.Join(homeDir(), "Games", safeName(job.GameTitle), "run.sh")
-	currentPrefix, _, _, _ := parseRunScript(scriptPath)
+	currentPrefix, _, _, _, _ := parseRunScript(scriptPath)
 
 	newPrefix := filepath.Join(homeDir(), ".local", "share", "playerr", "prefix_"+safeName(job.GameTitle))
 

@@ -33,6 +33,7 @@ type Handler struct {
 	manifest      *manifest.Service
 	checker       *updater.Checker
 	browsePending sync.Map // requestId → chan agent.BrowseDirResult
+	protonPending sync.Map // requestId → chan agent.ListProtonResult
 }
 
 func NewHandler(
@@ -252,9 +253,13 @@ func (h *Handler) NewRouter() http.Handler {
 		r.With(h.agentAuthMiddleware).Post("/{agentId}/games", h.ReportInstalledGames)
 		r.With(h.agentAuthMiddleware).Post("/log", h.ReceiveAgentLog)
 		r.With(h.agentAuthMiddleware).Post("/browse-result", h.ReceiveBrowseResult)
+		r.With(h.agentAuthMiddleware).Post("/proton-result", h.ReceiveProtonResult)
 
 		// Browser-facing: request a directory listing from an agent
 		r.Get("/{agentId}/browse", h.BrowseAgentDir)
+
+		// Browser-facing: list available Proton versions on an agent
+		r.Get("/{agentId}/proton-versions", h.ListProtonVersions)
 	})
 
 	return r

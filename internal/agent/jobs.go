@@ -47,6 +47,25 @@ type InstallJob struct {
 	SelectedExe string   `json:"selectedExe,omitempty"` // basename; empty = auto-detect
 	LaunchArgs  string   `json:"launchArgs,omitempty"`  // extra args appended to exe in run.sh
 	EnvVars     string   `json:"envVars,omitempty"`     // KEY=VALUE lines exported before the exe
+	ProtonPath  string   `json:"protonPath,omitempty"`  // explicit proton binary override; empty = auto-select
+}
+
+// ProtonVersionInfo describes a single Proton installation on an agent.
+type ProtonVersionInfo struct {
+	Name    string `json:"name"`
+	BinPath string `json:"binPath"`
+}
+
+// ListProtonJob is pushed to the agent to enumerate available Proton versions.
+type ListProtonJob struct {
+	RequestID string `json:"requestId"`
+}
+
+// ListProtonResult is posted back by the agent with the enumerated versions.
+type ListProtonResult struct {
+	RequestID string              `json:"requestId"`
+	Versions  []ProtonVersionInfo `json:"versions"`
+	Error     string              `json:"error,omitempty"`
 }
 
 // JobProgress is reported back by the agent via POST.

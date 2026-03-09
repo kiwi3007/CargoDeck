@@ -309,6 +309,7 @@ func (h *Handler) DispatchInstall(w http.ResponseWriter, r *http.Request) {
 		SelectedExe: req.SelectedExe,
 		LaunchArgs:  runSettings.LaunchArgs,
 		EnvVars:     runSettings.EnvVars,
+		ProtonPath:  runSettings.ProtonPath,
 	}
 
 	if h.agentRegistry.HasActiveJobForGame(agentID, req.GameID) {
@@ -736,6 +737,56 @@ func (h *Handler) ReceiveBrowseResult(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := h.browsePending.Load(result.RequestID); ok {
 		ch := v.(chan agent.BrowseDirResult)
+		select {
+		case ch <- result:
+		default:
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListProtonVersions dispatches a LIST_PROTON job to an online agent and waits up to
+// 10 s for the list of available Proton versions.
+// GET /api/v3/agent/{agentId}/proton-versions
+func (h *Handler) ListProtonVersions(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentId")
+
+	if _, ok := h.agentRegistry.Get(agentID); !ok {
+		jsonErr(w, 404, "agent not found or offline")
+		return
+	}
+
+	requestID := fmt.Sprintf("proton-%d", time.Now().UnixNano())
+	ch := make(chan agent.ListProtonResult, 1)
+	h.protonPending.Store(requestID, ch)
+	defer h.protonPending.Delete(requestID)
+
+	job := agent.ListProtonJob{RequestID: requestID}
+	data, _ := json.Marshal(job)
+	h.agentBroker.Send(agentID, "LIST_PROTON", string(data))
+
+	select {
+	case result := <-ch:
+		if result.Error != "" {
+			jsonErr(w, 422, result.Error)
+			return
+		}
+		jsonOK(w, result.Versions)
+	case <-time.After(10 * time.Second):
+		jsonErr(w, 504, "agent did not respond in time")
+	}
+}
+
+// ReceiveProtonResult is called by the agent with the Proton version list.
+// POST /api/v3/agent/proton-result (agent-authenticated)
+func (h *Handler) ReceiveProtonResult(w http.ResponseWriter, r *http.Request) {
+	var result agent.ListProtonResult
+	if err := decodeBody(r, &result); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	if v, ok := h.protonPending.Load(result.RequestID); ok {
+		ch := v.(chan agent.ListProtonResult)
 		select {
 		case ch <- result:
 		default:

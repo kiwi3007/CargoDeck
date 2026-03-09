@@ -39,6 +39,7 @@ func Open(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("create AgentGameLaunchArgs: %w", err)
 	}
 	addColumnIfMissing(db, "AgentGameLaunchArgs", "EnvVars", "TEXT NOT NULL DEFAULT ''")
+	addColumnIfMissing(db, "AgentGameLaunchArgs", "ProtonPath", "TEXT NOT NULL DEFAULT ''")
 	return db, nil
 }
 

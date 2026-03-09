@@ -28,11 +28,15 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
     const [showFileExplorer, setShowFileExplorer] = useState(false);
     const [explorerMode, setExplorerMode] = useState<'install' | 'executable'>('install');
 
-    // Per-device run settings: agentId → { launchArgs, envVars }
+    interface ProtonVersionInfo { name: string; binPath: string; }
+
+    // Per-device run settings: agentId → { launchArgs, envVars, protonPath }
     const [agents, setAgents] = useState<any[]>([]);
     const [agentLaunchArgs, setAgentLaunchArgs] = useState<Record<string, string>>({});
     const [agentEnvVars, setAgentEnvVars] = useState<Record<string, string>>({});
-    const [savedAgentSettings, setSavedAgentSettings] = useState<Record<string, { launchArgs: string; envVars: string }>>({});
+    const [agentProtonPath, setAgentProtonPath] = useState<Record<string, string>>({});
+    const [agentProtonVersions, setAgentProtonVersions] = useState<Record<string, ProtonVersionInfo[]>>({});
+    const [savedAgentSettings, setSavedAgentSettings] = useState<Record<string, { launchArgs: string; envVars: string; protonPath: string }>>({});
 
     useEffect(() => {
         if (!game.id) return;
@@ -41,18 +45,32 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
             axios.get(`/api/v3/game/${game.id}/agent-launch-args`),
         ]).then(([agentsRes, argsRes]) => {
             setAgents(agentsRes.data || []);
-            const settings: Record<string, { launchArgs: string; envVars: string }> = argsRes.data || {};
+            const settings: Record<string, { launchArgs: string; envVars: string; protonPath: string }> = argsRes.data || {};
             const launchArgs: Record<string, string> = {};
             const envVars: Record<string, string> = {};
+            const protonPaths: Record<string, string> = {};
             Object.entries(settings).forEach(([id, s]) => {
                 launchArgs[id] = s.launchArgs || '';
                 envVars[id] = s.envVars || '';
+                protonPaths[id] = s.protonPath || '';
             });
             setAgentLaunchArgs(launchArgs);
             setAgentEnvVars(envVars);
+            setAgentProtonPath(protonPaths);
             setSavedAgentSettings(settings);
         }).catch(() => {});
     }, [game.id]);
+
+    // Fetch Proton versions for online agents when the Play Path tab opens.
+    useEffect(() => {
+        if (activeTab !== 'playPath') return;
+        agents.forEach((agent: any) => {
+            if (agent.status !== 'online' || agentProtonVersions[agent.id] !== undefined) return;
+            axios.get(`/api/v3/agent/${agent.id}/proton-versions`)
+                .then(res => setAgentProtonVersions(prev => ({ ...prev, [agent.id]: res.data || [] })))
+                .catch(() => setAgentProtonVersions(prev => ({ ...prev, [agent.id]: [] })));
+        });
+    }, [activeTab, agents]);
 
     const t = (key: string) => translate(key as any, language as any);
 
@@ -84,17 +102,19 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
             updates.executablePath = executablePath;
         }
 
-        // Save changed per-device run settings (launch args + env vars)
+        // Save changed per-device run settings (launch args + env vars + proton path)
         const allAgentIds = new Set([
             ...Object.keys(agentLaunchArgs),
             ...Object.keys(agentEnvVars),
+            ...Object.keys(agentProtonPath),
             ...Object.keys(savedAgentSettings),
         ]);
         const patches = Array.from(allAgentIds).filter(agentId => {
             const saved = savedAgentSettings[agentId];
             const newArgs = agentLaunchArgs[agentId] ?? '';
             const newEnv = agentEnvVars[agentId] ?? '';
-            return newArgs !== (saved?.launchArgs ?? '') || newEnv !== (saved?.envVars ?? '');
+            const newProton = agentProtonPath[agentId] ?? '';
+            return newArgs !== (saved?.launchArgs ?? '') || newEnv !== (saved?.envVars ?? '') || newProton !== (saved?.protonPath ?? '');
         });
         await Promise.all(
             patches.map(agentId =>
@@ -102,6 +122,7 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                     agentId,
                     launchArgs: agentLaunchArgs[agentId] ?? '',
                     envVars: agentEnvVars[agentId] ?? '',
+                    protonPath: agentProtonPath[agentId] ?? '',
                 })
             )
         );
@@ -222,13 +243,14 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                                                 <th style={{ textAlign: 'left', padding: '4px 8px', opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>Device</th>
                                                 <th style={{ textAlign: 'left', padding: '4px 8px', opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>Launch Args</th>
                                                 <th style={{ textAlign: 'left', padding: '4px 8px', opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>Env Vars (one per line)</th>
+                                                <th style={{ textAlign: 'left', padding: '4px 8px', opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>Proton</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {agents.map((agent: any) => (
                                                 <tr key={agent.id}>
                                                     <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', opacity: 0.85, verticalAlign: 'top', paddingTop: '8px' }}>{agent.name}</td>
-                                                    <td style={{ padding: '4px 8px', width: '35%', verticalAlign: 'top' }}>
+                                                    <td style={{ padding: '4px 8px', width: '30%', verticalAlign: 'top' }}>
                                                         <input
                                                             type="text"
                                                             value={agentLaunchArgs[agent.id] ?? ''}
@@ -240,7 +262,7 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                                                             style={{ width: '100%', fontFamily: 'monospace', boxSizing: 'border-box' }}
                                                         />
                                                     </td>
-                                                    <td style={{ padding: '4px 8px', width: '50%', verticalAlign: 'top' }}>
+                                                    <td style={{ padding: '4px 8px', width: '40%', verticalAlign: 'top' }}>
                                                         <textarea
                                                             value={agentEnvVars[agent.id] ?? ''}
                                                             onChange={(e) => setAgentEnvVars(prev => ({
@@ -251,6 +273,25 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                                                             rows={3}
                                                             style={{ width: '100%', fontFamily: 'monospace', boxSizing: 'border-box', resize: 'vertical' }}
                                                         />
+                                                    </td>
+                                                    <td style={{ padding: '4px 8px', verticalAlign: 'top' }}>
+                                                        {agent.status === 'online' ? (
+                                                            <select
+                                                                value={agentProtonPath[agent.id] ?? ''}
+                                                                onChange={(e) => setAgentProtonPath(prev => ({
+                                                                    ...prev,
+                                                                    [agent.id]: e.target.value,
+                                                                }))}
+                                                                style={{ width: '100%', fontFamily: 'monospace', boxSizing: 'border-box' }}
+                                                            >
+                                                                <option value="">(auto)</option>
+                                                                {(agentProtonVersions[agent.id] || []).map((v: ProtonVersionInfo) => (
+                                                                    <option key={v.binPath} value={v.binPath}>{v.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        ) : (
+                                                            <span style={{ opacity: 0.4, fontSize: '0.85em' }}>offline</span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))}
