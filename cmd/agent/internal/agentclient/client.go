@@ -260,11 +260,12 @@ func (c *Client) listenSSE() error {
 					var req struct {
 						Title      string `json:"title"`
 						LaunchArgs string `json:"launchArgs"`
+						EnvVars    string `json:"envVars"`
 					}
 					if err := json.Unmarshal([]byte(dataLine), &req); err != nil {
 						log.Printf("[Agent] Bad SET_LAUNCH_ARGS JSON: %v", err)
 					} else {
-						go c.setLaunchArgs(req.Title, req.LaunchArgs)
+						go c.setRunScriptSettings(req.Title, req.LaunchArgs, req.EnvVars)
 					}
 				}
 			case "CHANGE_EXE":
@@ -458,7 +459,7 @@ shortcut:
 	// If a shortcut already exists (e.g. created by another device), skip adding a duplicate.
 	c.reportProgress(job, agent.JobCreatingShortcut, "Creating Steam shortcut...", 95)
 	if gameExe != "" {
-		scriptPath := createRunScript(job.GameTitle, gameExe, wineprefix, job.LaunchArgs)
+		scriptPath := createRunScript(job.GameTitle, gameExe, wineprefix, job.LaunchArgs, job.EnvVars)
 		entry := launcher.ShortcutEntry{
 			// Title-based AppID is identical on all platforms (Linux, Windows, macOS)
 			// so dual-boot / shared Steam installs produce one shortcut updated in-place.
@@ -748,8 +749,9 @@ func isGameExe(lower string) bool {
 // createRunScript writes a launcher script for the game.
 // On Windows: writes run.bat. On Linux: writes run.sh using the found runner.
 // launchArgs are extra arguments appended after the exe and before "$@".
+// envVars is a newline-separated list of KEY=VALUE pairs exported before the runner.
 // Returns the script path, or "" if no runner is available and not on Windows.
-func createRunScript(gameTitle, gameExe, wineprefix, launchArgs string) string {
+func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars string) string {
 	scriptDir := filepath.Join(homeDir(), "Games", safeName(gameTitle))
 	_ = os.MkdirAll(scriptDir, 0755)
 
@@ -792,17 +794,28 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs string) string {
 		launchArgsComment = "# LAUNCH_ARGS: " + launchArgs + "\n"
 	}
 
+	// Embed env vars as a JSON-encoded comment so parseRunScript can recover them.
+	envVarsComment := ""
+	envVarsBlock := ""
+	if envVars != "" {
+		encoded, _ := json.Marshal(envVars)
+		envVarsComment = "# ENV_VARS: " + string(encoded) + "\n"
+		envVarsBlock = buildEnvVarsBlock(envVars)
+	}
+
 	switch runner.Type {
 	case launcher.RunnerUMU:
 		content = fmt.Sprintf(
 			"#!/bin/bash\n"+
 				launchArgsComment+
+				envVarsComment+
 				"LOG=%q\n"+
 				"mkdir -p %q\n"+
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
 				"export WINEPREFIX=%q\n"+
 				"export PROTONPATH=%q\n"+
 				"export GAMEID=0\n"+
+				envVarsBlock+
 				"%q %q"+argsSuffix+" \"$@\" >> \"$LOG\" 2>&1\n"+
 				"touch %q\n",
 			logFile, filepath.Join(wineprefix, "pfx"),
@@ -815,12 +828,14 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs string) string {
 		content = fmt.Sprintf(
 			"#!/bin/bash\n"+
 				launchArgsComment+
+				envVarsComment+
 				"LOG=%q\n"+
 				"mkdir -p %q\n"+
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
 				"export STEAM_COMPAT_DATA_PATH=%q\n"+
 				"export STEAM_COMPAT_CLIENT_INSTALL_PATH=%q\n"+
 				"export PROTON_LOG=1\n"+
+				envVarsBlock+
 				"%q run %q"+argsSuffix+" \"$@\" >> \"$LOG\" 2>&1\n"+
 				"touch %q\n",
 			logFile, filepath.Join(wineprefix, "pfx"),
@@ -829,10 +844,12 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs string) string {
 		content = fmt.Sprintf(
 			"#!/bin/bash\n"+
 				launchArgsComment+
+				envVarsComment+
 				"LOG=%q\n"+
 				"mkdir -p %q\n"+
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
 				"export WINEPREFIX=%q\n"+
+				envVarsBlock+
 				"%q %q"+argsSuffix+" \"$@\" >> \"$LOG\" 2>&1\n"+
 				"touch %q\n",
 			logFile, wineprefix,
@@ -846,6 +863,28 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs string) string {
 		return ""
 	}
 	return scriptPath
+}
+
+// buildEnvVarsBlock converts newline-separated KEY=VALUE pairs into export statements.
+// Each non-empty, non-comment line becomes: export KEY="VALUE"\n
+func buildEnvVarsBlock(envVars string) string {
+	var sb strings.Builder
+	for _, line := range strings.Split(envVars, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		eq := strings.IndexByte(line, '=')
+		if eq < 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:eq])
+		val := strings.TrimSpace(line[eq+1:])
+		// Strip surrounding quotes if the user typed them
+		val = strings.Trim(val, `"'`)
+		fmt.Fprintf(&sb, "export %s=%q\n", key, val)
+	}
+	return sb.String()
 }
 
 // extractHeadless extracts an archive non-interactively.
@@ -1086,7 +1125,7 @@ func (c *Client) scanInstalledGames() {
 			// Resolve the active exe and all candidates.
 			// For Wine/Proton installs the real exe is inside the prefix, not gameDir.
 			if scriptPath != "" {
-				wineprefix, parsedExe, _ := parseRunScript(scriptPath)
+				wineprefix, parsedExe, _, _ := parseRunScript(scriptPath)
 				if parsedExe != "" {
 					exePath = parsedExe
 				}
@@ -1481,8 +1520,8 @@ func (c *Client) regenerateScripts() {
 		if _, err := os.Stat(scriptPath); err != nil {
 			continue // no run.sh, skip
 		}
-		// Parse wineprefix, exe, and launch args from existing script
-		wineprefix, gameExe, launchArgs := parseRunScript(scriptPath)
+		// Parse wineprefix, exe, launch args, and env vars from existing script
+		wineprefix, gameExe, launchArgs, envVars := parseRunScript(scriptPath)
 		// Validate the parsed exe — it may be stale/wrong (e.g. UnityCrashHandler64.exe)
 		if gameExe == "" || !isGameExe(strings.ToLower(filepath.Base(gameExe))) {
 			if gameExe != "" {
@@ -1499,7 +1538,7 @@ func (c *Client) regenerateScripts() {
 			wineprefix = filepath.Join(homeDir(), ".local", "share", "playerr", "prefix_"+safeName(e.Name()))
 			log.Printf("[Agent] regenerateScripts: no wineprefix found for %q, using %s", e.Name(), wineprefix)
 		}
-		newPath := createRunScript(e.Name(), gameExe, wineprefix, launchArgs)
+		newPath := createRunScript(e.Name(), gameExe, wineprefix, launchArgs, envVars)
 		if newPath != "" {
 			n++
 			log.Printf("[Agent] Regenerated run.sh for %q", e.Name())
@@ -1514,9 +1553,9 @@ func (c *Client) regenerateScripts() {
 func (c *Client) changeGameExe(title, exePath string) {
 	scriptDir := filepath.Join(homeDir(), "Games", safeName(title))
 	scriptPath := filepath.Join(scriptDir, "run.sh")
-	wineprefix, _, launchArgs := parseRunScript(scriptPath)
+	wineprefix, _, launchArgs, envVars := parseRunScript(scriptPath)
 
-	newScript := createRunScript(title, exePath, wineprefix, launchArgs)
+	newScript := createRunScript(title, exePath, wineprefix, launchArgs, envVars)
 	if newScript == "" {
 		log.Printf("[Agent] changeGameExe: no runner available for %q", title)
 		return
@@ -1538,31 +1577,36 @@ func (c *Client) changeGameExe(title, exePath string) {
 	go c.scanInstalledGames()
 }
 
-// setLaunchArgs rewrites run.sh to update the per-device launch arguments
+// setRunScriptSettings rewrites run.sh to update per-device launch arguments and env vars
 // without requiring a full reinstall.
-func (c *Client) setLaunchArgs(title, launchArgs string) {
+func (c *Client) setRunScriptSettings(title, launchArgs, envVars string) {
 	scriptPath := filepath.Join(homeDir(), "Games", safeName(title), "run.sh")
-	wineprefix, gameExe, _ := parseRunScript(scriptPath)
+	wineprefix, gameExe, _, _ := parseRunScript(scriptPath)
 	if gameExe == "" {
-		log.Printf("[Agent] setLaunchArgs: cannot parse exe from run.sh for %q — reinstall to apply args", title)
+		log.Printf("[Agent] setRunScriptSettings: cannot parse exe from run.sh for %q — reinstall to apply settings", title)
 		return
 	}
-	createRunScript(title, gameExe, wineprefix, launchArgs)
-	log.Printf("[Agent] Updated launch args for %q: %q", title, launchArgs)
+	createRunScript(title, gameExe, wineprefix, launchArgs, envVars)
+	log.Printf("[Agent] Updated run settings for %q: args=%q envVars=%q", title, launchArgs, envVars)
 }
 
-// parseRunScript extracts the WINEPREFIX path, game exe path, and launch args from a run.sh.
-// Returns ("", "", "") if the script cannot be parsed.
-func parseRunScript(scriptPath string) (wineprefix, gameExe, launchArgs string) {
+// parseRunScript extracts the WINEPREFIX path, game exe path, launch args, and env vars from a run.sh.
+// Returns ("", "", "", "") if the script cannot be parsed.
+func parseRunScript(scriptPath string) (wineprefix, gameExe, launchArgs, envVars string) {
 	data, err := os.ReadFile(scriptPath)
 	if err != nil {
-		return "", "", ""
+		return "", "", "", ""
 	}
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		// Embedded launch args comment written by createRunScript
 		if strings.HasPrefix(line, "# LAUNCH_ARGS:") {
 			launchArgs = strings.TrimSpace(strings.TrimPrefix(line, "# LAUNCH_ARGS:"))
+		}
+		// Embedded env vars comment written by createRunScript (JSON-encoded)
+		if strings.HasPrefix(line, "# ENV_VARS:") {
+			raw := strings.TrimSpace(strings.TrimPrefix(line, "# ENV_VARS:"))
+			_ = json.Unmarshal([]byte(raw), &envVars)
 		}
 		// WINEPREFIX is used by UMU and Wine runners
 		if strings.HasPrefix(line, "export WINEPREFIX=") {
@@ -1591,7 +1635,7 @@ func parseRunScript(scriptPath string) (wineprefix, gameExe, launchArgs string) 
 			}
 		}
 	}
-	return wineprefix, gameExe, launchArgs
+	return wineprefix, gameExe, launchArgs, envVars
 }
 
 // restartSteam gracefully shuts down Steam. In Game Mode (Steam Deck) the
@@ -1727,7 +1771,7 @@ func (c *Client) browseDir(job agent.BrowseDirJob) {
 // updates the WINEPREFIX / STEAM_COMPAT_DATA_PATH line in run.sh to match.
 func (c *Client) renamePrefix(job agent.RenamePrefixJob) {
 	scriptPath := filepath.Join(homeDir(), "Games", safeName(job.GameTitle), "run.sh")
-	currentPrefix, _, _ := parseRunScript(scriptPath)
+	currentPrefix, _, _, _ := parseRunScript(scriptPath)
 
 	newPrefix := filepath.Join(homeDir(), ".local", "share", "playerr", "prefix_"+safeName(job.GameTitle))
 

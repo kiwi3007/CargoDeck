@@ -430,22 +430,28 @@ func (r *GameRepository) GetAllAgentSavePaths(gameID int) (map[string]string, er
 	return result, rows.Err()
 }
 
-// GetAgentLaunchArgs returns the per-device launch args for an agent+game, or "" if none.
-func (r *GameRepository) GetAgentLaunchArgs(gameID int, agentID string) (string, error) {
-	var args string
-	err := r.db.QueryRow(
-		`SELECT LaunchArgs FROM AgentGameLaunchArgs WHERE GameId = ? AND AgentId = ?`,
-		gameID, agentID,
-	).Scan(&args)
-	if err == sql.ErrNoRows {
-		return "", nil
-	}
-	return args, err
+// AgentRunSettings holds per-device run configuration for a game.
+type AgentRunSettings struct {
+	LaunchArgs string `json:"launchArgs"`
+	EnvVars    string `json:"envVars"`
 }
 
-// SetAgentLaunchArgs upserts launch args for an agent+game. Empty string deletes the row.
-func (r *GameRepository) SetAgentLaunchArgs(gameID int, agentID, args string) error {
-	if args == "" {
+// GetAgentRunSettings returns the per-device run settings for an agent+game.
+func (r *GameRepository) GetAgentRunSettings(gameID int, agentID string) (AgentRunSettings, error) {
+	var s AgentRunSettings
+	err := r.db.QueryRow(
+		`SELECT LaunchArgs, COALESCE(EnvVars,'') FROM AgentGameLaunchArgs WHERE GameId = ? AND AgentId = ?`,
+		gameID, agentID,
+	).Scan(&s.LaunchArgs, &s.EnvVars)
+	if err == sql.ErrNoRows {
+		return AgentRunSettings{}, nil
+	}
+	return s, err
+}
+
+// SetAgentRunSettings upserts run settings for an agent+game. Deletes the row if both fields are empty.
+func (r *GameRepository) SetAgentRunSettings(gameID int, agentID string, s AgentRunSettings) error {
+	if s.LaunchArgs == "" && s.EnvVars == "" {
 		_, err := r.db.Exec(
 			`DELETE FROM AgentGameLaunchArgs WHERE GameId = ? AND AgentId = ?`,
 			gameID, agentID,
@@ -453,32 +459,38 @@ func (r *GameRepository) SetAgentLaunchArgs(gameID int, agentID, args string) er
 		return err
 	}
 	_, err := r.db.Exec(
-		`INSERT INTO AgentGameLaunchArgs(GameId, AgentId, LaunchArgs) VALUES(?,?,?)
-		 ON CONFLICT(GameId, AgentId) DO UPDATE SET LaunchArgs = excluded.LaunchArgs`,
-		gameID, agentID, args,
+		`INSERT INTO AgentGameLaunchArgs(GameId, AgentId, LaunchArgs, EnvVars) VALUES(?,?,?,?)
+		 ON CONFLICT(GameId, AgentId) DO UPDATE SET LaunchArgs = excluded.LaunchArgs, EnvVars = excluded.EnvVars`,
+		gameID, agentID, s.LaunchArgs, s.EnvVars,
 	)
 	return err
 }
 
-// GetAllAgentLaunchArgs returns all per-device launch arg overrides for a game.
-// Returns a map of agentId → launchArgs.
-func (r *GameRepository) GetAllAgentLaunchArgs(gameID int) (map[string]string, error) {
+// GetAllAgentRunSettings returns all per-device run settings for a game (agentId → settings).
+func (r *GameRepository) GetAllAgentRunSettings(gameID int) (map[string]AgentRunSettings, error) {
 	rows, err := r.db.Query(
-		`SELECT AgentId, LaunchArgs FROM AgentGameLaunchArgs WHERE GameId = ?`,
+		`SELECT AgentId, LaunchArgs, COALESCE(EnvVars,'') FROM AgentGameLaunchArgs WHERE GameId = ?`,
 		gameID,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	result := map[string]string{}
+	result := map[string]AgentRunSettings{}
 	for rows.Next() {
-		var agentID, args string
-		if err := rows.Scan(&agentID, &args); err == nil {
-			result[agentID] = args
+		var agentID string
+		var s AgentRunSettings
+		if err := rows.Scan(&agentID, &s.LaunchArgs, &s.EnvVars); err == nil {
+			result[agentID] = s
 		}
 	}
 	return result, rows.Err()
+}
+
+// GetAgentLaunchArgs returns the launch args string for an agent+game (legacy helper).
+func (r *GameRepository) GetAgentLaunchArgs(gameID int, agentID string) (string, error) {
+	s, err := r.GetAgentRunSettings(gameID, agentID)
+	return s.LaunchArgs, err
 }
 
 // UpdateGameVersion sets the current_version field (called when agent reports installed version).

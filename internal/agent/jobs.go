@@ -46,6 +46,7 @@ type InstallJob struct {
 	InstallDir  string   `json:"installDir,omitempty"`  // override default ~/Games/
 	SelectedExe string   `json:"selectedExe,omitempty"` // basename; empty = auto-detect
 	LaunchArgs  string   `json:"launchArgs,omitempty"`  // extra args appended to exe in run.sh
+	EnvVars     string   `json:"envVars,omitempty"`     // KEY=VALUE lines exported before the exe
 }
 
 // JobProgress is reported back by the agent via POST.

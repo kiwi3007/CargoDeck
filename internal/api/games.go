@@ -12,6 +12,7 @@ import (
 
 	"github.com/kiwi3007/playerr/internal/domain"
 	"github.com/kiwi3007/playerr/internal/metadata/igdb"
+	"github.com/kiwi3007/playerr/internal/repository"
 )
 
 func (h *Handler) GetAllGames(w http.ResponseWriter, r *http.Request) {
@@ -217,15 +218,15 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, updated)
 }
 
-// GetAgentLaunchArgs returns all per-device launch arg overrides for a game.
-// GET /api/v3/game/{id}/agent-launch-args → {agentId: launchArgs}
+// GetAgentLaunchArgs returns all per-device run settings for a game.
+// GET /api/v3/game/{id}/agent-launch-args → {agentId: {launchArgs, envVars}}
 func (h *Handler) GetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 	id, err := paramInt(r, "id")
 	if err != nil {
 		jsonErr(w, 400, "invalid id")
 		return
 	}
-	result, err := h.repo.GetAllAgentLaunchArgs(id)
+	result, err := h.repo.GetAllAgentRunSettings(id)
 	if err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -233,8 +234,8 @@ func (h *Handler) GetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, result)
 }
 
-// SetAgentLaunchArgs upserts the launch args for one agent+game.
-// PATCH /api/v3/game/{id}/agent-launch-args  body: {agentId, launchArgs}
+// SetAgentLaunchArgs upserts run settings for one agent+game.
+// PATCH /api/v3/game/{id}/agent-launch-args  body: {agentId, launchArgs, envVars}
 func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 	id, err := paramInt(r, "id")
 	if err != nil {
@@ -244,6 +245,7 @@ func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		AgentID    string `json:"agentId"`
 		LaunchArgs string `json:"launchArgs"`
+		EnvVars    string `json:"envVars"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		jsonErr(w, 400, err.Error())
@@ -253,7 +255,8 @@ func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "agentId required")
 		return
 	}
-	if err := h.repo.SetAgentLaunchArgs(id, req.AgentID, req.LaunchArgs); err != nil {
+	s := repository.AgentRunSettings{LaunchArgs: req.LaunchArgs, EnvVars: req.EnvVars}
+	if err := h.repo.SetAgentRunSettings(id, req.AgentID, s); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
 	}
@@ -261,10 +264,11 @@ func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 	type payload struct {
 		Title      string `json:"title"`
 		LaunchArgs string `json:"launchArgs"`
+		EnvVars    string `json:"envVars"`
 	}
 	game, _ := h.repo.GetGameByID(id)
 	if game != nil {
-		data, _ := json.Marshal(payload{Title: game.Title, LaunchArgs: req.LaunchArgs})
+		data, _ := json.Marshal(payload{Title: game.Title, LaunchArgs: req.LaunchArgs, EnvVars: req.EnvVars})
 		h.agentBroker.Send(req.AgentID, "SET_LAUNCH_ARGS", string(data))
 	}
 	jsonOK(w, map[string]string{"message": "ok"})

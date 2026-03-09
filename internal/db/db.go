@@ -38,6 +38,7 @@ func Open(dbPath string) (*sql.DB, error) {
 	)`); err != nil {
 		return nil, fmt.Errorf("create AgentGameLaunchArgs: %w", err)
 	}
+	addColumnIfMissing(db, "AgentGameLaunchArgs", "EnvVars", "TEXT NOT NULL DEFAULT ''")
 	return db, nil
 }
 

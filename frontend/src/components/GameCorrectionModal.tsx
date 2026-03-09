@@ -28,10 +28,11 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
     const [showFileExplorer, setShowFileExplorer] = useState(false);
     const [explorerMode, setExplorerMode] = useState<'install' | 'executable'>('install');
 
-    // Per-device launch args: agentId → launchArgs string
+    // Per-device run settings: agentId → { launchArgs, envVars }
     const [agents, setAgents] = useState<any[]>([]);
     const [agentLaunchArgs, setAgentLaunchArgs] = useState<Record<string, string>>({});
-    const [savedAgentLaunchArgs, setSavedAgentLaunchArgs] = useState<Record<string, string>>({});
+    const [agentEnvVars, setAgentEnvVars] = useState<Record<string, string>>({});
+    const [savedAgentSettings, setSavedAgentSettings] = useState<Record<string, { launchArgs: string; envVars: string }>>({});
 
     useEffect(() => {
         if (!game.id) return;
@@ -40,8 +41,16 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
             axios.get(`/api/v3/game/${game.id}/agent-launch-args`),
         ]).then(([agentsRes, argsRes]) => {
             setAgents(agentsRes.data || []);
-            setAgentLaunchArgs(argsRes.data || {});
-            setSavedAgentLaunchArgs(argsRes.data || {});
+            const settings: Record<string, { launchArgs: string; envVars: string }> = argsRes.data || {};
+            const launchArgs: Record<string, string> = {};
+            const envVars: Record<string, string> = {};
+            Object.entries(settings).forEach(([id, s]) => {
+                launchArgs[id] = s.launchArgs || '';
+                envVars[id] = s.envVars || '';
+            });
+            setAgentLaunchArgs(launchArgs);
+            setAgentEnvVars(envVars);
+            setSavedAgentSettings(settings);
         }).catch(() => {});
     }, [game.id]);
 
@@ -75,21 +84,27 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
             updates.executablePath = executablePath;
         }
 
-        // Save changed per-device launch args
-        const changedArgs = Object.entries(agentLaunchArgs).filter(
-            ([agentId, args]) => args !== (savedAgentLaunchArgs[agentId] ?? '')
-        );
-        const removedArgs = Object.entries(savedAgentLaunchArgs).filter(
-            ([agentId]) => agentLaunchArgs[agentId] === undefined
-        );
-        await Promise.all([
-            ...changedArgs.map(([agentId, launchArgs]) =>
-                axios.patch(`/api/v3/game/${game.id}/agent-launch-args`, { agentId, launchArgs })
-            ),
-            ...removedArgs.map(([agentId]) =>
-                axios.patch(`/api/v3/game/${game.id}/agent-launch-args`, { agentId, launchArgs: '' })
-            ),
+        // Save changed per-device run settings (launch args + env vars)
+        const allAgentIds = new Set([
+            ...Object.keys(agentLaunchArgs),
+            ...Object.keys(agentEnvVars),
+            ...Object.keys(savedAgentSettings),
         ]);
+        const patches = Array.from(allAgentIds).filter(agentId => {
+            const saved = savedAgentSettings[agentId];
+            const newArgs = agentLaunchArgs[agentId] ?? '';
+            const newEnv = agentEnvVars[agentId] ?? '';
+            return newArgs !== (saved?.launchArgs ?? '') || newEnv !== (saved?.envVars ?? '');
+        });
+        await Promise.all(
+            patches.map(agentId =>
+                axios.patch(`/api/v3/game/${game.id}/agent-launch-args`, {
+                    agentId,
+                    launchArgs: agentLaunchArgs[agentId] ?? '',
+                    envVars: agentEnvVars[agentId] ?? '',
+                })
+            )
+        );
 
         onSave(updates);
     };
@@ -200,20 +215,20 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
 
                             {agents.length > 0 && (
                                 <>
-                                    <label style={{ marginTop: '16px', display: 'block' }}>Launch Arguments (per device):</label>
-                                    <p className="hint">Extra arguments appended to the game exe in run.sh, before {"\"$@\""}.</p>
+                                    <label style={{ marginTop: '16px', display: 'block' }}>Per-device run settings:</label>
                                     <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '4px' }}>
                                         <thead>
                                             <tr>
                                                 <th style={{ textAlign: 'left', padding: '4px 8px', opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>Device</th>
-                                                <th style={{ textAlign: 'left', padding: '4px 8px', opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>Arguments</th>
+                                                <th style={{ textAlign: 'left', padding: '4px 8px', opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>Launch Args</th>
+                                                <th style={{ textAlign: 'left', padding: '4px 8px', opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>Env Vars (one per line)</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {agents.map((agent: any) => (
                                                 <tr key={agent.id}>
-                                                    <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', opacity: 0.85 }}>{agent.name}</td>
-                                                    <td style={{ padding: '4px 8px', width: '100%' }}>
+                                                    <td style={{ padding: '4px 8px', whiteSpace: 'nowrap', opacity: 0.85, verticalAlign: 'top', paddingTop: '8px' }}>{agent.name}</td>
+                                                    <td style={{ padding: '4px 8px', width: '35%', verticalAlign: 'top' }}>
                                                         <input
                                                             type="text"
                                                             value={agentLaunchArgs[agent.id] ?? ''}
@@ -223,6 +238,18 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                                                             }))}
                                                             placeholder="e.g. --rendering-driver vulkan"
                                                             style={{ width: '100%', fontFamily: 'monospace', boxSizing: 'border-box' }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ padding: '4px 8px', width: '50%', verticalAlign: 'top' }}>
+                                                        <textarea
+                                                            value={agentEnvVars[agent.id] ?? ''}
+                                                            onChange={(e) => setAgentEnvVars(prev => ({
+                                                                ...prev,
+                                                                [agent.id]: e.target.value,
+                                                            }))}
+                                                            placeholder={'WINEDLLOVERRIDES=steam_api64=n,b\nDXVK_HUD=fps'}
+                                                            rows={3}
+                                                            style={{ width: '100%', fontFamily: 'monospace', boxSizing: 'border-box', resize: 'vertical' }}
                                                         />
                                                     </td>
                                                 </tr>
