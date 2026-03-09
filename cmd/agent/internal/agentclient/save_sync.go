@@ -81,29 +81,64 @@ func (c *Client) restoreLatestSave(gameID int, title string) {
 		return
 	}
 
-	// For each save directory, find the matching top-level dir in the extract and copy
+	// Snapshot top-level entries (subdirs and/or files at root).
+	topEntries, _ := os.ReadDir(tmpDir)
+	var topDirs []string
+	hasRootFiles := false
+	for _, e := range topEntries {
+		if e.IsDir() {
+			topDirs = append(topDirs, e.Name())
+		} else {
+			hasRootFiles = true
+		}
+	}
+
 	restored := 0
 	for _, saveDir := range game.saveDirs {
-		base := filepath.Base(saveDir)
-		srcDir := filepath.Join(tmpDir, base)
-		if _, err := os.Stat(srcDir); err != nil {
-			log.Printf("[Saves] Restore: no %q in snapshot for %q — skipping dir", base, title)
-			continue
-		}
 		if err := os.MkdirAll(saveDir, 0755); err != nil {
 			log.Printf("[Saves] Restore: cannot create %s: %v", saveDir, err)
 			continue
 		}
-		copyDir(srcDir, saveDir)
-		restored++
-		log.Printf("[Saves] Restored %q → %s", base, saveDir)
+
+		base := filepath.Base(saveDir)
+
+		// 1. Exact dir name match (normal case — same path structure on both devices)
+		if srcDir := filepath.Join(tmpDir, base); dirExists(srcDir) {
+			copyDir(srcDir, saveDir)
+			restored++
+			log.Printf("[Saves] Restored %q → %s (exact match)", base, saveDir)
+			continue
+		}
+
+		// 2. Partial match — snapshot has a different top-level dir name.
+		//    Use the first available subdir in the snapshot. Handles cross-prefix restores
+		//    where the install is on a different user account or machine.
+		if len(topDirs) > 0 {
+			srcDir := filepath.Join(tmpDir, topDirs[0])
+			copyDir(srcDir, saveDir)
+			restored++
+			log.Printf("[Saves] Restored %q → %s (partial match from %q)", topDirs[0], saveDir, topDirs[0])
+			continue
+		}
+
+		// 3. Files directly at snapshot root (no wrapping dir) — copy straight in.
+		if hasRootFiles {
+			copyDir(tmpDir, saveDir)
+			restored++
+			log.Printf("[Saves] Restored snapshot root → %s", saveDir)
+		}
 	}
 
 	if restored > 0 {
 		log.Printf("[Saves] Restore complete for %q (%d save dir(s))", title, restored)
 	} else {
-		log.Printf("[Saves] Restore: no matching save directories found for %q in snapshot", title)
+		log.Printf("[Saves] Restore: snapshot was empty or no save dirs configured for %q", title)
 	}
+}
+
+func dirExists(path string) bool {
+	fi, err := os.Stat(path)
+	return err == nil && fi.IsDir()
 }
 
 // extractTarGzRestoreDir extracts a tar.gz reader into destDir.

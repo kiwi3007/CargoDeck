@@ -49,7 +49,27 @@ func (h *Handler) GetSavePaths(w http.ResponseWriter, r *http.Request) {
 
 	game, _ := h.repo.GetGameByTitle(title)
 
-	// Collect base paths: manifest → prefix-scan → fallback
+	gameID := 0
+	if game != nil {
+		gameID = game.ID
+	}
+
+	// If the user specified a custom save path for this device, use it exclusively.
+	// Don't mix with manifest/fallback — the user told us exactly where saves are.
+	var customPath string
+	if agentID != "" && game != nil {
+		customPath, _ = h.repo.GetAgentSavePath(game.ID, agentID)
+	}
+	if customPath == "" && game != nil && game.SavePath != "" {
+		customPath = game.SavePath
+	}
+	if customPath != "" {
+		log.Printf("[Saves] GetSavePaths %q agent=%s: using custom path %s", title, agentID, customPath)
+		jsonOK(w, map[string]any{"paths": []string{customPath}, "gameId": gameID})
+		return
+	}
+
+	// No custom path — auto-detect: manifest → prefix-scan → fallback
 	var basePaths []string
 	if err := h.manifest.EnsureLoaded(); err != nil {
 		log.Printf("[Saves] Manifest load error: %v", err)
@@ -68,24 +88,8 @@ func (h *Handler) GetSavePaths(w http.ResponseWriter, r *http.Request) {
 	if len(basePaths) == 0 {
 		basePaths = fallbackSavePaths(title, agentHome, wineprefix)
 	}
-
-	// Prepend per-device custom path (takes priority, appears first in watch list)
-	var customPath string
-	if agentID != "" && game != nil {
-		customPath, _ = h.repo.GetAgentSavePath(game.ID, agentID)
-	}
-	if customPath == "" && game != nil && game.SavePath != "" {
-		customPath = game.SavePath // legacy global path
-	}
-
-	gameID := 0
-	if game != nil {
-		gameID = game.ID
-	}
-	jsonOK(w, map[string]any{
-		"paths":  dedupePaths(prependIfNonEmpty(customPath, basePaths)),
-		"gameId": gameID,
-	})
+	log.Printf("[Saves] GetSavePaths %q agent=%s: auto-detected %v", title, agentID, basePaths)
+	jsonOK(w, map[string]any{"paths": basePaths, "gameId": gameID})
 }
 
 // ---- POST /api/v3/save/snapshot ----
