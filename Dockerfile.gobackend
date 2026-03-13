@@ -1,6 +1,6 @@
 # Playerr Go backend Dockerfile — ~15MB runtime vs ~200MB .NET aspnet image
 # Stage 1: Build Frontend
-FROM node:18-alpine AS frontend
+FROM node:22-alpine AS frontend
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm install
@@ -47,8 +47,8 @@ RUN mkdir -p /config /media
 VOLUME /config
 
 EXPOSE 2727
-ENV PLAYERR_PORT=2727
-ENV PLAYERR_IP=0.0.0.0
-ENV PLAYERR_CONFIG_DIR=/
+ENV CARGODECK_PORT=2727
+ENV CARGODECK_IP=0.0.0.0
+ENV CARGODECK_CONFIG_DIR=/
 
 ENTRYPOINT ["/app/cargodeck"]
