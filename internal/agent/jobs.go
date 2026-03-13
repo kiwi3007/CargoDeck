@@ -57,6 +57,11 @@ type ProtonVersionInfo struct {
 	BinPath string `json:"binPath"`
 }
 
+// SetupAccelaJob is pushed to the agent to install ACCELA + SLSsteam via enter-the-wired.
+type SetupAccelaJob struct {
+	JobID string `json:"jobId"`
+}
+
 // ListProtonJob is pushed to the agent to enumerate available Proton versions.
 type ListProtonJob struct {
 	RequestID string `json:"requestId"`

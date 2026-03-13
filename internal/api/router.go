@@ -271,6 +271,7 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Post("/{agentId}/uninstall", h.DispatchUninstallAgent)
 		r.Post("/{agentId}/upload-save", h.DispatchUploadSave)
 		r.Post("/{agentId}/rename-prefix", h.DispatchRenamePrefix)
+		r.Post("/{agentId}/setup-accela", h.DispatchSetupAccela)
 
 		// Agent-authenticated callbacks
 		r.With(h.agentAuthMiddleware).Post("/{agentId}/games", h.ReportInstalledGames)

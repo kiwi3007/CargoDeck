@@ -1239,6 +1239,12 @@ func serverFind7z() string {
 	return sevenZPath
 }
 
+// ---- Dispatch SETUP_ACCELA ----
+
+func (h *Handler) DispatchSetupAccela(w http.ResponseWriter, r *http.Request) {
+	h.dispatchSimpleJob(w, r, "SETUP_ACCELA", "ACCELA setup requested")
+}
+
 func serverIsMultiPartNotFirst(name string) bool {
 	lower := strings.ToLower(name)
 	if strings.Contains(lower, ".part") {

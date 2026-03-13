@@ -379,6 +379,8 @@ func (c *Client) listenSSE() error {
 						go c.renamePrefix(job)
 					}
 				}
+			case "SETUP_ACCELA":
+				go c.setupAccela()
 			}
 			eventType = ""
 			dataLine = ""
@@ -2321,4 +2323,40 @@ func (c *Client) checkAndUpdate() {
 
 	log.Printf("[Agent] Updated to %s — restarting...", vr.Version)
 	os.Exit(1) // systemd Restart=on-failure will restart with the new binary
+}
+
+// setupAccela installs ACCELA + SLSsteam on the agent machine via enter-the-wired.
+func (c *Client) setupAccela() {
+	const scriptURL = "https://raw.githubusercontent.com/ciscosweater/enter-the-wired/main/enter-the-wired"
+	log.Printf("[Agent] SETUP_ACCELA: downloading enter-the-wired from %s", scriptURL)
+
+	resp, err := c.http.Get(scriptURL)
+	if err != nil {
+		log.Printf("[Agent] SETUP_ACCELA: download failed: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		log.Printf("[Agent] SETUP_ACCELA: unexpected HTTP %d from %s", resp.StatusCode, scriptURL)
+		return
+	}
+
+	script, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("[Agent] SETUP_ACCELA: read failed: %v", err)
+		return
+	}
+
+	cmd := exec.Command("bash", "-s")
+	cmd.Stdin = bytes.NewReader(script)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	log.Printf("[Agent] SETUP_ACCELA: running enter-the-wired...")
+	if err := cmd.Run(); err != nil {
+		log.Printf("[Agent] SETUP_ACCELA: enter-the-wired exited with error: %v", err)
+		return
+	}
+	log.Printf("[Agent] SETUP_ACCELA: done")
 }
