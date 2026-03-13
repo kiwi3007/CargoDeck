@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { authFetch } from '../App';
-import { t, getLanguage, useTranslation } from '../i18n/translations';
+import { t } from '../i18n/translations';
 import { useSearchCache } from '../context/SearchCacheContext';
 import GameCorrectionModal from '../components/GameCorrectionModal';
 import UninstallModal from '../components/UninstallModal';
@@ -252,7 +252,6 @@ const FileTreeRow: React.FC<FileTreeRowProps> = ({ node, depth, deletingFile, on
 };
 
 const GameDetails: React.FC = () => {
-  useTranslation(); // Subscribe to language changes
   const { id } = useParams<{ id: string }>();
   const { getCacheForGame, setCacheForGame } = useSearchCache();
   const [game, setGame] = useState<Game | null>(null);
@@ -704,13 +703,11 @@ const GameDetails: React.FC = () => {
     return [step1, step2, step3, step4, step5, step6];
   };
 
-  const language = getLanguage();
-
   useEffect(() => {
     const loadGame = async () => {
       if (!id) return;
       try {
-        const response = await axios.get(`/api/v3/game/${id}?lang=${language}`);
+        const response = await axios.get(`/api/v3/game/${id}?lang=en`);
         setGame(response.data);
         setSearchTerm(prev => prev || response.data.title);
       } catch (err: any) {
@@ -721,7 +718,7 @@ const GameDetails: React.FC = () => {
     };
 
     loadGame();
-  }, [id, language]);
+  }, [id]);
 
 
   const handleSort = (field: keyof TorrentResult) => {
@@ -1317,7 +1314,7 @@ const GameDetails: React.FC = () => {
       setNotification({ message: t('gameUpdated'), type: 'success' });
       setShowCorrectionModal(false);
       // Reload game to reflect changes
-      const response = await axios.get(`/api/v3/game/${game.id}?lang=${language}`);
+      const response = await axios.get(`/api/v3/game/${game.id}?lang=en`);
       setGame(response.data);
     } catch (err: any) {
       console.error(err);
@@ -2124,7 +2121,6 @@ const GameDetails: React.FC = () => {
       {showCorrectionModal && game && (
         <GameCorrectionModal
           game={game}
-          language={language}
           onClose={() => setShowCorrectionModal(false)}
           onSave={handleCorrectionSave}
         />

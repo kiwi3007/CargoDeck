@@ -15,17 +15,16 @@ interface FolderExplorerModalProps {
     initialPath: string;
     onSelect: (path: string) => void;
     onClose: () => void;
-    language: any;
 }
 
-const FolderExplorerModal: React.FC<FolderExplorerModalProps> = ({ initialPath, onSelect, onClose, language }) => {
+const FolderExplorerModal: React.FC<FolderExplorerModalProps> = ({ initialPath, onSelect, onClose }) => {
     const [currentPath, setCurrentPath] = useState(initialPath || '/');
     const [entries, setEntries] = useState<FolderEntry[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [parentPath, setParentPath] = useState<string | null>(null);
 
-    const t = (key: any) => translate(key, language);
+    const t = (key: any) => translate(key);
 
     useEffect(() => {
         loadPath(currentPath);

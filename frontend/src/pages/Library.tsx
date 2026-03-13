@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import GameCard from '../components/GameCard';
 import ContextMenu, { ContextMenuOption } from '../components/ContextMenu';
-import { t, getLanguage } from '../i18n/translations';
+import { t } from '../i18n/translations';
 import appLogo from '../assets/app_logo.png';
 import './Library.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -66,8 +66,6 @@ const navigate = useNavigate();
     visible: false,
     game: null
   });
-
-  const language = getLanguage();
 
   const handleContextMenu = (e: React.MouseEvent, game: Game) => {
     e.preventDefault();
@@ -178,7 +176,7 @@ const navigate = useNavigate();
     setIsSearching(true);
     setShowSearchResults(true);
     try {
-      const response = await axios.get(`/api/v3/game/lookup?term=${encodeURIComponent(searchQuery)}&lang=${language}`);
+      const response = await axios.get(`/api/v3/game/lookup?term=${encodeURIComponent(searchQuery)}`);
       setSearchResults(response.data);
     } catch (error) {
       console.error('Error searching games:', error);

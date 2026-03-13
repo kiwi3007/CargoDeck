@@ -10,10 +10,9 @@ interface GameCorrectionModalProps {
     game: any;
     onClose: () => void;
     onSave: (updates: any) => void;
-    language?: string;
 }
 
-const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose, onSave, language = 'es' }) => {
+const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose, onSave }) => {
     const [activeTab, setActiveTab] = useState<'metadata' | 'path'>('metadata');
 
     // Metadata State
@@ -57,14 +56,14 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
         }).catch(() => {});
     }, [game.id]);
 
-const t = (key: string) => translate(key as any, language as any);
+const t = (key: string) => translate(key as any);
 
     const handleSearch = async () => {
         if (!searchTerm) return;
         setSearching(true);
         try {
             const response = await axios.get('/api/v3/game/lookup', {
-                params: { term: searchTerm, lang: language }
+                params: { term: searchTerm, lang: 'en' }
             });
             setResults(response.data);
         } catch (error) {
@@ -219,7 +218,6 @@ const t = (key: string) => translate(key as any, language as any);
             {showFileExplorer && (
                 <FolderExplorerModal
                     initialPath={gamePath || '/'}
-                    language={language}
                     onClose={() => setShowFileExplorer(false)}
                     onSelect={(path) => {
                         setGamePath(path);

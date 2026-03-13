@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
-import { t as translate, Language, getLanguage as getSavedLanguage, setLanguage as setGlobalLanguage } from '../i18n/translations';
+import { t as translate } from '../i18n/translations';
 import './Settings.css';
 import igdbLogo from '../assets/igdb_logo.png';
 import prowlarrLogo from '../assets/prowlarr_logo.png';
-import languageIcon from '../assets/language_icon.png';
 import mediaFolderIcon from '../assets/media_folder_icon.png';
 import jackettLogo from '../assets/jackett_logo.png';
 import pcIcon from '../assets/pc_icon.png';
@@ -598,17 +597,10 @@ const Settings: React.FC = () => {
   const [winePrefixPath, setWinePrefixPath] = useState('');
   const [scanning, setScanning] = useState(false);
   const [activeFolderField, setActiveFolderField] = useState<'media' | 'download' | 'destination' | 'wine' | 'clientLocalPath'>('media');
-  const [language, setLanguage] = useState<Language>(getSavedLanguage());
   const [forceUpdateCounter, setForceUpdateCounter] = useState(0); // Force re-render trigger
   const [showFolderExplorer, setShowFolderExplorer] = useState(false);
 
-  const t = (key: any) => translate(key, language);
-
-  const handleSaveLanguage = () => {
-    setGlobalLanguage(language);
-    alert(t('languageSaved'));
-    // Optional: reload or trigger global state update if needed
-  };
+  const t = (key: any) => translate(key);
 
   const [downloadClients, setDownloadClients] = useState<DownloadClient[]>([]);
   const [showClientModal, setShowClientModal] = useState(false);
@@ -640,9 +632,6 @@ const Settings: React.FC = () => {
   });
 
   useEffect(() => {
-    // Load saved language
-    const savedLang = localStorage.getItem('playerr_language');
-    if (savedLang) setLanguage(savedLang as Language);
     loadDownloadClients();
     loadSettings();
 
@@ -1496,34 +1485,6 @@ const Settings: React.FC = () => {
         </>
       )}
 
-      {currentTab === 'language' && (
-        <div className="settings-section" id="language">
-          <div className="section-header-with-logo">
-            <img src={languageIcon} alt="Language" className="language-icon" />
-          </div>
-          <p className="settings-description">
-            {t('languageDesc')}
-          </p>
-          <div className="form-group">
-            <label htmlFor="language-select">{t('languageTitle')}</label>
-            <select
-              id="language-select"
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-            >
-              <option value="es">Español</option>
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-              <option value="de">Deutsch</option>
-              <option value="ru">Русский</option>
-              <option value="zh">中文</option>
-              <option value="ja">日本語</option>
-            </select>
-          </div>
-          <button type="button" className="btn-primary" onClick={handleSaveLanguage}>{t('saveLanguage')}</button>
-        </div>
-      )}
-
       {currentTab === 'indexers' && (
         <>
           <div className="settings-section" id="indexers">
@@ -2091,7 +2052,6 @@ const Settings: React.FC = () => {
               setShowFolderExplorer(false);
             }}
             onClose={() => setShowFolderExplorer(false)}
-            language={language}
           />
         )
       }
