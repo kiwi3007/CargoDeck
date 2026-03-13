@@ -168,9 +168,21 @@ func (h *Handler) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.agentRegistry.Remove(agentID)
+	revokeAgentSessions(agentID)
 	h.publishAgentList()
 	log.Printf("[Agent] Deleted: %s", agentID)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// revokeAgentSessions removes all session tokens associated with agentID.
+func revokeAgentSessions(agentID string) {
+	agentSessionsMu.Lock()
+	for token, entry := range agentSessionMap {
+		if entry.agentID == agentID {
+			delete(agentSessionMap, token)
+		}
+	}
+	agentSessionsMu.Unlock()
 }
 
 // ---- List ----

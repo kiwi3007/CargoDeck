@@ -77,6 +77,16 @@ func main() {
 	handler := api.NewHandler(repo, cfg, broker, scan, importStatus, processor, linkStore, agentRegistry, agentJobs, agentBroker, manifestSvc, updateChecker)
 	router := handler.NewRouter()
 
+	// ---- Auth warning ----
+	authCfg := cfg.LoadServer()
+	if authCfg.UIPassword == "" {
+		log.Println("┌─────────────────────────────────────────────────────┐")
+		log.Println("│  WARNING: No password set. The UI is unprotected.   │")
+		log.Println("│  Set a password in Settings → Security.             │")
+		log.Println("│  Do not expose this instance to the internet.       │")
+		log.Println("└─────────────────────────────────────────────────────┘")
+	}
+
 	// ---- Static UI ----
 	uiPath := findUIPath(contentRoot)
 	if uiPath != "" {
