@@ -4,7 +4,6 @@
 Designed to make installing non-Steam games to the Steam Deck as painless as possible
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
-[![Docker](https://img.shields.io/badge/Docker-amd64%20%2F%20arm64-2496ed?style=for-the-badge&logo=docker)](https://github.com/kiwi3007/CargoDeck/pkgs/container/cargodeck)
 
 ---
 
