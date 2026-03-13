@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  GHCR_IMAGE: ghcr.io/kiwi3007/playerr
+  GHCR_IMAGE: ghcr.io/kiwi3007/cargodeck
 
 jobs:
   build-and-push:
