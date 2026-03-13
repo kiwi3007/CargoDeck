@@ -9,8 +9,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/kiwi3007/playerr/internal/domain"
-	"github.com/kiwi3007/playerr/internal/metadata/igdb"
+	"github.com/kiwi3007/cargodeck/internal/domain"
+	"github.com/kiwi3007/cargodeck/internal/metadata/igdb"
 )
 
 // platformKeyToIgdbID maps frontend platformKey strings to IGDB platform IDs.

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/kiwi3007/playerr/internal/domain"
+	"github.com/kiwi3007/cargodeck/internal/domain"
 )
 
 // cryptoRandRead is a var so tests can override it.

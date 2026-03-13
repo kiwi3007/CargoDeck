@@ -20,8 +20,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/kiwi3007/playerr/internal/agent"
-	"github.com/kiwi3007/playerr/internal/steamgriddb"
+	"github.com/kiwi3007/cargodeck/internal/agent"
+	"github.com/kiwi3007/cargodeck/internal/steamgriddb"
 )
 
 // ---- Agent nonce store (60s TTL, single-use) ----

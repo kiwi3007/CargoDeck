@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kiwi3007/playerr/internal/domain"
+	"github.com/kiwi3007/cargodeck/internal/domain"
 )
 
 // FloodClient uses Flood's REST API.

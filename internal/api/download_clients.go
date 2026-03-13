@@ -14,9 +14,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/kiwi3007/playerr/internal/domain"
-	"github.com/kiwi3007/playerr/internal/download"
-	"github.com/kiwi3007/playerr/internal/monitor"
+	"github.com/kiwi3007/cargodeck/internal/domain"
+	"github.com/kiwi3007/cargodeck/internal/download"
+	"github.com/kiwi3007/cargodeck/internal/monitor"
 )
 
 func (h *Handler) GetDownloadClients(w http.ResponseWriter, r *http.Request) {

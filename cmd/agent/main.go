@@ -4,7 +4,7 @@
 //
 // Usage:
 //
-//	playerr-agent --server http://unraid:5002 --token <token> [--name steam-deck]
+//	cargodeck-agent --server http://unraid:5002 --token <token> [--name steam-deck]
 package main
 
 import (
@@ -15,7 +15,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kiwi3007/playerr/cmd/agent/internal/agentclient"
+	"github.com/kiwi3007/cargodeck/cmd/agent/internal/agentclient"
 )
 
 var version = "dev"
@@ -29,7 +29,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println("playerr-agent", version)
+		fmt.Println("cargodeck-agent", version)
 		os.Exit(0)
 	}
 

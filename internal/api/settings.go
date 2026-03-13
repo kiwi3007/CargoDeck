@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/kiwi3007/playerr/internal/config"
+	"github.com/kiwi3007/cargodeck/internal/config"
 )
 
 // ---- IGDB ----

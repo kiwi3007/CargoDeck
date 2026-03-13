@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/kiwi3007/playerr/internal/agent"
-	"github.com/kiwi3007/playerr/internal/manifest"
+	"github.com/kiwi3007/cargodeck/internal/agent"
+	"github.com/kiwi3007/cargodeck/internal/manifest"
 )
 
 // ---- GET /api/v3/save/paths ----

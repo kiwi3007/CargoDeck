@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kiwi3007/playerr/internal/config"
-	"github.com/kiwi3007/playerr/internal/domain"
-	"github.com/kiwi3007/playerr/internal/indexer"
-	"github.com/kiwi3007/playerr/internal/repository"
-	"github.com/kiwi3007/playerr/internal/sse"
+	"github.com/kiwi3007/cargodeck/internal/config"
+	"github.com/kiwi3007/cargodeck/internal/domain"
+	"github.com/kiwi3007/cargodeck/internal/indexer"
+	"github.com/kiwi3007/cargodeck/internal/repository"
+	"github.com/kiwi3007/cargodeck/internal/sse"
 )
 
 // Checker periodically searches indexers for newer versions of installed games.

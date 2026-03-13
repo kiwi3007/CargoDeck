@@ -132,7 +132,7 @@ func (r *Runner) RunWith(exePath, wineprefix string, extraArgs ...string) *exec.
 // Used as STEAM_COMPAT_CLIENT_INSTALL_PATH to satisfy Proton without pointing at real Steam.
 func fakeSteamRootDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "playerr-agent", "fake-steam-root")
+	return filepath.Join(home, ".config", "cargodeck-agent", "fake-steam-root")
 }
 
 // findBestProtonDir finds the best Proton installation dir for UMU.

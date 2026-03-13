@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kiwi3007/playerr/internal/domain"
+	"github.com/kiwi3007/cargodeck/internal/domain"
 )
 
 // Client is the unified download client interface.

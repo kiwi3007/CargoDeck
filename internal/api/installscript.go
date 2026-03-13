@@ -24,20 +24,20 @@ INSTALL_DIR="${HOME}/Games/${GAME_TITLE}"
 SERVER={{.ServerURLQuoted}}
 TOKEN={{.TokenQuoted}}
 
-echo "[Playerr] Installing: ${GAME_TITLE}"
-echo "[Playerr] Destination: ${INSTALL_DIR}"
+echo "[CargoDeck] Installing: ${GAME_TITLE}"
+echo "[CargoDeck] Destination: ${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"
 cd "${INSTALL_DIR}"
 
 # ---- Download files ----
-{{range .Files}}echo "[Playerr] Downloading: {{.}}"
+{{range .Files}}echo "[CargoDeck] Downloading: {{.}}"
 mkdir -p "$(dirname "{{.}}")"
 curl -L --continue-at - \
   -H "Authorization: Bearer ${TOKEN}" \
   -o {{shellQuote .}} \
   "${SERVER}/api/v3/game/${GAME_ID}/file?path={{urlEncode .}}"
 {{end}}
-echo "[Playerr] Download complete."
+echo "[CargoDeck] Download complete."
 
 # ---- Run installer if found ----
 INSTALLER=""
@@ -49,7 +49,7 @@ for f in setup*.exe Setup*.exe install*.exe Install*.exe; do
 done
 
 if [ -n "${INSTALLER}" ]; then
-  echo "[Playerr] Found installer: ${INSTALLER}"
+  echo "[CargoDeck] Found installer: ${INSTALLER}"
 
   STEAM_ROOT="${HOME}/.local/share/Steam"
   [ -d "${HOME}/.steam/steam" ] && STEAM_ROOT="${HOME}/.steam/steam"
@@ -67,24 +67,24 @@ if [ -n "${INSTALLER}" ]; then
   mkdir -p "${COMPAT_DATA}"
 
   if [ -n "${PROTON_BIN}" ]; then
-    echo "[Playerr] Running via Proton: ${PROTON_BIN}"
+    echo "[CargoDeck] Running via Proton: ${PROTON_BIN}"
     STEAM_COMPAT_DATA_PATH="${COMPAT_DATA}" \
     STEAM_COMPAT_CLIENT_INSTALL_PATH="${STEAM_ROOT}" \
     "${PROTON_BIN}" run "${INSTALLER}"
   elif command -v wine &>/dev/null; then
-    echo "[Playerr] Running via Wine"
+    echo "[CargoDeck] Running via Wine"
     wine "${INSTALLER}"
   else
-    echo "[Playerr] WARNING: No Proton or Wine found. Run manually: ${INSTALL_DIR}/${INSTALLER}"
+    echo "[CargoDeck] WARNING: No Proton or Wine found. Run manually: ${INSTALL_DIR}/${INSTALLER}"
   fi
 fi
 
 # ---- Create Steam shortcut via Playerr ----
-echo "[Playerr] Creating Steam shortcut..."
+echo "[CargoDeck] Creating Steam shortcut..."
 curl -s -X POST "${SERVER}/api/v3/game/${GAME_ID}/shortcut" \
-  || echo "[Playerr] WARNING: Could not create Steam shortcut."
+  || echo "[CargoDeck] WARNING: Could not create Steam shortcut."
 
-echo "[Playerr] Done. Files are in: ${INSTALL_DIR}"
+echo "[CargoDeck] Done. Files are in: ${INSTALL_DIR}"
 `
 
 type scriptData struct {

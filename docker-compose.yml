@@ -10,6 +10,6 @@ services:
       - /mnt/user/Games:/media/games          # adjust to your game library path
       - /mnt/user/Downloads:/media/downloads  # adjust to your downloads path
     environment:
-      - PLAYERR_PORT=2727
-      - PLAYERR_IP=0.0.0.0
-      - PLAYERR_CONFIG_DIR=/
+      - CARGODECK_PORT=2727
+      - CARGODECK_IP=0.0.0.0
+      - CARGODECK_CONFIG_DIR=/

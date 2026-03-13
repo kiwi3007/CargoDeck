@@ -12,16 +12,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kiwi3007/playerr/internal/agent"
-	"github.com/kiwi3007/playerr/internal/api"
-	"github.com/kiwi3007/playerr/internal/config"
-	dbpkg "github.com/kiwi3007/playerr/internal/db"
-	"github.com/kiwi3007/playerr/internal/manifest"
-	"github.com/kiwi3007/playerr/internal/monitor"
-	"github.com/kiwi3007/playerr/internal/repository"
-	"github.com/kiwi3007/playerr/internal/scanner"
-	"github.com/kiwi3007/playerr/internal/sse"
-	"github.com/kiwi3007/playerr/internal/updater"
+	"github.com/kiwi3007/cargodeck/internal/agent"
+	"github.com/kiwi3007/cargodeck/internal/api"
+	"github.com/kiwi3007/cargodeck/internal/config"
+	dbpkg "github.com/kiwi3007/cargodeck/internal/db"
+	"github.com/kiwi3007/cargodeck/internal/manifest"
+	"github.com/kiwi3007/cargodeck/internal/monitor"
+	"github.com/kiwi3007/cargodeck/internal/repository"
+	"github.com/kiwi3007/cargodeck/internal/scanner"
+	"github.com/kiwi3007/cargodeck/internal/sse"
+	"github.com/kiwi3007/cargodeck/internal/updater"
 )
 
 var version = "dev"
@@ -35,7 +35,7 @@ func main() {
 	execDir = filepath.Dir(execDir)
 
 	// Allow override via env
-	if d := os.Getenv("PLAYERR_CONFIG_DIR"); d != "" {
+	if d := os.Getenv("CARGODECK_CONFIG_DIR"); d != "" {
 		execDir = d
 	}
 
@@ -43,7 +43,7 @@ func main() {
 	cfg := config.NewService(contentRoot)
 
 	// ---- Database ----
-	dbPath := filepath.Join(cfg.Dir(), "playerr.db")
+	dbPath := filepath.Join(cfg.Dir(), "cargodeck.db")
 	db, err := dbpkg.Open(dbPath)
 	if err != nil {
 		log.Fatalf("[DB] Failed to open database: %v", err)
@@ -89,14 +89,14 @@ func main() {
 	// ---- Server binding ----
 	serverCfg := cfg.LoadServer()
 	port := serverCfg.Port
-	if p := os.Getenv("PLAYERR_PORT"); p != "" {
+	if p := os.Getenv("CARGODECK_PORT"); p != "" {
 		fmt.Sscanf(p, "%d", &port)
 	}
 	bindIP := "127.0.0.1"
 	if serverCfg.UseAllInterfaces || os.Getenv("DOTNET_RUNNING_IN_CONTAINER") == "true" {
 		bindIP = "0.0.0.0"
 	}
-	if ip := os.Getenv("PLAYERR_IP"); ip != "" {
+	if ip := os.Getenv("CARGODECK_IP"); ip != "" {
 		bindIP = ip
 	}
 
@@ -122,7 +122,7 @@ func main() {
 	go updateChecker.Run(ctx)
 
 	// ---- Serve ----
-	log.Printf("[Server] Playerr backend listening on http://%s", addr)
+	log.Printf("[Server] CargoDeck backend listening on http://%s", addr)
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

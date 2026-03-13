@@ -22,14 +22,14 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build \
     -ldflags="-s -w -X main.version=${VERSION}" \
-    -o /app/playerr \
+    -o /app/cargodeck \
     .
 # Build agent binaries for all platforms
-RUN CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/linux-x64/playerr-agent   ./cmd/agent/ && \
-    CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/linux-arm64/playerr-agent  ./cmd/agent/ && \
-    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/win-x64/playerr-agent.exe  ./cmd/agent/ && \
-    CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/osx-x64/playerr-agent      ./cmd/agent/ && \
-    CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/osx-arm64/playerr-agent    ./cmd/agent/ && \
+RUN CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/linux-x64/cargodeck-agent   ./cmd/agent/ && \
+    CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/linux-arm64/cargodeck-agent  ./cmd/agent/ && \
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/win-x64/cargodeck-agent.exe  ./cmd/agent/ && \
+    CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/osx-x64/cargodeck-agent      ./cmd/agent/ && \
+    CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/osx-arm64/cargodeck-agent    ./cmd/agent/ && \
     echo "${VERSION}" > /app/agents/version.txt
 
 # Stage 3: Minimal runtime image (~15MB)
@@ -39,7 +39,7 @@ WORKDIR /app
 # ca-certificates for HTTPS, unrar/p7zip for post-processor archive extraction
 RUN apk add --no-cache ca-certificates p7zip
 
-COPY --from=backend /app/playerr /app/playerr
+COPY --from=backend /app/cargodeck /app/cargodeck
 COPY --from=backend /app/agents  /app/agents
 COPY --from=frontend /src/_output/UI /app/_output/UI
 
@@ -51,4 +51,4 @@ ENV PLAYERR_PORT=2727
 ENV PLAYERR_IP=0.0.0.0
 ENV PLAYERR_CONFIG_DIR=/
 
-ENTRYPOINT ["/app/playerr"]
+ENTRYPOINT ["/app/cargodeck"]
