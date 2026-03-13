@@ -1,3 +1,12 @@
+# Local dev binaries
+/cargodeck
+/playerr
+/agent
+/cargodeck-agent
+
+# Claude Code local config
+.claude/
+
 # Dependencies
 node_modules/
 .yarn/

@@ -1,8 +1,11 @@
 name: Build and Push Docker Image
 
 on:
-  release:
-    types: [published, edited]
+  push:
+    branches:
+      - dev
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
 
 env:
@@ -19,9 +22,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -32,16 +32,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get Release Version
-        id: get_version
+      - name: Compute tags
+        id: meta
         run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            echo "tags=${{ env.GHCR_IMAGE }}:latest,${{ env.GHCR_IMAGE }}:${VERSION}" >> $GITHUB_OUTPUT
           else
-            VERSION=$(grep '"version":' package.json | head -n 1 | awk -F '"' '{print $4}')
+            echo "tags=${{ env.GHCR_IMAGE }}:dev" >> $GITHUB_OUTPUT
           fi
-          echo "Detected Version: $VERSION"
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -49,7 +48,9 @@ jobs:
           context: .
           file: Dockerfile.gobackend
           push: true
-          platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ env.GHCR_IMAGE }}:latest
-            ${{ env.GHCR_IMAGE }}:${{ steps.get_version.outputs.VERSION }}
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ github.ref_name }}

@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kiwi3007/playerr/internal/config"
-	"github.com/kiwi3007/playerr/internal/domain"
-	"github.com/kiwi3007/playerr/internal/indexer"
-	"github.com/kiwi3007/playerr/internal/metadata/igdb"
-	"github.com/kiwi3007/playerr/internal/repository"
-	"github.com/kiwi3007/playerr/internal/sse"
+	"github.com/kiwi3007/cargodeck/internal/config"
+	"github.com/kiwi3007/cargodeck/internal/domain"
+	"github.com/kiwi3007/cargodeck/internal/indexer"
+	"github.com/kiwi3007/cargodeck/internal/metadata/igdb"
+	"github.com/kiwi3007/cargodeck/internal/repository"
+	"github.com/kiwi3007/cargodeck/internal/sse"
 )
 
 // Processor runs the post-download pipeline: extract → clean → move → add to library.

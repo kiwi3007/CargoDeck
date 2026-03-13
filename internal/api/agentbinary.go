@@ -12,11 +12,11 @@ import (
 )
 
 var validPlatforms = map[string]string{
-	"linux-x64":   "playerr-agent",
-	"linux-arm64": "playerr-agent",
-	"win-x64":     "playerr-agent.exe",
-	"osx-x64":     "playerr-agent",
-	"osx-arm64":   "playerr-agent",
+	"linux-x64":   "cargodeck-agent",
+	"linux-arm64": "cargodeck-agent",
+	"win-x64":     "cargodeck-agent.exe",
+	"osx-x64":     "cargodeck-agent",
+	"osx-arm64":   "cargodeck-agent",
 }
 
 // ServeAgentBinary streams the agent binary for the requested platform.
@@ -105,7 +105,7 @@ func (h *Handler) findAgentBinary(platform, binName string) string {
 // ---- Setup script ----
 
 const agentSetupTmpl = `#!/usr/bin/env bash
-# Playerr Agent Setup Script
+# CargoDeck Agent Setup Script
 # Generated: {{.GeneratedAt}}
 # Server:    {{.ServerURL}}
 #
@@ -114,16 +114,16 @@ const agentSetupTmpl = `#!/usr/bin/env bash
 #
 set -euo pipefail
 
-PLAYERR_SERVER={{.ServerURLQuoted}}
-PLAYERR_TOKEN={{.TokenQuoted}}
-PLAYERR_NAME="${1:-$(hostname 2>/dev/null || echo playerr-device)}"
+CARGODECK_SERVER={{.ServerURLQuoted}}
+CARGODECK_TOKEN={{.TokenQuoted}}
+CARGODECK_NAME="${1:-$(hostname 2>/dev/null || echo cargodeck-device)}"
 
 echo ""
 echo "╔══════════════════════════════════════╗"
-echo "║      Playerr Agent Setup             ║"
+echo "║      CargoDeck Agent Setup             ║"
 echo "╚══════════════════════════════════════╝"
-echo " Server:  ${PLAYERR_SERVER}"
-echo " Device:  ${PLAYERR_NAME}"
+echo " Server:  ${CARGODECK_SERVER}"
+echo " Device:  ${CARGODECK_NAME}"
 echo ""
 
 # ── Detect OS / architecture ──────────────────────────────────────────────────
@@ -143,17 +143,17 @@ case "${OS_TYPE}" in
   *)  echo "Unsupported OS: ${OS_TYPE}"; exit 1 ;;
 esac
 
-INSTALL_DIR="${HOME}/.config/playerr-agent"
-BINARY="${INSTALL_DIR}/playerr-agent${BIN_EXT}"
+INSTALL_DIR="${HOME}/.config/cargodeck-agent"
+BINARY="${INSTALL_DIR}/cargodeck-agent${BIN_EXT}"
 
 echo "[1/4] Creating install directory: ${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}"
 
 # ── Stop any running agent so the binary is not locked ────────────────────────
 if [ "${OS_TYPE}" = "Linux" ] && command -v systemctl &>/dev/null; then
-  systemctl --user stop playerr-agent 2>/dev/null || true
+  systemctl --user stop cargodeck-agent 2>/dev/null || true
 elif [ "${OS_TYPE}" = "Darwin" ]; then
-  PLIST="${HOME}/Library/LaunchAgents/com.playerr.agent.plist"
+  PLIST="${HOME}/Library/LaunchAgents/com.cargodeck.agent.plist"
   launchctl unload "${PLIST}" 2>/dev/null || true
 fi
 
@@ -162,11 +162,11 @@ echo "[2/4] Downloading agent binary (${PLATFORM})..."
 TMP_BINARY="${BINARY}.tmp"
 if command -v curl &>/dev/null; then
   curl -fL --progress-bar \
-    "${PLAYERR_SERVER}/api/v3/agent/binary?os=${PLATFORM}" \
+    "${CARGODECK_SERVER}/api/v3/agent/binary?os=${PLATFORM}" \
     -o "${TMP_BINARY}"
 elif command -v wget &>/dev/null; then
   wget -q --show-progress \
-    "${PLAYERR_SERVER}/api/v3/agent/binary?os=${PLATFORM}" \
+    "${CARGODECK_SERVER}/api/v3/agent/binary?os=${PLATFORM}" \
     -O "${TMP_BINARY}"
 else
   echo "Error: curl or wget is required"; exit 1
@@ -177,7 +177,7 @@ echo "      ✓ $(du -sh "${BINARY}" 2>/dev/null | cut -f1 || echo "ok")"
 
 # ── Quick connectivity test ───────────────────────────────────────────────────
 echo "[3/4] Testing connection to server..."
-if "${BINARY}" --server "${PLAYERR_SERVER}" --token "${PLAYERR_TOKEN}" --name "${PLAYERR_NAME}" --test-connection 2>/dev/null; then
+if "${BINARY}" --server "${CARGODECK_SERVER}" --token "${CARGODECK_TOKEN}" --name "${CARGODECK_NAME}" --test-connection 2>/dev/null; then
   echo "      ✓ Connected"
 else
   echo "      ⚠ Could not verify connection (agent will retry automatically)"
@@ -191,14 +191,14 @@ if [ "${OS_TYPE}" = "Linux" ] && command -v systemctl &>/dev/null; then
   SVCDIR="${HOME}/.config/systemd/user"
   mkdir -p "${SVCDIR}"
 
-  cat > "${SVCDIR}/playerr-agent.service" << SVCEOF
+  cat > "${SVCDIR}/cargodeck-agent.service" << SVCEOF
 [Unit]
 Description=Playerr Agent
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=${BINARY} --server ${PLAYERR_SERVER} --token ${PLAYERR_TOKEN} --name ${PLAYERR_NAME}
+ExecStart=${BINARY} --server ${CARGODECK_SERVER} --token ${CARGODECK_TOKEN} --name ${CARGODECK_NAME}
 Restart=on-failure
 RestartSec=15
 StandardOutput=journal
@@ -209,8 +209,8 @@ WantedBy=default.target
 SVCEOF
 
   systemctl --user daemon-reload
-  systemctl --user enable playerr-agent
-  systemctl --user restart playerr-agent 2>/dev/null || systemctl --user start playerr-agent
+  systemctl --user enable cargodeck-agent
+  systemctl --user restart cargodeck-agent 2>/dev/null || systemctl --user start cargodeck-agent
 
   # Enable linger so the service survives logout / reboot without login
   loginctl enable-linger "$(id -un)" 2>/dev/null \
@@ -219,11 +219,11 @@ SVCEOF
   sleep 2
   echo ""
   echo "── Service Status ─────────────────────────────────────────────────────"
-  systemctl --user status playerr-agent --no-pager -l || true
+  systemctl --user status cargodeck-agent --no-pager -l || true
 
 elif [ "${OS_TYPE}" = "Darwin" ]; then
   # launchd user agent
-  PLIST="${HOME}/Library/LaunchAgents/com.playerr.agent.plist"
+  PLIST="${HOME}/Library/LaunchAgents/com.cargodeck.agent.plist"
   mkdir -p "${HOME}/Library/LaunchAgents"
 
   cat > "${PLIST}" << PLISTEOF
@@ -231,13 +231,13 @@ elif [ "${OS_TYPE}" = "Darwin" ]; then
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.playerr.agent</string>
+  <key>Label</key><string>com.cargodeck.agent</string>
   <key>ProgramArguments</key>
   <array>
     <string>${BINARY}</string>
-    <string>--server</string><string>${PLAYERR_SERVER}</string>
-    <string>--token</string><string>${PLAYERR_TOKEN}</string>
-    <string>--name</string><string>${PLAYERR_NAME}</string>
+    <string>--server</string><string>${CARGODECK_SERVER}</string>
+    <string>--token</string><string>${CARGODECK_TOKEN}</string>
+    <string>--name</string><string>${CARGODECK_NAME}</string>
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -255,7 +255,7 @@ else
   # Fallback: write a run script
   cat > "${INSTALL_DIR}/run.sh" << RUNEOF
 #!/bin/bash
-exec "${BINARY}" --server "${PLAYERR_SERVER}" --token "${PLAYERR_TOKEN}" --name "${PLAYERR_NAME}"
+exec "${BINARY}" --server "${CARGODECK_SERVER}" --token "${CARGODECK_TOKEN}" --name "${CARGODECK_NAME}"
 RUNEOF
   chmod +x "${INSTALL_DIR}/run.sh"
   echo "      ⚠ No systemd/launchd found."
@@ -266,10 +266,10 @@ echo ""
 echo "══════════════════════════════════════════════════════════════════════"
 echo "  ✓ Playerr Agent installed!"
 echo "    Binary:  ${BINARY}"
-echo "    Server:  ${PLAYERR_SERVER}"
+echo "    Server:  ${CARGODECK_SERVER}"
 if [ "${OS_TYPE}" = "Linux" ] && command -v systemctl &>/dev/null; then
-  echo "    Logs:    journalctl --user -u playerr-agent -f"
-  echo "    Manage:  systemctl --user {status|stop|restart} playerr-agent"
+  echo "    Logs:    journalctl --user -u cargodeck-agent -f"
+  echo "    Manage:  systemctl --user {status|stop|restart} cargodeck-agent"
 elif [ "${OS_TYPE}" = "Darwin" ]; then
   echo "    Logs:    tail -f ${INSTALL_DIR}/agent.log"
 fi
@@ -312,7 +312,7 @@ func (h *Handler) ServeAgentSetupScript(w http.ResponseWriter, r *http.Request) 
 	}
 
 	w.Header().Set("Content-Type", "text/x-sh; charset=utf-8")
-	w.Header().Set("Content-Disposition", `attachment; filename="setup-playerr-agent.sh"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="setup-cargodeck-agent.sh"`)
 	w.WriteHeader(http.StatusOK)
 	w.Write(buf.Bytes())
 }

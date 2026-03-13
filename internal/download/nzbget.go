@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kiwi3007/playerr/internal/domain"
+	"github.com/kiwi3007/cargodeck/internal/domain"
 )
 
 type NzbgetClient struct {

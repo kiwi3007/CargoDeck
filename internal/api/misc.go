@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/kiwi3007/playerr/internal/indexer"
-	"github.com/kiwi3007/playerr/internal/scorer"
+	"github.com/kiwi3007/cargodeck/internal/indexer"
+	"github.com/kiwi3007/cargodeck/internal/scorer"
 )
 
 // Search handles GET /api/v3/search?query=&categories=

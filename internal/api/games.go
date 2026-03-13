@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kiwi3007/playerr/internal/domain"
-	"github.com/kiwi3007/playerr/internal/metadata/igdb"
-	"github.com/kiwi3007/playerr/internal/repository"
+	"github.com/kiwi3007/cargodeck/internal/domain"
+	"github.com/kiwi3007/cargodeck/internal/metadata/igdb"
+	"github.com/kiwi3007/cargodeck/internal/repository"
 )
 
 func (h *Handler) GetAllGames(w http.ResponseWriter, r *http.Request) {

@@ -1,7 +1,7 @@
 {
-  "name": "playerr",
-  "version": "0.4.9",
-  "description": "Playerr - A PVR for Video Games",
+  "name": "cargodeck",
+  "version": "0.1.0",
+  "description": "CargoDeck - Self-hosted game library manager and remote installer",
   "scripts": {
     "build": "webpack --config ./frontend/build/webpack.config.js",
     "prebuild": "npm run clean",

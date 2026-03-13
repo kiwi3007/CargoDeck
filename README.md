@@ -63,9 +63,9 @@ services:
       - /your/games:/media/games
       - /your/downloads:/media/downloads
     environment:
-      - PLAYERR_PORT=2727
-      - PLAYERR_IP=0.0.0.0
-      - PLAYERR_CONFIG_DIR=/config
+      - CARGODECK_PORT=2727
+      - CARGODECK_IP=0.0.0.0
+      - CARGODECK_CONFIG_DIR=/config
 ```
 
 Run with:
@@ -143,7 +143,7 @@ The agent registers itself on first run, stores a session token, and reconnects 
 
 ## Configuration
 
-Config files are stored in the config directory (default: `./config/`). Override with the `PLAYERR_CONFIG_DIR` environment variable.
+Config files are stored in the config directory (default: `./config/`). Override with the `CARGODECK_CONFIG_DIR` environment variable.
 
 | File | Purpose |
 |------|---------|

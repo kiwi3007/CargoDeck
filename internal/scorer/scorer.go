@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kiwi3007/playerr/internal/indexer"
+	"github.com/kiwi3007/cargodeck/internal/indexer"
 )
 
 // ── Source catalogue ──────────────────────────────────────────────────────────

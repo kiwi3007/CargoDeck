@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kiwi3007/playerr/internal/config"
-	"github.com/kiwi3007/playerr/internal/download"
-	"github.com/kiwi3007/playerr/internal/domain"
+	"github.com/kiwi3007/cargodeck/internal/config"
+	"github.com/kiwi3007/cargodeck/internal/download"
+	"github.com/kiwi3007/cargodeck/internal/domain"
 )
 
 // DownloadMonitor polls enabled download clients and triggers post-processing

@@ -10,14 +10,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/kiwi3007/playerr/internal/agent"
-	"github.com/kiwi3007/playerr/internal/config"
-	"github.com/kiwi3007/playerr/internal/manifest"
-	"github.com/kiwi3007/playerr/internal/monitor"
-	"github.com/kiwi3007/playerr/internal/repository"
-	"github.com/kiwi3007/playerr/internal/scanner"
-	"github.com/kiwi3007/playerr/internal/sse"
-	"github.com/kiwi3007/playerr/internal/updater"
+	"github.com/kiwi3007/cargodeck/internal/agent"
+	"github.com/kiwi3007/cargodeck/internal/config"
+	"github.com/kiwi3007/cargodeck/internal/manifest"
+	"github.com/kiwi3007/cargodeck/internal/monitor"
+	"github.com/kiwi3007/cargodeck/internal/repository"
+	"github.com/kiwi3007/cargodeck/internal/scanner"
+	"github.com/kiwi3007/cargodeck/internal/sse"
+	"github.com/kiwi3007/cargodeck/internal/updater"
 )
 
 // Handler holds all dependencies for the API layer.

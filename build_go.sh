@@ -22,7 +22,7 @@ build() {
     echo "  Building ${os}/${arch}..."
     GOOS="$os" GOARCH="$arch" go build \
         -ldflags "$LDFLAGS" \
-        -o "_output/${outdir}/playerr${ext}" \
+        -o "_output/${outdir}/cargodeck${ext}" \
         .
 }
 
@@ -31,7 +31,7 @@ build_agent() {
     echo "  Building agent ${os}/${arch}..."
     GOOS="$os" GOARCH="$arch" go build \
         -ldflags "$LDFLAGS" \
-        -o "_output/${outdir}/playerr-agent${ext}" \
+        -o "_output/${outdir}/cargodeck-agent${ext}" \
         ./cmd/agent/
 }
 
@@ -55,4 +55,4 @@ echo "${VERSION}" > _output/version.txt
 
 echo ""
 echo "Build complete. Binary sizes:"
-ls -lh _output/*/playerr* | awk '{print "  " $5 "  " $9}'
+ls -lh _output/*/cargodeck* | awk '{print "  " $5 "  " $9}'

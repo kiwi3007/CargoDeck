@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/kiwi3007/playerr/internal/agent"
-	"github.com/kiwi3007/playerr/internal/launcher"
+	"github.com/kiwi3007/cargodeck/internal/agent"
+	"github.com/kiwi3007/cargodeck/internal/launcher"
 )
 
 var cryptoRandRead = rand.Read
@@ -1387,8 +1387,8 @@ func (c *Client) uninstallSelf() {
 
 	// Disable and remove systemd user service (Linux)
 	if runtime.GOOS == "linux" {
-		exec.Command("systemctl", "--user", "disable", "playerr-agent").Run()
-		svcFile := filepath.Join(homeDir(), ".config", "systemd", "user", "playerr-agent.service")
+		exec.Command("systemctl", "--user", "disable", "cargodeck-agent").Run()
+		svcFile := filepath.Join(homeDir(), ".config", "systemd", "user", "cargodeck-agent.service")
 		os.Remove(svcFile)
 		exec.Command("systemctl", "--user", "daemon-reload").Run()
 		log.Printf("[Agent] Removed systemd service")
@@ -1396,13 +1396,13 @@ func (c *Client) uninstallSelf() {
 
 	// Unload launchd agent (macOS)
 	if runtime.GOOS == "darwin" {
-		plist := filepath.Join(homeDir(), "Library", "LaunchAgents", "com.playerr.agent.plist")
+		plist := filepath.Join(homeDir(), "Library", "LaunchAgents", "com.cargodeck.agent.plist")
 		exec.Command("launchctl", "unload", plist).Run()
 		os.Remove(plist)
 		log.Printf("[Agent] Removed launchd plist")
 	}
 
-	// Remove the entire config dir (~/.config/playerr-agent/) which contains
+	// Remove the entire config dir (~/.config/cargodeck-agent/) which contains
 	// the binary, agent ID, and any cached state. On Linux, the running binary
 	// inode is reference-counted by the kernel and stays in memory until exit.
 	configDir := filepath.Dir(agentIDPath())
@@ -2209,11 +2209,11 @@ func agentIDPath() string {
 	home, _ := os.UserHomeDir()
 	switch runtime.GOOS {
 	case "windows":
-		return filepath.Join(os.Getenv("APPDATA"), "playerr-agent", "id")
+		return filepath.Join(os.Getenv("APPDATA"), "cargodeck-agent", "id")
 	case "darwin":
-		return filepath.Join(home, "Library", "Application Support", "playerr-agent", "id")
+		return filepath.Join(home, "Library", "Application Support", "cargodeck-agent", "id")
 	default:
-		return filepath.Join(home, ".config", "playerr-agent", "id")
+		return filepath.Join(home, ".config", "cargodeck-agent", "id")
 	}
 }
 
