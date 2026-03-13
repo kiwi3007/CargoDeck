@@ -1,265 +1,361 @@
+/* ═══════════════════════════════════════════════
+   DOWNLOADS PAGE  —  CargoDeck
+   ═══════════════════════════════════════════════ */
+
+/* ── Page shell ── */
 .status-page {
-    padding: 2rem;
-    color: var(--text-primary);
-    max-width: 1200px;
-    margin: 0 auto;
+  min-height: 100%;
+  padding: 2rem 2.5rem 3rem;
+  background: var(--bg-base);
+  position: relative;
 }
 
+/* Ambient radial glow */
+.status-page::before {
+  content: '';
+  position: fixed;
+  top: -120px;
+  left: -80px;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.05) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Header ── */
 .status-header {
-    margin-bottom: 2rem;
+  position: relative;
+  z-index: 1;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.status-header h1 {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
+.status-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--purple-400);
+  margin-bottom: 0.4rem;
 }
 
-.status-header p {
-    color: var(--text-secondary);
+.status-title {
+  font-family: var(--font-display);
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--purple-300) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
 }
 
+/* ── Table container ── */
 .downloads-table-container {
-    background: var(--bg-secondary);
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--border-color);
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(155deg, #17152b 0%, #100e1c 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  animation: cardReveal 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* ── Table ── */
 .downloads-table {
-    width: 100%;
-    border-collapse: collapse;
+  width: 100%;
+  border-collapse: collapse;
 }
 
 .downloads-table th,
 .downloads-table td {
-    padding: 1rem;
-    text-align: left;
-    border-bottom: 1px solid var(--border-color);
+  padding: 0.85rem 1.1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .downloads-table th {
-    background: rgba(255, 255, 255, 0.05);
-    font-weight: 600;
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+  background: rgba(255, 255, 255, 0.02);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .downloads-table tr:last-child td {
-    border-bottom: none;
+  border-bottom: none;
 }
 
+.downloads-table tbody tr {
+  transition: background 0.15s;
+}
+
+.downloads-table tbody tr:hover {
+  background: rgba(168, 85, 247, 0.04);
+}
+
+.downloads-table td {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+/* ── Progress bar ── */
 .progress-bar-container {
-    width: 100%;
-    height: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
-    overflow: hidden;
-    margin-top: 0.5rem;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 0.45rem;
 }
 
 .progress-bar-fill {
-    height: 100%;
-    background: var(--accent-color);
-    transition: width 0.3s ease;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ── Client badge ── */
+.client-badge {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(168, 85, 247, 0.1);
+  color: var(--purple-300);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  white-space: nowrap;
+}
+
+/* ── Status badges ── */
 .status-badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 999px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    text-transform: capitalize;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .status-badge.downloading {
-    background: rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.22);
 }
 
 .status-badge.completed {
-    background: rgba(16, 185, 129, 0.2);
-    color: #34d399;
+  background: rgba(74, 222, 128, 0.08);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.18);
 }
 
 .status-badge.checking {
-    background: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
-    border: 1px solid rgba(245, 158, 11, 0.2);
+  background: rgba(251, 191, 36, 0.08);
+  color: var(--amber-400);
+  border: 1px solid rgba(251, 191, 36, 0.18);
 }
 
 .status-badge.copying {
-    background: rgba(99, 102, 241, 0.15);
-    color: #818cf8;
-    border: 1px solid rgba(99, 102, 241, 0.2);
+  background: rgba(99, 102, 241, 0.1);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.2);
 }
 
 .status-badge.error {
-    background: rgba(239, 68, 68, 0.2);
-    color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.2);
 }
 
 .status-badge.paused {
-    background: rgba(245, 158, 11, 0.2);
-    color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  color: var(--amber-300);
+  border: 1px solid rgba(251, 191, 36, 0.15);
 }
 
+/* ── Empty state ── */
 .empty-state {
-    text-align: center;
-    padding: 3rem;
-    color: var(--text-secondary);
+  text-align: center;
+  padding: 3.5rem 1rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
 }
 
-.delete-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
-    transition: all 0.2s ease;
-    font-size: 1.2rem;
-    line-height: 1;
-    border-radius: 4px;
-    opacity: 0.7;
-}
-
-.delete-btn:hover {
-    color: #ef4444;
-    background: rgba(239, 68, 68, 0.1);
-    opacity: 1;
+/* ── Action buttons ── */
+.control-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
 }
 
 .control-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
-    transition: all 0.2s ease;
-    font-size: 1.2rem;
-    line-height: 1;
-    border-radius: 4px;
-    opacity: 0.7;
-    margin-right: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.3rem 0.55rem;
+  transition: all 0.15s;
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: var(--radius-sm);
 }
 
 .control-btn:hover {
-    color: var(--accent-color);
-    background: rgba(59, 130, 246, 0.1);
-    opacity: 1;
+  color: var(--purple-300);
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.25);
 }
 
-.control-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
+.delete-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.3rem 0.55rem;
+  transition: all 0.15s;
+  font-size: 0.9rem;
+  line-height: 1;
+  border-radius: var(--radius-sm);
 }
 
+.delete-btn:hover {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.25);
+}
 
-/* Modal Styles copied from Settings.css for consistency */
+/* ── Modal ── */
 .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(8px);
 }
 
 .modal {
-    background-color: #181825;
-    border-radius: 8px;
-    border: 1px solid #313244;
-    width: 90%;
-    max-width: 500px;
-    /* Slightly smaller for delete confirmation */
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-normal);
+  border-radius: var(--radius-xl);
+  width: 90%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), var(--glow-purple-sm);
 }
 
 .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1.5rem;
-    border-bottom: 1px solid #313244;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .modal-header h3 {
-    color: #cdd6f4;
-    margin: 0;
-    font-size: 1.25rem;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
 }
 
 .modal-close {
-    background: none;
-    border: none;
-    color: #a6adc8;
-    font-size: 2rem;
-    cursor: pointer;
-    line-height: 1;
-    transition: color 0.2s;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.8rem;
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.15s;
+  padding: 0;
 }
 
 .modal-close:hover {
-    color: #cdd6f4;
+  color: var(--text-primary);
 }
 
 .modal-content {
-    padding: 1.5rem;
-    color: #cdd6f4;
-    line-height: 1.5;
+  padding: 1.5rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  font-size: 0.92rem;
 }
 
 .modal-actions {
-    display: flex;
-    gap: 1rem;
-    justify-content: flex-end;
-    padding: 1.5rem;
-    /* Add padding to match header/content */
-    border-top: 1px solid #313244;
-    background-color: rgba(0, 0, 0, 0.2);
-    /* Slight darken for actions area */
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-subtle);
 }
 
-/* Button styles for Modal */
 .btn-secondary {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    background-color: #313244;
-    color: #cdd6f4;
+  padding: 0.6rem 1.4rem;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .btn-secondary:hover {
-    background-color: #45475a;
-    transform: translateY(-1px);
+  border-color: var(--border-normal);
 }
 
 .btn-danger-modal {
-    /* Renamed to avoid overlap if any, but consistent style */
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    background-color: #f38ba8;
-    color: #11111b;
+  padding: 0.6rem 1.4rem;
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
 .btn-danger-modal:hover {
-    background-color: #f5c2e7;
-    /* Lighter pink/red on hover */
-    transform: translateY(-1px);
+  background: rgba(248, 113, 113, 0.2);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+/* ── Keyframes ── */
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .status-page { padding: 1.25rem 1rem 2rem; }
+  .status-title { font-size: 2rem; }
+  .downloads-table th:nth-child(1),
+  .downloads-table td:nth-child(1) { display: none; }
 }

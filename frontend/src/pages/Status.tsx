@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from '../i18n/translations';
+import { authFetch } from '../App';
 import './Status.css';
 
 interface DownloadStatus {
@@ -22,7 +23,7 @@ const Status: React.FC = () => {
 
     const fetchQueue = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:5002/api/v3/downloadclient/queue');
+            const response = await authFetch('/api/v3/downloadclient/queue');
             if (response.ok) {
                 const data = await response.json();
                 setDownloads(data);
@@ -35,15 +36,22 @@ const Status: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchQueue();
-        const interval = setInterval(fetchQueue, 3000);
-        return () => clearInterval(interval);
+        fetchQueue(); // initial load before first SSE push
+        const handler = (e: Event) => {
+            try {
+                const data = JSON.parse((e as CustomEvent).detail);
+                setDownloads(data || []);
+                setLoading(false);
+            } catch { /* ignore */ }
+        };
+        window.addEventListener('DOWNLOAD_QUEUE_UPDATED_EVENT', handler);
+        return () => window.removeEventListener('DOWNLOAD_QUEUE_UPDATED_EVENT', handler);
     }, []);
 
     const handlePause = async (clientId: number, downloadId: string, e: React.MouseEvent) => {
         e.stopPropagation();
         try {
-            await fetch(`http://127.0.0.1:5002/api/v3/downloadclient/queue/${clientId}/${encodeURIComponent(downloadId)}/pause`, {
+            await authFetch(`/api/v3/downloadclient/queue/${clientId}/${encodeURIComponent(downloadId)}/pause`, {
                 method: 'POST'
             });
             // Optimistic update
@@ -58,7 +66,7 @@ const Status: React.FC = () => {
     const handleResume = async (clientId: number, downloadId: string, e: React.MouseEvent) => {
         e.stopPropagation();
         try {
-            await fetch(`http://127.0.0.1:5002/api/v3/downloadclient/queue/${clientId}/${encodeURIComponent(downloadId)}/resume`, {
+            await authFetch(`/api/v3/downloadclient/queue/${clientId}/${encodeURIComponent(downloadId)}/resume`, {
                 method: 'POST'
             });
             // Optimistic update
@@ -79,7 +87,7 @@ const Status: React.FC = () => {
         if (!deleteCandidate) return;
 
         try {
-            const response = await fetch(`http://127.0.0.1:5002/api/v3/downloadclient/queue/${deleteCandidate.clientId}/${encodeURIComponent(deleteCandidate.id)}`, {
+            const response = await authFetch(`/api/v3/downloadclient/queue/${deleteCandidate.clientId}/${encodeURIComponent(deleteCandidate.id)}`, {
                 method: 'DELETE'
             });
 
@@ -119,8 +127,8 @@ const Status: React.FC = () => {
     return (
         <div className="status-page">
             <div className="status-header">
-                <h1>{t('statusPageTitle')}</h1>
-                <p>{t('statusPageDesc')}</p>
+                <div className="status-eyebrow">DOWNLOAD QUEUE</div>
+                <h1 className="status-title">Downloads</h1>
             </div>
 
             <div className="downloads-table-container">

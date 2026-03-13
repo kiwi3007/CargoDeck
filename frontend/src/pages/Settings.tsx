@@ -8,7 +8,6 @@ import prowlarrLogo from '../assets/prowlarr_logo.png';
 import languageIcon from '../assets/language_icon.png';
 import mediaFolderIcon from '../assets/media_folder_icon.png';
 import jackettLogo from '../assets/jackett_logo.png';
-import steamLogo from '../assets/steam_logo.png';
 import pcIcon from '../assets/pc_icon.png';
 import torrentNzbIcon from '../assets/TORRENT_NZB_icon.png';
 import FolderExplorerModal from '../components/FolderExplorerModal';
@@ -42,6 +41,537 @@ interface HydraConfiguration {
   enabled: boolean;
 }
 
+// ---- Agents tab (self-contained) ----
+
+interface AgentRow {
+  id: string;
+  name: string;
+  platform: string;
+  status: string;
+  lastSeen: string;
+  version?: string;
+}
+
+const AgentsTab: React.FC = () => {
+  const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [serverVersion, setServerVersion] = useState('');
+  const [copiedCmd, setCopiedCmd] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [token, setToken] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpExpiry, setOtpExpiry] = useState<Date | null>(null);
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState(0);
+  const [generatingOtp, setGeneratingOtp] = useState(false);
+
+  const handleDeleteAgent = async (agentId: string, agentName: string) => {
+    if (!window.confirm(`Remove "${agentName}" permanently? This cannot be undone.`)) return;
+    try {
+      await axios.delete(`/api/v3/agent/${agentId}`);
+      setAgents(prev => prev.filter(a => a.id !== agentId));
+    } catch { /* ignore */ }
+  };
+
+  const handleUninstallAgent = async (agentId: string, agentName: string) => {
+    if (!window.confirm(`Uninstall the agent on "${agentName}"?\n\nThis will stop the service, remove the binary and config, and deregister the device.`)) return;
+    try {
+      await axios.post(`/api/v3/agent/${agentId}/uninstall`);
+      // Give the agent a moment to exit, then remove from registry
+      setTimeout(async () => {
+        await axios.delete(`/api/v3/agent/${agentId}`).catch(() => {});
+        setAgents(prev => prev.filter(a => a.id !== agentId));
+      }, 3000);
+    } catch { /* ignore */ }
+  };
+
+  const handleGenerateOtp = async () => {
+    setGeneratingOtp(true);
+    try {
+      const res = await axios.post('/api/v3/auth/otp/generate');
+      setOtp(res.data.otp);
+      setOtpExpiry(new Date(res.data.expiresAt));
+    } catch { /* ignore */ }
+    setGeneratingOtp(false);
+  };
+
+  // Countdown timer for OTP
+  useEffect(() => {
+    if (!otpExpiry) return;
+    const interval = setInterval(() => {
+      const secs = Math.max(0, Math.round((otpExpiry.getTime() - Date.now()) / 1000));
+      setOtpSecondsLeft(secs);
+      if (secs === 0) {
+        setOtp('');
+        setOtpExpiry(null);
+        clearInterval(interval);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [otpExpiry]);
+
+  const serverOrigin = window.location.origin;
+  const isWindows = navigator.userAgent.includes('Windows');
+
+  // OTP-based setup command — no session token in curl (OTP is single-use)
+  const setupCmd = otp
+    ? `curl -fsSL '${serverOrigin}/api/v3/agent/setup.sh?otp=${otp}' | bash`
+    : `curl -fsSL '${serverOrigin}/api/v3/agent/setup.sh?otp=<generate-otp-first>' | bash`;
+  const setupCmdWithName = otp
+    ? `curl -fsSL '${serverOrigin}/api/v3/agent/setup.sh?otp=${otp}' | bash -s "My Device Name"`
+    : `curl -fsSL '${serverOrigin}/api/v3/agent/setup.sh?otp=<generate-otp-first>' | bash -s "My Device Name"`;
+  const winCmd = `$d="$env:APPDATA\\playerr-agent"; New-Item -Force -ItemType Directory $d | Out-Null; Invoke-WebRequest '${serverOrigin}/api/v3/agent/binary?os=win-x64' -OutFile "$d\\playerr-agent.exe"; & "$d\\playerr-agent.exe" --server '${serverOrigin}' --token '${token}' --name $env:COMPUTERNAME`;
+
+  useEffect(() => {
+    axios.get('/api/v3/agent').then(r => setAgents(r.data || [])).catch(() => {});
+    axios.get('/api/v3/settings/agent').then(r => setToken(r.data?.token || '')).catch(() => {});
+    axios.get('/api/v3/agent/version').then(r => setServerVersion(r.data?.version || '')).catch(() => {});
+    const handler = (e: Event) => {
+      try { setAgents(JSON.parse((e as CustomEvent).detail) || []); } catch { /* ignore */ }
+    };
+    window.addEventListener('AGENTS_UPDATED_EVENT', handler);
+    return () => window.removeEventListener('AGENTS_UPDATED_EVENT', handler);
+  }, []);
+
+  const copyCmd = () => {
+    const copy = (text: string) => {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).catch(() => fallback(text));
+      } else {
+        fallback(text);
+      }
+    };
+    const fallback = (text: string) => {
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    };
+    copy(isWindows ? winCmd : setupCmd);
+    setCopiedCmd(true);
+    setTimeout(() => setCopiedCmd(false), 2500);
+  };
+
+  const platforms = [
+    { id: 'linux-x64',   label: 'Linux x64',       icon: '🐧', hint: 'Steam Deck, most PCs' },
+    { id: 'linux-arm64', label: 'Linux ARM64',      icon: '🐧', hint: 'Raspberry Pi, ARM servers' },
+    { id: 'win-x64',     label: 'Windows x64',      icon: '🪟', hint: '' },
+    { id: 'osx-arm64',   label: 'macOS Apple Silicon', icon: '🍎', hint: 'M1/M2/M3' },
+    { id: 'osx-x64',     label: 'macOS Intel',      icon: '🍎', hint: '' },
+  ];
+
+  const formatLastSeen = (iso: string) => {
+    if (!iso) return 'never';
+    const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86400)}d ago`;
+  };
+
+  return (
+    <div className="settings-section" id="agents">
+      <div className="section-header-with-logo">
+        <h3>Remote Agents</h3>
+      </div>
+      <p className="settings-description">
+        Install the Playerr Agent on any device to remotely install and manage games.
+        Saves sync back automatically when games close.
+      </p>
+
+      {/* ── Setup script (primary) ── */}
+      <div className="settings-card agent-setup-card" style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '1.4rem' }}>🚀</span>
+          <div>
+            <h4 style={{ margin: 0 }}>Quick Install</h4>
+            <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: '#a6adc8' }}>
+              Run this command on the target device — it downloads, installs, and starts the agent automatically.
+            </p>
+          </div>
+        </div>
+
+        {/* OTP section (Linux/macOS) */}
+        {!isWindows && (
+          <div style={{ marginBottom: '14px', padding: '10px 14px', background: '#1e1e2e', borderRadius: '8px', border: '1px solid #313244' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.85rem', color: '#cdd6f4' }}>One-time install code:</span>
+              {otp ? (
+                <>
+                  <code style={{ fontSize: '1.1rem', fontWeight: 700, letterSpacing: '0.15em', color: '#a6e3a1', background: '#313244', padding: '3px 10px', borderRadius: '6px' }}>{otp}</code>
+                  <span style={{ fontSize: '0.8rem', color: otpSecondsLeft < 60 ? '#f38ba8' : '#a6adc8' }}>
+                    expires in {Math.floor(otpSecondsLeft / 60)}:{String(otpSecondsLeft % 60).padStart(2, '0')}
+                  </span>
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: '0.78rem', padding: '3px 10px' }}
+                    onClick={handleGenerateOtp}
+                    disabled={generatingOtp}
+                  >
+                    Regenerate
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: '0.82rem', color: '#6c7086' }}>Generate a code to embed in the curl command below.</span>
+                  <button
+                    className="btn-primary"
+                    style={{ fontSize: '0.82rem', padding: '4px 14px' }}
+                    onClick={handleGenerateOtp}
+                    disabled={generatingOtp}
+                  >
+                    {generatingOtp ? 'Generating…' : 'Generate OTP'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {isWindows ? (
+          <>
+            <p style={{ fontSize: '0.8rem', color: '#a6adc8', marginBottom: '6px' }}>
+              Run in <strong>PowerShell</strong> (Windows):
+            </p>
+            <div className="agent-cmd-box">
+              <code className="agent-cmd-text">{token ? winCmd : 'Loading...'}</code>
+              <button className="agent-cmd-copy" onClick={copyCmd} title="Copy command" disabled={!token}>
+                {copiedCmd ? '✓ Copied!' : 'Copy'}
+              </button>
+            </div>
+            <p style={{ fontSize: '0.78rem', color: '#6c7086', marginTop: '10px' }}>
+              Downloads the agent to <code>%APPDATA%\playerr-agent\</code> and starts it. To run on login, add a shortcut to your Startup folder.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="agent-cmd-box">
+              <code className="agent-cmd-text">{setupCmd}</code>
+              <button className="agent-cmd-copy" onClick={copyCmd} title="Copy command" disabled={!otp}>
+                {copiedCmd ? '✓ Copied!' : 'Copy'}
+              </button>
+            </div>
+            {!otp && (
+              <p style={{ fontSize: '0.79rem', color: '#f38ba8', marginTop: '6px' }}>
+                Generate a one-time code above to activate the copy button.
+              </p>
+            )}
+            <p style={{ fontSize: '0.8rem', color: '#6c7086', marginTop: '10px' }}>
+              To set a custom device name: <br />
+              <code style={{ fontSize: '0.78rem', color: '#a6adc8' }}>{setupCmdWithName}</code>
+            </p>
+            <p style={{ fontSize: '0.78rem', color: '#6c7086', marginTop: '8px' }}>
+              Works on Linux (systemd) and macOS (launchd). The agent auto-restarts on crash and reboot.
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* ── Manual download (advanced) ── */}
+      <div className="settings-card" style={{ marginBottom: '20px' }}>
+        <button
+          className="agent-advanced-toggle"
+          onClick={() => setShowAdvanced(v => !v)}
+        >
+          {showAdvanced ? '▾' : '▸'} Manual / Advanced Download
+        </button>
+
+        {showAdvanced && (
+          <div style={{ marginTop: '14px' }}>
+            <p style={{ fontSize: '0.85rem', color: '#a6adc8', marginBottom: '12px' }}>
+              Download the binary directly and run it manually.
+            </p>
+            <div className="agent-platform-grid">
+              {platforms.map(p => (
+                <a
+                  key={p.id}
+                  href={`/api/v3/agent/binary?os=${p.id}`}
+                  className="agent-platform-btn"
+                  download
+                >
+                  <span className="agent-platform-icon">{p.icon}</span>
+                  <span className="agent-platform-label">{p.label}</span>
+                  {p.hint && <span className="agent-platform-hint">{p.hint}</span>}
+                </a>
+              ))}
+            </div>
+            <div className="agent-manual-usage">
+              <p style={{ margin: '12px 0 4px', fontSize: '0.82rem', color: '#a6adc8' }}>Usage:</p>
+              <code style={{ fontSize: '0.78rem', color: '#cdd6f4', display: 'block', background: '#181825', padding: '8px 10px', borderRadius: '6px', lineHeight: 1.6 }}>
+                ./playerr-agent \<br />
+                &nbsp;&nbsp;--server {serverOrigin} \<br />
+                &nbsp;&nbsp;--token YOUR_TOKEN \<br />
+                &nbsp;&nbsp;--name "My Device"
+              </code>
+              <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#6c7086' }}>
+                Find your token in the server config at <code>config/agent.json</code>
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Connected agents ── */}
+      <div className="settings-card">
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          Connected Devices
+          {serverVersion && (
+            <span style={{ fontSize: '0.75rem', color: '#6c7086', fontWeight: 'normal', fontFamily: 'monospace' }}>
+              server {serverVersion}
+            </span>
+          )}
+        </h4>
+        {agents.length === 0 ? (
+          <p style={{ color: '#6c7086', fontSize: '0.9rem', marginTop: '8px' }}>
+            No devices yet. Run the setup command on a device to get started.
+          </p>
+        ) : (
+          <div className="agent-device-list">
+            {agents.map(a => {
+              const isOutdated = serverVersion && a.version && a.version !== serverVersion;
+              return (
+                <div key={a.id} className={`agent-device-row ${a.status}`}>
+                  <span className={`agent-device-dot ${a.status}`} />
+                  <div className="agent-device-info">
+                    <span className="agent-device-name">{a.name}</span>
+                    <span className="agent-device-platform">{a.platform}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+                    {a.version && (
+                      <span style={{
+                        fontSize: '0.72rem',
+                        color: isOutdated ? '#f38ba8' : (serverVersion && a.version === serverVersion ? '#a6e3a1' : '#6c7086'),
+                        fontFamily: 'monospace',
+                      }} title={isOutdated ? `Server is ${serverVersion}, agent is ${a.version}` : 'Up to date'}>
+                        {a.version}
+                        {isOutdated && ' ↑'}
+                      </span>
+                    )}
+                    <span className="agent-device-seen">{formatLastSeen(a.lastSeen)}</span>
+                    {a.status === 'online' && (
+                      <button
+                        className="agent-delete-btn"
+                        onClick={() => handleUninstallAgent(a.id, a.name)}
+                        title="Uninstall agent on this device"
+                        style={{ background: '#f38ba820', color: '#f38ba8', marginRight: '4px' }}
+                      >
+                        Uninstall
+                      </button>
+                    )}
+                    <button
+                      className="agent-delete-btn"
+                      onClick={() => handleDeleteAgent(a.id, a.name)}
+                      title="Remove device from registry (does not uninstall)"
+                    >
+                      <FontAwesomeIcon icon={faTimes} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ---- Accounts tab ----
+
+const AccountsTab: React.FC = () => {
+  const [uiPasswordSet, setUiPasswordSet] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    axios.get('/api/v3/settings/server').then(r => setUiPasswordSet(r.data?.uiPasswordSet || false)).catch(() => {});
+  }, []);
+
+  const savePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      setMsg('Passwords do not match.');
+      return;
+    }
+    try {
+      await axios.post('/api/v3/settings/server', { uiPassword: newPassword });
+      setUiPasswordSet(newPassword !== '');
+      setNewPassword('');
+      setConfirmPassword('');
+      setMsg(newPassword ? 'Password set. Reload to log in.' : 'Authentication disabled.');
+      setTimeout(() => setMsg(''), 4000);
+    } catch {
+      setMsg('Failed to save.');
+    }
+  };
+
+  return (
+    <div className="settings-section" id="accounts">
+      <h2 className="section-title">Accounts</h2>
+
+      <div className="settings-card">
+        <h4 style={{ margin: '0 0 6px' }}>UI Authentication</h4>
+        <p style={{ fontSize: '0.85rem', color: '#a6adc8', margin: '0 0 10px' }}>
+          Set a password to protect the interface when accessed over the internet.
+          Leave blank to disable (recommended for local network use).
+        </p>
+        <p style={{ fontSize: '0.82rem', margin: '0 0 14px', color: uiPasswordSet ? '#a6e3a1' : '#6c7086' }}>
+          {uiPasswordSet ? 'Authentication enabled' : 'No authentication (local network mode)'}
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '320px' }}>
+          <input
+            type="password"
+            placeholder="New password (leave blank to disable)"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            style={{ padding: '0.55rem 0.8rem', background: '#181825', border: '1px solid #313244', borderRadius: '6px', color: '#cdd6f4', fontSize: '0.9rem' }}
+          />
+          <input
+            type="password"
+            placeholder="Confirm password"
+            value={confirmPassword}
+            onChange={e => setConfirmPassword(e.target.value)}
+            style={{ padding: '0.55rem 0.8rem', background: '#181825', border: '1px solid #313244', borderRadius: '6px', color: '#cdd6f4', fontSize: '0.9rem' }}
+          />
+          <button
+            onClick={savePassword}
+            style={{ alignSelf: 'flex-start', padding: '0.5rem 1.2rem', background: '#89b4fa', color: '#1e1e2e', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}
+          >
+            Save
+          </button>
+          {msg && <p style={{ margin: 0, fontSize: '0.82rem', color: msg.includes('match') || msg.includes('Failed') ? '#f38ba8' : '#a6e3a1' }}>{msg}</p>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---- Updates tab (Discord + update check) ----
+
+interface DiscordSettings {
+  webhookUrl: string;
+  checkIntervalHours: number;
+}
+
+interface GameWithUpdate {
+  id: number;
+  title: string;
+  currentVersion: string;
+  latestVersion: string;
+}
+
+const UpdatesTab: React.FC = () => {
+  const [discord, setDiscord] = useState<DiscordSettings>({ webhookUrl: '', checkIntervalHours: 24 });
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [gamesWithUpdates, setGamesWithUpdates] = useState<GameWithUpdate[]>([]);
+
+  useEffect(() => {
+    axios.get<DiscordSettings>('/api/v3/settings/discord')
+      .then(r => setDiscord(r.data))
+      .catch(() => { /* ignore */ });
+    axios.get<Array<{ id: number; title: string; currentVersion: string; latestVersion: string; updateAvailable: boolean }>>('/api/v3/game')
+      .then(r => setGamesWithUpdates((r.data || []).filter(g => g.updateAvailable)))
+      .catch(() => { /* ignore */ });
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMsg('');
+    try {
+      await axios.post('/api/v3/settings/discord', discord);
+      setSaveMsg('Saved');
+    } catch {
+      setSaveMsg('Error saving');
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMsg(''), 3000);
+    }
+  };
+
+  const handleCheckAll = async () => {
+    setChecking(true);
+    try {
+      await axios.post('/api/v3/game/check-update');
+      setSaveMsg('Update check started');
+    } catch {
+      setSaveMsg('Error starting check');
+    } finally {
+      setChecking(false);
+      setTimeout(() => setSaveMsg(''), 4000);
+    }
+  };
+
+  return (
+    <div className="settings-section" id="updates">
+      <h2 className="section-title">Updates</h2>
+      <p style={{ color: '#a6adc8', fontSize: '0.85rem', marginBottom: '16px' }}>
+        Playerr periodically searches your indexers for newer versions of installed games and notifies you via Discord.
+      </p>
+
+      <div className="settings-row">
+        <label className="settings-label">Check interval</label>
+        <select
+          value={discord.checkIntervalHours}
+          onChange={e => setDiscord(prev => ({ ...prev, checkIntervalHours: Number(e.target.value) }))}
+          style={{ padding: '6px 10px', background: '#313244', border: '1px solid #45475a', borderRadius: '4px', color: '#cdd6f4', fontSize: '14px' }}
+        >
+          <option value={6}>Every 6 hours</option>
+          <option value={12}>Every 12 hours</option>
+          <option value={24}>Every 24 hours</option>
+          <option value={48}>Every 48 hours</option>
+        </select>
+      </div>
+
+      <div className="settings-row" style={{ marginTop: '12px' }}>
+        <label className="settings-label">Discord webhook URL</label>
+        <input
+          type="text"
+          value={discord.webhookUrl}
+          onChange={e => setDiscord(prev => ({ ...prev, webhookUrl: e.target.value }))}
+          placeholder="https://discord.com/api/webhooks/..."
+          style={{ flex: 1, padding: '6px 10px', background: '#313244', border: '1px solid #45475a', borderRadius: '4px', color: '#cdd6f4', fontSize: '14px' }}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', marginTop: '14px', alignItems: 'center' }}>
+        <button className="btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button className="btn-secondary" onClick={handleCheckAll} disabled={checking}>
+          {checking ? 'Checking…' : 'Check all now'}
+        </button>
+        {saveMsg && <span style={{ color: '#a6e3a1', fontSize: '0.85rem' }}>{saveMsg}</span>}
+      </div>
+
+      {gamesWithUpdates.length > 0 && (
+        <div style={{ marginTop: '20px' }}>
+          <h3 style={{ fontSize: '0.9rem', color: '#cdd6f4', marginBottom: '10px' }}>Games with pending updates</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {gamesWithUpdates.map(g => (
+              <div key={g.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 12px',
+                background: 'rgba(251, 146, 60, 0.06)',
+                border: '1px solid rgba(251, 146, 60, 0.15)',
+                borderRadius: '6px',
+              }}>
+                <span style={{ color: '#cdd6f4' }}>{g.title}</span>
+                <span style={{ color: '#a6adc8', fontSize: '0.8rem' }}>
+                  v{g.currentVersion || '?'} → v{g.latestVersion || '?'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ---- Main Settings component ----
+
 const Settings: React.FC = () => {
   const location = useLocation();
   const currentTab = location.hash.replace('#', '') || 'media';
@@ -61,12 +591,7 @@ const Settings: React.FC = () => {
 
   const [igdbClientId, setIgdbClientId] = useState('');
   const [igdbClientSecret, setIgdbClientSecret] = useState('');
-  const [steamApiKey, setSteamApiKey] = useState('');
-  const [steamId, setSteamId] = useState('');
-  const [steamTesting, setSteamTesting] = useState(false);
-  const [steamTestResult, setSteamTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [steamSyncing, setSteamSyncing] = useState(false);
-  const [steamSyncResult, setSteamSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [sgdbApiKey, setSgdbApiKey] = useState('');
   const [folderPath, setFolderPath] = useState('');
   const [downloadPath, setDownloadPath] = useState('');
   const [destinationPath, setDestinationPath] = useState('');
@@ -213,6 +738,9 @@ const Settings: React.FC = () => {
       setIgdbClientId(igdbResponse.data.clientId);
       setIgdbClientSecret(igdbResponse.data.clientSecret);
 
+      const sgdbResponse = await axios.get('/api/v3/settings/steamgriddb').catch(() => ({ data: {} }));
+      setSgdbApiKey(sgdbResponse.data.apiKey || '');
+
       const mediaResponse = await axios.get('/api/v3/media');
       setFolderPath(mediaResponse.data.folderPath);
       setDownloadPath(mediaResponse.data.downloadPath || '');
@@ -224,36 +752,10 @@ const Settings: React.FC = () => {
       setJackettApiKey(jackettResponse.data.apiKey);
       setJackettEnabled(jackettResponse.data.enabled !== false); // Default true
 
-      const steamResponse = await axios.get('/api/v3/settings/steam');
-      setSteamApiKey(steamResponse.data.apiKey);
-      setSteamId(steamResponse.data.steamId);
-
-      const postDownloadResponse = await axios.get('/api/v3/postdownload');
+      const postDownloadResponse = await axios.get('/api/v3/settings/postdownload');
       setPostDownloadSettings(postDownloadResponse.data);
-
-      const serverResponse = await axios.get('/api/v3/settings/server');
-      setServerSettings(serverResponse.data);
     } catch (error) {
       console.error('Error loading settings:', error);
-    }
-  };
-
-  const [serverSettings, setServerSettings] = useState({
-    port: 5002,
-    useAllInterfaces: false
-  });
-
-  const handleSaveServerSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (serverSettings.port < 1024 || serverSettings.port > 65535) {
-        alert("Port must be between 1024 and 65535");
-        return;
-      }
-      await axios.post('/api/v3/settings/server', serverSettings);
-      alert("Server settings saved. PLEASE RESTART PLAYERR FOR CHANGES TO TAKE EFFECT.");
-    } catch (error: any) {
-      alert("Error saving settings: " + error.message);
     }
   };
 
@@ -269,28 +771,15 @@ const Settings: React.FC = () => {
   const handleSaveMetadata = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('/api/v3/metadata/igdb', {
+      await axios.post('/api/v3/settings/igdb', {
         clientId: igdbClientId,
         clientSecret: igdbClientSecret,
       });
+      window.dispatchEvent(new Event('SETTINGS_UPDATED_EVENT'));
       alert(t('igdbSettingsSaved'));
     } catch (error: any) {
       console.error('Error saving IGDB settings:', error);
       alert(`${t('error')} ${t('saveMetadata')}: ${error.response?.data?.error || error.message}`);
-    }
-  };
-
-  const handleSaveSteam = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await axios.post('/api/v3/settings/steam', {
-        apiKey: steamApiKey,
-        steamId: steamId
-      });
-      alert(t('steamSettingsSaved'));
-    } catch (error: any) {
-      console.error('Error saving Steam settings:', error);
-      alert(`${t('error')} ${t('saveSteam')}: ${error.response?.data?.error || error.message}`);
     }
   };
 
@@ -308,65 +797,23 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleDisconnectSteam = async () => {
+  const handleSaveSteamGridDB = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await axios.post('/api/v3/settings/steamgriddb', { apiKey: sgdbApiKey });
+      alert('SteamGridDB settings saved');
+    } catch (error: any) {
+      alert(`Error: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
+  const handleDisconnectSteamGridDB = async () => {
     if (!window.confirm(t('disconnectConfirm'))) return;
-
     try {
-      await axios.delete('/api/v3/settings/steam');
-      setSteamApiKey('');
-      setSteamId('');
-      alert(t('steamSettingsSaved')); // Reusing "Saved" message or similar success
+      await axios.delete('/api/v3/settings/steamgriddb');
+      setSgdbApiKey('');
     } catch (error: any) {
-      console.error('Error disconnecting Steam:', error);
-      alert(`${t('error')}: ${error.response?.data?.error || error.message}`);
-    }
-  };
-
-  // ... (existing handlers)
-
-
-  const handleTestSteam = async () => {
-    setSteamTesting(true);
-    setSteamTestResult(null);
-
-    try {
-      const response = await axios.post('/api/v3/settings/steam/test', {
-        apiKey: steamApiKey,
-        steamId: steamId
-      });
-
-      setSteamTestResult({
-        success: response.data.success,
-        message: response.data.message
-      });
-    } catch (error: any) {
-      setSteamTestResult({
-        success: false,
-        message: `✗ ${t('error')}: ${error.response?.data?.message || error.message}`
-      });
-    } finally {
-      setSteamTesting(false);
-    }
-  };
-
-  const handleSyncSteam = async () => {
-    setSteamSyncing(true);
-    setSteamSyncResult(null);
-
-    try {
-      const response = await axios.post('/api/v3/settings/steam/sync');
-
-      setSteamSyncResult({
-        success: response.data.success,
-        message: response.data.message
-      });
-    } catch (error: any) {
-      setSteamSyncResult({
-        success: false,
-        message: `✗ ${t('error')}: ${error.response?.data?.message || error.message}`
-      });
-    } finally {
-      setSteamSyncing(false);
+      alert(`Error: ${error.response?.data?.error || error.message}`);
     }
   };
 
@@ -420,33 +867,12 @@ const Settings: React.FC = () => {
     }
   };
 
-  // Monitor Scan Status
+  // Monitor Scan Status via LIBRARY_UPDATED_EVENT (replaces 1s poll)
   useEffect(() => {
-    let intervalId: any;
-
-    if (scanning) {
-      // Poll every 1 second
-      intervalId = setInterval(async () => {
-        try {
-          const response = await axios.get('/api/v3/media/scan/status');
-          const isScanning = response.data.isScanning;
-
-          // If backend says it finished, update UI
-          if (!isScanning) {
-            setScanning(false);
-          }
-        } catch (err) {
-          console.error("Error polling scan status:", err);
-          // If poll fails repeatedly, should we stop? For now, let's keep trying or stop on definitive error?
-          // Stopping to avoid infinite error loops
-          setScanning(false);
-        }
-      }, 1000);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
+    if (!scanning) return;
+    const handler = () => setScanning(false);
+    window.addEventListener('LIBRARY_UPDATED_EVENT', handler);
+    return () => window.removeEventListener('LIBRARY_UPDATED_EVENT', handler);
   }, [scanning]);
 
 
@@ -700,7 +1126,7 @@ const Settings: React.FC = () => {
   const handleSavePostDownload = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post('/api/v3/postdownload', postDownloadSettings);
+      await axios.post('/api/v3/settings/postdownload', postDownloadSettings);
       alert(t('postDownloadSettingsSaved'));
     } catch (error: any) {
       console.error('Error saving post-download settings:', error);
@@ -990,79 +1416,6 @@ const Settings: React.FC = () => {
         <>
           <div className="settings-section" id="connections">
             <div className="section-header-with-logo">
-              <img src={steamLogo} alt="Steam" className="steam-logo" style={{ height: '60px' }} />
-            </div>
-            <p className="settings-description">
-              {t('steamDesc')}
-            </p>
-            <form onSubmit={handleSaveSteam}>
-              <div className="form-group">
-                <label htmlFor="steam-api-key">{t('steamApiKey')}</label>
-                <input
-                  type="password"
-                  id="steam-api-key"
-                  placeholder={t('steamApiKey')}
-                  value={steamApiKey}
-                  onChange={(e) => setSteamApiKey(e.target.value)}
-                />
-                <small>{t('steamApiKeyHelp')} <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noopener noreferrer">{t('steamDevPage')}</a></small>
-              </div>
-              <div className="form-group">
-                <label htmlFor="steam-id">{t('steamId')}</label>
-                <input
-                  type="text"
-                  id="steam-id"
-                  placeholder={t('steamId')}
-                  value={steamId}
-                  onChange={(e) => setSteamId(e.target.value)}
-                />
-              </div>
-              <div className="button-group">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={handleTestSteam}
-                  disabled={steamTesting || !steamApiKey || !steamId}
-                >
-                  {steamTesting ? t('testing') : t('testConnection')}
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={handleSyncSteam}
-                  disabled={steamSyncing || !steamApiKey || !steamId}
-                >
-                  {steamSyncing ? t('syncing') : t('syncLibrary')}
-                </button>
-                <button type="submit" className="btn-primary">{t('saveSteam')}</button>
-                {steamApiKey && (
-                  <button
-                    type="button"
-                    className="btn-delete"
-                    onClick={handleDisconnectSteam}
-                    style={{ marginLeft: '10px' }}
-                  >
-                    {t('disconnect')}
-                  </button>
-                )}
-              </div>
-
-              {steamTestResult && (
-                <div className={`test-result ${steamTestResult.success ? 'success' : 'error'}`}>
-                  {steamTestResult.message}
-                </div>
-              )}
-
-              {steamSyncResult && (
-                <div className={`test-result ${steamSyncResult.success ? 'success' : 'error'}`}>
-                  {steamSyncResult.message}
-                </div>
-              )}
-            </form>
-          </div>
-
-          <div className="settings-section">
-            <div className="section-header-with-logo">
               <img src={igdbLogo} alt="IGDB" className="igdb-logo" />
             </div>
             <p className="settings-description">
@@ -1097,6 +1450,41 @@ const Settings: React.FC = () => {
                     type="button"
                     className="btn-delete"
                     onClick={handleDisconnectIgdb}
+                    style={{ marginLeft: '10px' }}
+                  >
+                    {t('disconnect')}
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          <div className="settings-section">
+            <div className="section-header-with-logo">
+              <span style={{ fontSize: '18px', fontWeight: 700, color: '#cdd6f4' }}>SteamGridDB</span>
+            </div>
+            <p className="settings-description">
+              Automatically downloads grid, hero, and logo artwork for Steam shortcuts from SteamGridDB.
+              Get your API key at <a href="https://www.steamgriddb.com/profile/preferences/api" target="_blank" rel="noopener noreferrer">steamgriddb.com</a>.
+            </p>
+            <form onSubmit={handleSaveSteamGridDB}>
+              <div className="form-group">
+                <label htmlFor="sgdb-api-key">API Key</label>
+                <input
+                  type="password"
+                  id="sgdb-api-key"
+                  placeholder="SteamGridDB API Key"
+                  value={sgdbApiKey}
+                  onChange={(e) => setSgdbApiKey(e.target.value)}
+                />
+              </div>
+              <div className="button-group">
+                <button type="submit" className="btn-primary">{t('save')}</button>
+                {sgdbApiKey && (
+                  <button
+                    type="button"
+                    className="btn-delete"
+                    onClick={handleDisconnectSteamGridDB}
                     style={{ marginLeft: '10px' }}
                   >
                     {t('disconnect')}
@@ -1532,67 +1920,11 @@ const Settings: React.FC = () => {
       }
 
 
-      {
-        currentTab === 'advanced' && (
-          <div className="settings-section" id="advanced">
-            <div className="section-header-with-logo">
+      {currentTab === 'agents' && <AgentsTab />}
 
-              <h3>Advanced Settings</h3>
-            </div>
+      {currentTab === 'accounts' && <AccountsTab />}
 
-            <div className="settings-card warning-card">
-              <h4>⚠️ Network Configuration</h4>
-              <p>
-                Changing these settings requires a restart of the application.
-                <br />Ensure you know what you are doing before exposing the server to the Network.
-              </p>
-            </div>
-
-            <form onSubmit={handleSaveServerSettings} style={{ marginTop: '20px' }}>
-              <div className="form-group">
-                <label>HTTP Port</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  value={serverSettings.port}
-                  onChange={(e) => setServerSettings({ ...serverSettings, port: parseInt(e.target.value) })}
-                  min="1024"
-                  max="65535"
-                />
-                <small className="form-text text-muted">Default: 5002</small>
-              </div>
-
-              <div className="form-group">
-                <div className="checkbox-group">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={serverSettings.useAllInterfaces}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          if (confirm("Security Warning: Allowing remote access (0.0.0.0) exposes your server to the local network.\n\nAre you sure you want to proceed?")) {
-                            setServerSettings({ ...serverSettings, useAllInterfaces: true });
-                          }
-                        } else {
-                          setServerSettings({ ...serverSettings, useAllInterfaces: false });
-                        }
-                      }}
-                    />
-                    Allow Remote Control (Web UI)
-                  </label>
-                </div>
-                <small className="form-text text-muted">
-                  Binds the server to 0.0.0.0, allowing access from other devices on the LAN.
-                </small>
-              </div>
-
-              <div className="form-actions">
-                <button type="submit" className="btn-primary">Save & Restart Later</button>
-              </div>
-            </form>
-          </div>
-        )
-      }
+      {currentTab === 'updates' && <UpdatesTab />}
 
       {/* Modals */}
       <HydraSourceModal

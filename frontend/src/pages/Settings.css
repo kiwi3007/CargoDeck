@@ -560,11 +560,175 @@
   background-color: #e37cb1;
 }
 
-.social-btn.kofi {
-  background-color: #fcbf47;
-  color: #323842 !important;
+/* ── Agent Tab ── */
+.agent-setup-card h4 {
+  color: #cdd6f4;
+  margin: 0;
+  font-size: 1rem;
 }
 
-.social-btn.kofi:hover {
-  background-color: #ffd270;
+.agent-cmd-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #181825;
+  border: 1px solid #313244;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.agent-cmd-text {
+  flex: 1;
+  font-size: 0.82rem;
+  color: #cdd6f4;
+  word-break: break-all;
+  font-family: 'Courier New', monospace;
+}
+
+.agent-cmd-copy {
+  flex-shrink: 0;
+  background: rgba(137, 180, 250, 0.1);
+  border: 1px solid rgba(137, 180, 250, 0.3);
+  color: #89b4fa;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.agent-cmd-copy:hover {
+  background: rgba(137, 180, 250, 0.2);
+}
+
+.agent-advanced-toggle {
+  background: none;
+  border: none;
+  color: #a6adc8;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.agent-advanced-toggle:hover {
+  color: #cdd6f4;
+}
+
+.agent-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.agent-platform-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 10px;
+  text-decoration: none;
+  color: #cdd6f4;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.agent-platform-btn:hover {
+  border-color: #89b4fa;
+  background: rgba(137, 180, 250, 0.05);
+  color: #89b4fa;
+}
+
+.agent-platform-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.agent-platform-label {
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.agent-platform-hint {
+  font-size: 0.72rem;
+  color: #6c7086;
+}
+
+.agent-device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.agent-device-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 8px;
+}
+
+.agent-device-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #6c7086;
+}
+
+.agent-device-dot.online {
+  background: #a6e3a1;
+  box-shadow: 0 0 6px rgba(166, 227, 161, 0.5);
+}
+
+.agent-device-dot.offline {
+  background: #6c7086;
+}
+
+.agent-device-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.agent-device-name {
+  font-size: 0.9rem;
+  color: #cdd6f4;
+  font-weight: 500;
+}
+
+.agent-device-platform {
+  font-size: 0.78rem;
+  color: #6c7086;
+}
+
+.agent-device-seen {
+  font-size: 0.78rem;
+  color: #6c7086;
+}
+
+.agent-delete-btn {
+  background: none;
+  border: none;
+  color: #6c7086;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 0.8rem;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.agent-delete-btn:hover {
+  color: #f38ba8;
+  background: rgba(243, 139, 168, 0.12);
 }

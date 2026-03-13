@@ -1,17 +1,15 @@
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useTranslation } from '../i18n/translations';
 import { useState } from 'react';
 import './Navigation.css';
-import navEye from '../assets/nav_eye.png';
-import navLetters from '../assets/nav_letters.png';
+import cargodeckLogo from '../assets/cargodeck-logo-white.svg';
 
 import { useUI } from '../context/UIContext';
 
 const Navigation: React.FC = () => {
   const { t } = useTranslation();
-  const { toggleKofi, lastLibraryPath, lastSettingsPath } = useUI();
+  const { lastLibraryPath, lastSettingsPath } = useUI();
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
-  const location = useLocation();
 
   const handleDropdownItemClick = (tabName: string) => {
     setShowSettingsDropdown(false);
@@ -21,15 +19,15 @@ const Navigation: React.FC = () => {
   return (
     <nav className="navigation">
       <div className="nav-brand">
-        <div className="nav-logo-link" onClick={toggleKofi} style={{ cursor: 'pointer' }}>
-          <img src={navEye} alt="" className="nav-logo-eye" />
-          <img src={navLetters} alt="Playerr" className="nav-logo-letters" />
-        </div>
+        <Link to="/library" className="nav-logo-link">
+          <img src={cargodeckLogo} alt="" className="nav-logo-eye" />
+          <span className="nav-brand-name">CargoDeck</span>
+        </Link>
       </div>
       <ul className="nav-links">
         <li><NavLink to={lastLibraryPath}>{t('library')}</NavLink></li>
-        <li><NavLink to="/status">{t('status')}</NavLink></li>
-        <li><NavLink to="/user">{t('user')}</NavLink></li>
+        <li><NavLink to="/devices">Devices</NavLink></li>
+        <li><NavLink to="/status">Downloads</NavLink></li>
         <li
           className="nav-item-dropdown"
           onMouseEnter={() => setShowSettingsDropdown(true)}
@@ -44,22 +42,14 @@ const Navigation: React.FC = () => {
             <Link to="/settings#indexers" onClick={() => handleDropdownItemClick('indexers')}>{t('settingsIndexers')}</Link>
             <Link to="/settings#clients" onClick={() => handleDropdownItemClick('clients')}>{t('settingsClients')}</Link>
             <Link to="/settings#language" onClick={() => handleDropdownItemClick('language')}>{t('settingsLanguage')}</Link>
-            <Link to="/settings#advanced" onClick={() => handleDropdownItemClick('advanced')}>{t('settingsAdvanced') || 'Advanced'}</Link>
+            <Link to="/settings#agents" onClick={() => handleDropdownItemClick('agents')}>Agents</Link>
+            <Link to="/settings#accounts" onClick={() => handleDropdownItemClick('accounts')}>Accounts</Link>
+            <Link to="/settings#updates" onClick={() => handleDropdownItemClick('updates')}>Updates</Link>
           </div>
         </li>
         <li><NavLink to="/about">{t('about')}</NavLink></li>
       </ul>
-      <div className="nav-branch-tag" style={{
-        fontSize: '10px',
-        opacity: 0.6,
-        padding: '2px 6px',
-        border: '1px solid currentColor',
-        borderRadius: '4px',
-        marginLeft: '10px',
-        whiteSpace: 'nowrap'
-      }}>
-        BETA Release
-      </div>
+      <div className="nav-branch-tag">v0.1</div>
     </nav>
   );
 };

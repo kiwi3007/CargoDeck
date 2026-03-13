@@ -1,35 +1,15 @@
 services:
   playerr:
-    build: .
+    image: ghcr.io/kiwi3007/cargodeck:latest
     container_name: playerr
+    restart: unless-stopped
     ports:
       - "2727:2727"
     volumes:
-      - ./config:/app/config
-      - ./games:/media
-      - ./downloads:/downloads
+      - /mnt/user/appdata/playerr:/config
+      - /mnt/user/Games:/media/games          # adjust to your game library path
+      - /mnt/user/Downloads:/media/downloads  # adjust to your downloads path
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:2727
-    restart: unless-stopped
-    networks:
-      - arr-network
-  # Optional: Include Prowlarr if not running separately
-  # prowlarr:
-  #   image: lscr.io/linuxserver/prowlarr:latest
-  #   container_name: prowlarr
-  #   environment:
-  #     - PUID=1000
-  #     - PGID=1000
-  #     - TZ=Europe/Madrid
-  #   volumes:
-  #     - ./prowlarr-config:/config
-  #   ports:
-  #     - "9696:9696"
-  #   restart: unless-stopped
-  #   networks:
-  #     - arr-network
-
-networks:
-  arr-network:
-    driver: bridge
+      - PLAYERR_PORT=2727
+      - PLAYERR_IP=0.0.0.0
+      - PLAYERR_CONFIG_DIR=/

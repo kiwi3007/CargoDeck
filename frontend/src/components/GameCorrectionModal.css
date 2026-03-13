@@ -98,6 +98,34 @@
     cursor: pointer;
 }
 
+.steam-id-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.steam-id-row label {
+    font-size: 0.8rem;
+    color: #a6adc8;
+    white-space: nowrap;
+}
+
+.steam-id-input {
+    width: 140px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #313244;
+    background: #181825;
+    color: #cdd6f4;
+    font-size: 0.85rem;
+}
+
+.steam-id-input::-webkit-outer-spin-button,
+.steam-id-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+}
+
 .search-results {
     display: flex;
     flex-direction: column;

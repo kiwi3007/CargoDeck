@@ -250,6 +250,7 @@ export const en = {
     searchingInstaller: 'Searching installer...',
     installerLaunched: 'Installer launched',
     errorLaunchingInstaller: 'Error launching installer',
+    noGameFilesFound: 'No game files found. The download may still be in progress or needs to be transferred to the library first.',
     launchingGame: 'Launching game...',
     gameLaunched: 'Game launched',
     errorLaunchingGame: 'Error launching game',

@@ -1,29 +1,43 @@
+/* ── Game Card ── */
 .game-card {
-  background-color: #181825;
-  border-radius: 8px;
+  background: linear-gradient(155deg, #17152b 0%, #100e1c 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: border-color 0.22s, box-shadow 0.22s, transform 0.22s;
   position: relative;
+  animation: cardReveal 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .game-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  border-color: rgba(168, 85, 247, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(168, 85, 247, 0.08),
+    0 8px 28px rgba(168, 85, 247, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+  transform: translateY(-3px);
 }
 
+/* ── Poster ── */
 .game-card-poster {
   position: relative;
   width: 100%;
   aspect-ratio: 3/4;
   overflow: hidden;
-  background-color: #11111b;
+  background: var(--bg-elevated);
 }
 
 .game-card-poster img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.3s ease;
+  display: block;
+}
+
+.game-card:hover .game-card-poster img {
+  transform: scale(1.04);
 }
 
 .game-card-placeholder {
@@ -32,126 +46,164 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 3rem;
-  color: #45475a;
+  font-size: 2.4rem;
+  color: var(--text-muted);
 }
 
-.game-card-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 50%);
-  opacity: 0;
-  transition: opacity 0.2s;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding: 1rem;
-}
-
-.game-card:hover .game-card-overlay {
-  opacity: 1;
-}
-
-.game-card-rating {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background-color: #89b4fa;
-  color: #11111b;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-weight: bold;
-  font-size: 0.875rem;
-}
-
-.game-card-info {
-  padding: 1rem;
-}
-
-.game-card-title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem 0;
-  color: #cdd6f4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.game-card-meta {
-  display: flex;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: #a6adc8;
-  margin-bottom: 0.5rem;
-}
-
-.game-card-year,
-.game-card-platform {
-  padding: 2px 6px;
-  background-color: #313244;
-  border-radius: 4px;
-}
-
-.game-card-status {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #11111b;
-}
-
+/* ── Delete button (top-left, shown on hover) ── */
 .game-card-delete-btn {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 24px;
-  height: 24px;
-  background-color: #f38ba8;
-  color: #11111b;
+  top: 7px;
+  left: 7px;
+  width: 26px;
+  height: 26px;
+  background: rgba(248, 113, 113, 0.82);
+  color: #fff;
   border: none;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: bold;
-  transition: transform 0.2s, background-color 0.2s;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s, transform 0.15s, background 0.15s;
   z-index: 10;
 }
 
+.game-card:hover .game-card-delete-btn {
+  opacity: 1;
+}
+
 .game-card-delete-btn:hover {
-  background-color: #f8a1b6;
+  background: rgba(248, 113, 113, 1);
   transform: scale(1.1);
 }
 
+/* ── Platform icon (bottom-right corner) ── */
 .game-card-platform-badge {
   position: absolute;
-  bottom: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  background-color: rgba(24, 24, 37, 0.8);
+  bottom: 7px;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  background: rgba(10, 8, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 50%;
-  padding: 4px;
+  padding: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 5;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(6px);
 }
 
 .game-card-platform-badge img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* ── Card info strip ── */
+.game-card-info {
+  padding: 0.65rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.game-card-title {
+  font-family: var(--font-display);
+  font-size: 0.84rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  /* Reserve space for exactly 2 lines so all cards are the same height */
+  min-height: calc(2 * 1.3 * 0.84rem);
+}
+
+/* ── Footer row: year · rating · status ── */
+.game-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 1.4rem; /* consistent height even when no badge */
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.game-card-year {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.gc-sep {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  opacity: 0.4;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.game-card-rating {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--amber-300);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+/* ── Status badges ── */
+.gc-badge {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.gc-badge--owned {
+  background: rgba(74, 222, 128, 0.08);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.18);
+}
+
+.gc-badge--downloading {
+  background: rgba(96, 165, 250, 0.1);
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  animation: pulseDownload 2s ease-in-out infinite;
+}
+
+.gc-badge--missing {
+  background: rgba(251, 191, 36, 0.08);
+  color: var(--amber-400);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+/* ── Keyframes ── */
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseDownload {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
 }

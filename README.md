@@ -1,188 +1,167 @@
-# Playerr
-[🇪🇸 Leer en Español](README.es.md)
+# CargoDeck
 
-### **Self-Hosted Game Library Manager & PVR**
+**Self-hosted game library manager & remote installer.**
+Designed to make installing non-Steam games to the Steam Deck as painless as possible
 
-[![Go to Website](https://img.shields.io/badge/Website-playerr.app-6366f1?style=for-the-badge)](https://playerr.app)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Docker Support](https://img.shields.io/badge/Docker-amd64%20%2F%20arm64-2496ed?style=for-the-badge&logo=docker)](https://hub.docker.com/r/maikboarder/playerr)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](https://www.gnu.org/licenses/gpl-3.0)
+[![Docker](https://img.shields.io/badge/Docker-amd64%20%2F%20arm64-2496ed?style=for-the-badge&logo=docker)](https://github.com/kiwi3007/CargoDeck/pkgs/container/cargodeck)
 
-### Downloads (Latest)
-[![Windows](https://img.shields.io/badge/Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Windows-x64.zip)
-[![Playerr.exe](https://img.shields.io/badge/Playerr.exe-Installer-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Windows-Setup-x64.exe)
-[![Playerr.app](https://img.shields.io/badge/Playerr.app-macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr.dmg)
-[![macOS ARM64](https://img.shields.io/badge/macOS_Apple_Silicon-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr.dmg)
-[![macOS Intel](https://img.shields.io/badge/macOS_Intel-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Intel.dmg)
-[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Linux-x64.tar.gz)
+---
 
-Inspired by the workflow of Radarr and Sonarr, Playerr is designed to be the definitive solution for video game enthusiasts who self-host their libraries. It bridges the gap between your local digital assets and the vast world of gaming metadata.
+## AI Disclaimer
 
-## Main Features
+This project was initially forked from [Maikboarder/Playerr](https://github.com/Maikboarder/Playerr) and all further development has been with heavy AI assistance. I am making this public because it has been useful to me and could be useful to others. It would my advice that this application is not exposed to the internet.
 
-*   **Intelligent Library Scanning:** Recursive and smart recognition engine that identifies video game platforms across your storage, mapping local files to their respective titles.
-*   **Rich Metadata Integration:** Native hooks into IGDB and Steam APIs to fetch high-quality artwork, descriptions, ratings, and release dates.
-*   **Seamless PVR Workflow:** Support for Prowlarr and Jackett for automated indexer management and advanced searching.
-*   **NZB Protocol Support:** Native integration for Usenet downloads via NZB files, automatically handling protocol associations. Compatible with **SABnzbd** and **NZBGet**.
-*   **Download Client Connectivity:** Native API integration for managing transfers via industry-standard clients (qBittorrent, Transmission, SABnzbd).
-*   **Modern Web GUI:** A vibrant, dark-themed responsive interface designed for both desktop and containerized environments.
-*   **Smart Path & File Management:** Automatic folder renaming based on sanitized IGDB titles, preserving original release structure while keeping the library clean and organized.
-*   **Automated Deployment Tool:** Efficiently processes local installation packages and identifies primary executables to streamline library organization.
-*   **Unified Library View:** Display your entire gaming collection in one place, including native support for syncing and viewing your **Steam Library**.
+## What is CargoDeck?
 
-## Screenshots
+CargoDeck is a self-hosted game library manager focused on manual download of games. It connects to your indexers and download clients, automatically processes completed downloads, and can push games directly to remote devices such as the Steam Deck over the network.
 
-| Game View | Game Details |
-|:---:|:---:|
-| ![Game View](https://raw.githubusercontent.com/Maikboarder/Playerr/master/screenshots/Game%20View.png) | ![Game Details](https://raw.githubusercontent.com/Maikboarder/Playerr/master/screenshots/Details.png) |
+---
 
-| Settings (Indexers) | Library Grid |
-|:---:|:---:|
-| ![Settings](https://raw.githubusercontent.com/Maikboarder/Playerr/master/screenshots/Indexers%3ATorrents.png) | ![Library Grid](https://raw.githubusercontent.com/Maikboarder/Playerr/master/screenshots/Library%20Games.png) |
+## Features
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Maikboarder/Playerr/master/screenshots/Search%20Manager.png" alt="Search Manager" width="600">
-  <br>
-  <em>Search Manager</em>
-</p>
+### Indexer Search
+Search Prowlarr from a single interface and send directly to your download client of choice.
 
-## Supported Platforms
+### Game Library
+Add games my scanning your games directory or manually searching for games from IGDB.
 
-Playerr is architected for maximum reach, offering multi-platform binaries and containerized solutions:
+### Automatic Processing
+Automatically scans, extracts, and imports game files from your download clients.
 
-*   **Docker:** Universal support for amd64 and arm64 (Raspberry Pi, CasaOS, Synology, etc.).
-*   **Windows:** Native 64-bit performance. [Download .exe (Installer)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Windows-Setup-x64.exe) or [Download .zip (Portable)](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Windows-x64.zip)
-*   **macOS:** Optimized for Apple Silicon ([Download .dmg](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr.dmg)) and Intel ([Download .dmg](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Intel.dmg)).
-*   **Linux:** Generic 64-bit binary distributions. [Download .tar.gz](https://github.com/Maikboarder/Playerr/releases/latest/download/Playerr-Linux-x64.tar.gz)
+### Download Clients
+Native integration with qBittorrent, Transmission, Deluge, Flood, rTorrent, SABnzbd, and NZBGet.
 
-### Compatibility & Runners
-Playerr manages your library, but to execute Windows-native titles on macOS or Linux, we recommend the following compatibility layers:
+### Remote Devices & Agents
+Install and manage games on remote machines over the network via lightweight agents. Supports Steam Deck, HTPCs, and any Linux or Windows machine. Agents connect back to the server and receive install jobs automatically.
 
-* **macOS:** [Whisky](https://getwhisky.app/) (Free/Open Source) or [CrossOver](https://www.codeweavers.com/crossover) (Paid/Official Support).
-* **Linux / Steam Deck:** Native support via **Proton** (Steam), [Lutris](https://lutris.net/), or [Bottles](https://usebottles.com/).
+### Wine & Proton
+Auto-detects the best available runner on each device (Steam Proton, system Wine). Generates launch scripts, applies crack files, and adds Steam shortcuts automatically.
 
-## Installation & Setup
+### Save Sync
+Watches game save directories in real-time using inotify. Syncs snapshots to the server on file change or game exit. Retains the last 10 snapshots per device per game, with conflict detection and restore-suppression to avoid false positives.
 
-> **Note:** Requires valid IGDB API keys (free) for metadata fetching.
+### Update Tracking
+Monitors indexers for newer versions of games already in your library. Parses version numbers from release names, PE binaries, GOG info files, and engine-specific metadata.
+
+---
+
+## Installation
 
 ### Docker (Recommended)
-The easiest way to run Playerr is using Docker. It includes everything you need in a single container. Access the UI at `http://your-ip:2727`.
 
-#### Standard Desktop / Server
-Create a `docker-compose.yml` file and run `docker-compose up -d`:
 ```yaml
 services:
-  playerr:
-    image: maikboarder/playerr:latest
-    container_name: playerr
+  cargodeck:
+    image: ghcr.io/kiwi3007/cargodeck:latest
+    container_name: cargodeck
+    restart: unless-stopped
     ports:
       - "2727:2727"
     volumes:
-      - ./config:/app/config
-      - /your/games/path:/media
-    restart: unless-stopped
+      - ./config:/config
+      - /your/games:/media/games
+      - /your/downloads:/media/downloads
+    environment:
+      - PLAYERR_PORT=2727
+      - PLAYERR_IP=0.0.0.0
+      - PLAYERR_CONFIG_DIR=/config
 ```
 
-#### CasaOS
-1. Go to **App Store** -> **Custom Install**.
-2. Click on **Import** (top right) and paste this specific code (includes the icon):
-   ```yaml
-   services:
-     playerr:
-       image: maikboarder/playerr:latest
-       container_name: playerr
-       ports:
-         - "2727:2727"
-       volumes:
-         - /DATA/AppData/playerr/config:/app/config
-         - /DATA/Media/Games:/media
-       restart: unless-stopped
-   
-   x-casaos:
-     architectures:
-       - amd64
-       - arm64
-     main: playerr
-     icon: https://raw.githubusercontent.com/Maikboarder/Playerr/master/frontend/src/assets/app_logo.png
-     title:
-       en_us: Playerr
-   ```
-3. Click **Install**.
+Run with:
+```bash
+docker compose up -d
+```
 
-#### Synology / NAS
-1. Open **Container Manager** (or Docker).
-2. Go to **Project** -> **Create**.
-3. Paste the Docker Compose code and configure your local folders.
-4. Click **Done**.
+Access the UI at `http://your-ip:2727`.
 
-### Build from Source (For Developers)
+### Build from Source
 
-If you want to modify the code or build the image locally instead of pulling it from Docker Hub:
+**Requirements:** Go 1.24+, Node.js 18+
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/maikboarder/playerr.git
-   cd playerr
-   ```
+```bash
+git clone https://github.com/kiwi3007/CargoDeck.git
+cd CargoDeck
 
-2. Use the build command:
-   ```bash
-   docker build -t playerr:local .
-   ```
+# Build frontend
+npm install && npm run build
 
-3. Or use a `docker-compose.override.yml` to force a local build:
-   ```yaml
-   services:
-     playerr:
-       build: .
-       image: playerr:local
-       # ... rest of your config
-   ```
+# Build backend (Linux)
+go build -o _output/linux-x64/cargodeck .
+
+# Or use the build script for all platforms
+./build_go.sh
+```
 
 ---
 
-## Roadmap
+## Agent Setup
 
-### Phase 1: Foundation (v0.1.0 - v0.4.7)
-- [x] **Core PVR Functionality:** Automated search and categorization engine.
-- [x] **NZB Protocol Support:** Native integration for SABnzbd and NZBGet.
-- [x] **Multi-Platform Deployment:** Official builds for Windows, macOS (Apple & Intel), and Linux.
-- [x] **Windows Installer:** Professional NSIS installer for a seamless setup experience.
-- [x] **Persistent Storage:** SQLite integration to ensure library data and metadata longevity.
+Agents are lightweight binaries that run on remote devices and receive install jobs from the server.
+### Linux / Steam Deck / macOS
 
-### Phase 2: Power User Features (Current Focus)
-- [x] **Infrastructure & Storage Optimization:**
-  - [x] **Atomic Move (Hardlinks):** Instant file management without data fragmentation.
-  - [x] **Unraid Integration:** Community XML template support (`_unraid/playerr.xml`).
-  - [x] **Smart API Handling:** Advanced rate-limiting and batching for metadata providers.
-- [x] **One-Click Launch Integration:** Direct execution support for **Steam** and initial implementation for **Installed Local Games**.
-- [x] **UI/UX Refinement:** Premium iconography (FontAwesome) and consistent Nord-themed design.
-- [x] **Advanced Configuration:**
-  - [x] **Custom IP/Port Binding:** Flexible network settings.
-  - [x] **System Tray Support:** Minimize to Tray for Windows.
+Go to **Settings → Agents**, generate a one-time token (valid 15 minutes), and copy the command shown in the client.
 
-### Phase 3: Ecosystem & Future Vision
-- [ ] **Bazzite & Linux Gaming:** Specialized compatibility hooks for Lutris, Proton, and Steam Deck.
-- [x] **DBI Protocol Support:** Advanced USB file transfer and management for handheld hardware devices.
-- [ ] **Official App Stores:** Integration into official Unraid, CasaOS, and Synology app manifests.
-- [ ] **Extensibility Engine:** Support for community-driven scripts and metadata plugins.
+Run the installer in your terminal on your remote device. To make this easier on Steam Deck, you can visit the UI in the browser and copy the command from there.
 
-## Community & Support
+This will:
+- Auto-detect the OS and architecture
+- Download the correct agent binary to `~/.config/playerr-agent/`
+- Install and start a **systemd user service** (Linux) or **launchd agent** (macOS) so the agent restarts automatically on reboot
 
-I'm building Playerr with the community in mind. Your feedback is the engine that drives our development.
+To check status on Linux:
+```bash
+systemctl --user status playerr-agent
+journalctl --user -u playerr-agent -f
+```
 
-*   **Contribute:** Found a bug? Have a killer feature idea? Open an issue or a PR!
-*   **Support:** If Playerr brings value to your setup, consider supporting the project. Your contributions enable more focused development, better stability, and faster implementation of the roadmap.
+### Windows
+
+Windows does not support the one-liner. Instead:
+
+1. In the UI go to **Settings → Agents** and download the `win-x64` agent binary
+2. Move `playerr-agent.exe` somewhere permanent, e.g. `C:\playerr-agent\`
+3. Open Command Prompt and run:
+
+```cmd
+playerr-agent.exe --server http://your-server:2727 --token YOUR_TOKEN --name my-pc
+```
+
+To run automatically on login, create a scheduled task:
+
+```powershell
+$action = New-ScheduledTaskAction -Execute "C:\playerr-agent\playerr-agent.exe" `
+  -Argument "--server http://your-server:2727 --token YOUR_TOKEN --name my-pc"
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+Register-ScheduledTask -TaskName "CargoDeck Agent" -Action $action -Trigger $trigger -RunLevel Highest
+```
 
 
-[![Sponsor on GitHub](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86&style=for-the-badge)](https://github.com/sponsors/Maikboarder)
+The agent registers itself on first run, stores a session token, and reconnects automatically if the server restarts.
+
+---
+
+## Configuration
+
+Config files are stored in the config directory (default: `./config/`). Override with the `PLAYERR_CONFIG_DIR` environment variable.
+
+| File | Purpose |
+|------|---------|
+| `appsettings.json` | Server port and bind address |
+| `igdb.json` | IGDB API credentials (required for metadata) |
+| `hydra.json` | Indexer configuration |
+| `prowlarr.json` / `jackett.json` | Prowlarr / Jackett connection |
+| `media.json` | Library, download, and destination paths |
+| `playerr.db` | SQLite database |
+
+---
 
 ## License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Released under the GNU General Public License v3.0. See `LICENSE` for details.
 
-## Legal Disclaimer
-
-Playerr is an open-source project for educational and personal library management. It is **not affiliated** with any third-party game platforms or metadata providers. The developers do not condone piracy; users are responsible for complying with their local laws regarding copyright and content usage. See `DISCLAIMER.md` for the full legal notice.
+See `DISCLAIMER.md` for the legal notice regarding third-party content and user responsibility.
 
 ---
-*Developed by Maikboarder*
+
+*Forked from [Maikboarder/Playerr](https://github.com/Maikboarder/Playerr). Developed with the assistance of AI.*

@@ -6,7 +6,6 @@ import ContextMenu, { ContextMenuOption } from '../components/ContextMenu';
 import { t, getLanguage } from '../i18n/translations';
 import appLogo from '../assets/app_logo.png';
 import './Library.css';
-import { useUI } from '../context/UIContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTrash, faThLarge, faBars } from '@fortawesome/free-solid-svg-icons';
 import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
@@ -47,8 +46,7 @@ interface Platform {
 }
 
 const Library: React.FC = () => {
-  const { toggleKofi } = useUI();
-  const navigate = useNavigate();
+const navigate = useNavigate();
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -91,6 +89,7 @@ const Library: React.FC = () => {
       await loadGames();
     } catch (error: any) {
       console.error('Error deleting game:', error);
+      alert(error?.response?.data?.error || 'Failed to delete game');
     }
   };
 
@@ -107,9 +106,15 @@ const Library: React.FC = () => {
       loadGames();
     };
 
+    const handleSettingsUpdate = () => {
+      checkIgdbConfig();
+    };
+
     window.addEventListener('LIBRARY_UPDATED_EVENT', handleLibraryUpdate);
+    window.addEventListener('SETTINGS_UPDATED_EVENT', handleSettingsUpdate);
     return () => {
       window.removeEventListener('LIBRARY_UPDATED_EVENT', handleLibraryUpdate);
+      window.removeEventListener('SETTINGS_UPDATED_EVENT', handleSettingsUpdate);
     };
   }, []);
 
@@ -117,8 +122,9 @@ const Library: React.FC = () => {
     try {
       const response = await axios.get(`/api/v3/game?t=${Date.now()}`);
       setGames(response.data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading games:', error);
+      setGames([]);
     }
   };
 
@@ -312,14 +318,15 @@ const Library: React.FC = () => {
     <div className="library">
       <div className="library-header">
         <div className="header-left">
-          <div className="library-stats">
-            <span style={{ textTransform: 'uppercase', fontWeight: 'bold' }}>
-              {filteredGames.length} {t('gamesCount')}
-            </span>
-          </div>
+          <div className="library-eyebrow">GAME LIBRARY</div>
+          <h2 className="library-title">Library</h2>
         </div>
 
         <div className="header-right">
+          <div className="library-stat-pill">
+            <span className="library-stat-value">{filteredGames.length}</span>
+            <span className="library-stat-label">{t('gamesCount')}</span>
+          </div>
           <div className="search-bar-mini">
             <input
               type="text"
@@ -458,7 +465,7 @@ const Library: React.FC = () => {
       {
         filteredGames.length === 0 ? (
           <div className="empty-library">
-            <div className="empty-icon" onClick={toggleKofi} style={{ cursor: 'pointer' }}>
+            <div className="empty-icon">
               <img src={appLogo} alt="Playerr" className="empty-lib-logo" />
             </div>
             <h3>
@@ -476,6 +483,7 @@ const Library: React.FC = () => {
             style={{ height: 'calc(100vh - 160px)' }}
             totalCount={filteredGames.length}
             listClassName="game-grid"
+            components={{ Header: () => <div style={{ height: '1.5rem' }} /> }}
             itemContent={(index) => {
               const game = filteredGames[index];
               return (
@@ -497,6 +505,7 @@ const Library: React.FC = () => {
             style={{ height: 'calc(100vh - 160px)' }}
             totalCount={filteredGames.length}
             components={{
+              Header: () => <div style={{ height: '1.5rem' }} />,
               List: React.forwardRef(({ style, children, ...props }: any, ref) => (
                 <div {...props} ref={ref} style={style} className="game-list">
                   {children}

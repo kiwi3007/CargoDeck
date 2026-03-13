@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { t as translate } from '../i18n/translations';
 import FolderExplorerModal from './FolderExplorerModal';
@@ -14,21 +14,50 @@ interface GameCorrectionModalProps {
 }
 
 const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose, onSave, language = 'es' }) => {
-    const [activeTab, setActiveTab] = useState<'metadata' | 'path' | 'playPath'>('metadata');
+    const [activeTab, setActiveTab] = useState<'metadata' | 'path'>('metadata');
 
     // Metadata State
     const [searchTerm, setSearchTerm] = useState(game.title);
     const [results, setResults] = useState<any[]>([]);
     const [searching, setSearching] = useState(false);
     const [selectedMetadata, setSelectedMetadata] = useState<any | null>(null);
+    const [steamId, setSteamId] = useState<string>(game.steamId?.toString() || '');
 
     // Path State
-    const [installPath, setInstallPath] = useState(game.installPath || game.path || '');
-    const [executablePath, setExecutablePath] = useState(game.executablePath || '');
+    const [gamePath, setGamePath] = useState(game.path || '');
     const [showFileExplorer, setShowFileExplorer] = useState(false);
-    const [explorerMode, setExplorerMode] = useState<'install' | 'executable'>('install');
 
-    const t = (key: string) => translate(key as any, language as any);
+    // Per-device run settings: agentId → { launchArgs, envVars, protonPath }
+    const [agents, setAgents] = useState<any[]>([]);
+    const [agentLaunchArgs, setAgentLaunchArgs] = useState<Record<string, string>>({});
+    const [agentEnvVars, setAgentEnvVars] = useState<Record<string, string>>({});
+    const [agentProtonPath, setAgentProtonPath] = useState<Record<string, string>>({});
+    const [savedAgentSettings, setSavedAgentSettings] = useState<Record<string, { launchArgs: string; envVars: string; protonPath: string }>>({});
+
+    useEffect(() => {
+        if (!game.id) return;
+        Promise.all([
+            axios.get('/api/v3/agent'),
+            axios.get(`/api/v3/game/${game.id}/agent-launch-args`),
+        ]).then(([agentsRes, argsRes]) => {
+            setAgents(agentsRes.data || []);
+            const settings: Record<string, { launchArgs: string; envVars: string; protonPath: string }> = argsRes.data || {};
+            const launchArgs: Record<string, string> = {};
+            const envVars: Record<string, string> = {};
+            const protonPaths: Record<string, string> = {};
+            Object.entries(settings).forEach(([id, s]) => {
+                launchArgs[id] = s.launchArgs || '';
+                envVars[id] = s.envVars || '';
+                protonPaths[id] = s.protonPath || '';
+            });
+            setAgentLaunchArgs(launchArgs);
+            setAgentEnvVars(envVars);
+            setAgentProtonPath(protonPaths);
+            setSavedAgentSettings(settings);
+        }).catch(() => {});
+    }, [game.id]);
+
+const t = (key: string) => translate(key as any, language as any);
 
     const handleSearch = async () => {
         if (!searchTerm) return;
@@ -45,24 +74,49 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
         }
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const updates: any = {};
         if (selectedMetadata) {
             updates.igdbId = selectedMetadata.igdbId;
-            updates.title = selectedMetadata.title; // Optional: Update title immediately
+            updates.title = selectedMetadata.title;
         }
-        if (installPath !== game.installPath) {
-            updates.installPath = installPath;
+        if (gamePath !== (game.path || '')) {
+            updates.path = gamePath;
         }
-        if (executablePath !== game.executablePath) {
-            updates.executablePath = executablePath;
+        const parsedSteamId = parseInt(steamId, 10);
+        if (!isNaN(parsedSteamId) && parsedSteamId !== (game.steamId || 0)) {
+            updates.steamId = parsedSteamId;
         }
+
+        // Save changed per-device run settings (launch args + env vars + proton path)
+        const allAgentIds = new Set([
+            ...Object.keys(agentLaunchArgs),
+            ...Object.keys(agentEnvVars),
+            ...Object.keys(agentProtonPath),
+            ...Object.keys(savedAgentSettings),
+        ]);
+        const patches = Array.from(allAgentIds).filter(agentId => {
+            const saved = savedAgentSettings[agentId];
+            const newArgs = agentLaunchArgs[agentId] ?? '';
+            const newEnv = agentEnvVars[agentId] ?? '';
+            const newProton = agentProtonPath[agentId] ?? '';
+            return newArgs !== (saved?.launchArgs ?? '') || newEnv !== (saved?.envVars ?? '') || newProton !== (saved?.protonPath ?? '');
+        });
+        await Promise.all(
+            patches.map(agentId =>
+                axios.patch(`/api/v3/game/${game.id}/agent-launch-args`, {
+                    agentId,
+                    launchArgs: agentLaunchArgs[agentId] ?? '',
+                    envVars: agentEnvVars[agentId] ?? '',
+                    protonPath: agentProtonPath[agentId] ?? '',
+                })
+            )
+        );
 
         onSave(updates);
     };
 
-    const openExplorer = (mode: 'install' | 'executable') => {
-        setExplorerMode(mode);
+    const openExplorer = () => {
         setShowFileExplorer(true);
     };
 
@@ -85,13 +139,7 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                         className={`tab-btn ${activeTab === 'path' ? 'active' : ''}`}
                         onClick={() => setActiveTab('path')}
                     >
-                        {t('installPath') || 'Ruta Instalación'}
-                    </button>
-                    <button
-                        className={`tab-btn ${activeTab === 'playPath' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('playPath')}
-                    >
-                        {t('playPath') || 'Play Path'}
+                        Path
                     </button>
                 </div>
 
@@ -109,6 +157,17 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
                                 <button onClick={handleSearch} disabled={searching} className="search-btn">
                                     {searching ? '...' : <FontAwesomeIcon icon={faSearch} />}
                                 </button>
+                            </div>
+
+                            <div className="steam-id-row">
+                                <label>Steam App ID</label>
+                                <input
+                                    type="number"
+                                    value={steamId}
+                                    onChange={(e) => setSteamId(e.target.value)}
+                                    placeholder="e.g. 646570"
+                                    className="steam-id-input"
+                                />
                             </div>
 
                             <div className="search-results">
@@ -134,35 +193,18 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
 
                     {activeTab === 'path' && (
                         <div className="path-correction">
-                            <label>{t('currentPath') || 'Ruta Actual'}:</label>
+                            <label>Game folder:</label>
                             <div className="path-input-group">
                                 <input
                                     type="text"
-                                    value={installPath}
-                                    onChange={(e) => setInstallPath(e.target.value)}
+                                    value={gamePath}
+                                    onChange={(e) => setGamePath(e.target.value)}
+                                    placeholder="/path/to/game/folder"
                                 />
-                                <button onClick={() => openExplorer('install')}>📁</button>
+                                <button onClick={() => openExplorer()}>📁</button>
                             </div>
                             <p className="hint">
-                                {t('pathHint') || 'Selecciona la carpeta donde está instalado el juego.'}
-                            </p>
-                        </div>
-                    )}
-
-                    {activeTab === 'playPath' && (
-                        <div className="path-correction">
-                            <label>{t('executablePath') || 'Ejecutable'}:</label>
-                            <div className="path-input-group">
-                                <input
-                                    type="text"
-                                    value={executablePath}
-                                    onChange={(e) => setExecutablePath(e.target.value)}
-                                    placeholder="/path/to/game.exe"
-                                />
-                                <button onClick={() => openExplorer('executable')}>📁</button>
-                            </div>
-                            <p className="hint">
-                                {t('playPathHint') || 'Selecciona el archivo ejecutable del juego.'}
+                                The folder where game files are stored on this server. Used for the file browser and agent downloads.
                             </p>
                         </div>
                     )}
@@ -176,15 +218,11 @@ const GameCorrectionModal: React.FC<GameCorrectionModalProps> = ({ game, onClose
 
             {showFileExplorer && (
                 <FolderExplorerModal
-                    initialPath={explorerMode === 'executable' ? (executablePath || installPath || '/') : (installPath || '/')}
+                    initialPath={gamePath || '/'}
                     language={language}
                     onClose={() => setShowFileExplorer(false)}
                     onSelect={(path) => {
-                        if (explorerMode === 'install') {
-                            setInstallPath(path);
-                        } else {
-                            setExecutablePath(path);
-                        }
+                        setGamePath(path);
                         setShowFileExplorer(false);
                     }}
                 />

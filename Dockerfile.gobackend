@@ -1,0 +1,54 @@
+# Playerr Go backend Dockerfile — ~15MB runtime vs ~200MB .NET aspnet image
+# Stage 1: Build Frontend
+FROM node:18-alpine AS frontend
+WORKDIR /src
+COPY package.json package-lock.json ./
+RUN npm install
+COPY frontend/ ./frontend/
+COPY tsconfig.json ./
+COPY frontend/build/webpack.config.js ./frontend/build/
+RUN npm run build
+
+# Stage 2: Build Go Backend (static binary, no CGo)
+FROM golang:1.24-alpine AS backend
+WORKDIR /build
+ENV GOTOOLCHAIN=local
+ENV GO111MODULE=on
+ARG VERSION=dev
+# Cache module downloads
+COPY go.mod go.sum ./
+RUN go mod download
+# Build
+COPY . .
+RUN CGO_ENABLED=0 go build \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /app/playerr \
+    .
+# Build agent binaries for all platforms
+RUN CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/linux-x64/playerr-agent   ./cmd/agent/ && \
+    CGO_ENABLED=0 GOOS=linux   GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/linux-arm64/playerr-agent  ./cmd/agent/ && \
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/win-x64/playerr-agent.exe  ./cmd/agent/ && \
+    CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/osx-x64/playerr-agent      ./cmd/agent/ && \
+    CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/osx-arm64/playerr-agent    ./cmd/agent/ && \
+    echo "${VERSION}" > /app/agents/version.txt
+
+# Stage 3: Minimal runtime image (~15MB)
+FROM alpine:3.20
+WORKDIR /app
+
+# ca-certificates for HTTPS, unrar/p7zip for post-processor archive extraction
+RUN apk add --no-cache ca-certificates p7zip
+
+COPY --from=backend /app/playerr /app/playerr
+COPY --from=backend /app/agents  /app/agents
+COPY --from=frontend /src/_output/UI /app/_output/UI
+
+RUN mkdir -p /config /media
+VOLUME /config
+
+EXPOSE 2727
+ENV PLAYERR_PORT=2727
+ENV PLAYERR_IP=0.0.0.0
+ENV PLAYERR_CONFIG_DIR=/
+
+ENTRYPOINT ["/app/playerr"]
