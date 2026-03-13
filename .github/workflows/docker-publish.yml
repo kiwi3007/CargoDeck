@@ -10,6 +10,7 @@ on:
 
 env:
   GHCR_IMAGE: ghcr.io/kiwi3007/cargodeck
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-push:
@@ -43,7 +44,7 @@ jobs:
           fi
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile.gobackend
