@@ -293,6 +293,7 @@ const GameDetails: React.FC = () => {
   const [manifestFetching, setManifestFetching] = useState(false);
   const [manifestUploadRef] = useState(() => React.createRef<HTMLInputElement>());
   const [steamDownloading, setSteamDownloading] = useState(false);
+  const [selectedDepots, setSelectedDepots] = useState<Set<number>>(new Set());
   const [saveSnapshots, setSaveSnapshots] = useState<SaveSnapshot[]>([]);
   const [savesLoading, setSavesLoading] = useState(false);
   const [savePathsInfo, setSavePathsInfo] = useState<SavePathsInfo | null>(null);
@@ -1045,8 +1046,10 @@ const GameDetails: React.FC = () => {
     try {
       const r = await axios.get(`/api/v3/game/${gameId}/steam-manifest-info`);
       setManifestInfo(r.data);
+      setSelectedDepots(new Set((r.data.depots as { depotId: number }[]).map(d => d.depotId)));
     } catch {
       setManifestInfo(null);
+      setSelectedDepots(new Set());
     }
   };
 
@@ -1069,6 +1072,7 @@ const GameDetails: React.FC = () => {
     try {
       const r = await axios.post(`/api/v3/game/${game.id}/fetch-manifest`);
       setManifestInfo(r.data);
+      setSelectedDepots(new Set((r.data.depots as { depotId: number }[]).map((d: { depotId: number }) => d.depotId)));
     } catch (err: any) {
       setNotification({ message: err.response?.data?.error || 'Manifest fetch failed', type: 'error' });
     }
@@ -1094,7 +1098,9 @@ const GameDetails: React.FC = () => {
     if (!game) return;
     setSteamDownloading(true);
     try {
-      const r = await axios.post(`/api/v3/game/${game.id}/steam-download`);
+      const r = await axios.post(`/api/v3/game/${game.id}/steam-download`, {
+        depotIds: [...selectedDepots],
+      });
       setNotification({ message: `Steam download started (job ${r.data.jobId})`, type: 'success' });
     } catch (err: any) {
       setNotification({ message: err.response?.data?.error || 'Failed to start Steam download', type: 'error' });
@@ -1683,20 +1689,32 @@ const GameDetails: React.FC = () => {
                   />
                 </div>
                 {manifestInfo && manifestInfo.depots.length > 0 && (
-                  <div style={{ fontSize: '0.8rem', color: '#6c7086' }}>
-                    Depots: {manifestInfo.depots.map(d => d.depotId).join(', ')}
-                  </div>
-                )}
-                {manifestInfo && manifestInfo.depots.length > 0 && (
-                  <div style={{ marginTop: '4px' }}>
-                    <button
-                      className="gd-icon-btn"
-                      onClick={handleSteamDownload}
-                      disabled={steamDownloading}
-                      style={{ padding: '4px 10px', fontSize: '0.82rem' }}
-                    >
-                      {steamDownloading ? '…' : '⬇ Steam Download'}
-                    </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {manifestInfo.depots.map(d => (
+                      <label key={d.depotId} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: '#a6adc8', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedDepots.has(d.depotId)}
+                          onChange={e => setSelectedDepots(prev => {
+                            const next = new Set(prev);
+                            e.target.checked ? next.add(d.depotId) : next.delete(d.depotId);
+                            return next;
+                          })}
+                        />
+                        Depot {d.depotId}
+                        {d.manifestGid && <span style={{ color: '#6c7086', fontSize: '0.75rem' }}>{d.manifestGid}</span>}
+                      </label>
+                    ))}
+                    <div style={{ marginTop: '4px' }}>
+                      <button
+                        className="gd-icon-btn"
+                        onClick={handleSteamDownload}
+                        disabled={steamDownloading || selectedDepots.size === 0}
+                        style={{ padding: '4px 10px', fontSize: '0.82rem' }}
+                      >
+                        {steamDownloading ? '…' : `⬇ Steam Download (${selectedDepots.size})`}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

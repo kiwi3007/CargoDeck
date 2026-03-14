@@ -397,6 +397,13 @@ func (h *Handler) SteamDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Optional body: { "depotIds": [123, 456] } to select specific depots.
+	// If omitted or empty, all depots in the manifest are used.
+	var req struct {
+		DepotIDs []int `json:"depotIds"`
+	}
+	_ = decodeBody(r, &req) // ignore decode error — body is optional
+
 	if !h.ddm.IsAvailable() {
 		jsonErr(w, 503, "DepotDownloaderMod binary not found — check PLAYERR_DDM_BIN or rebuild the container")
 		return
@@ -404,8 +411,27 @@ func (h *Handler) SteamDownload(w http.ResponseWriter, r *http.Request) {
 
 	media := h.cfg.LoadMedia()
 
-	depots := make([]ddm.DepotEntry, len(info.Depots))
-	for i, d := range info.Depots {
+	selected := info.Depots
+	if len(req.DepotIDs) > 0 {
+		keep := make(map[int]bool, len(req.DepotIDs))
+		for _, id := range req.DepotIDs {
+			keep[id] = true
+		}
+		filtered := info.Depots[:0]
+		for _, d := range info.Depots {
+			if keep[d.DepotID] {
+				filtered = append(filtered, d)
+			}
+		}
+		if len(filtered) == 0 {
+			jsonErr(w, 400, "none of the requested depotIds exist in this manifest")
+			return
+		}
+		selected = filtered
+	}
+
+	depots := make([]ddm.DepotEntry, len(selected))
+	for i, d := range selected {
 		depots[i] = ddm.DepotEntry{
 			DepotID:     d.DepotID,
 			DepotKey:    d.DepotKey,
