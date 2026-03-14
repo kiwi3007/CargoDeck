@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - dev
+      - feat/**
     tags:
       - 'v*.*.*'
   workflow_dispatch:
@@ -39,8 +40,12 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
             echo "tags=${{ env.GHCR_IMAGE }}:latest,${{ env.GHCR_IMAGE }}:${VERSION}" >> $GITHUB_OUTPUT
-          else
+          elif [[ "$GITHUB_REF" == refs/heads/dev ]]; then
             echo "tags=${{ env.GHCR_IMAGE }}:dev" >> $GITHUB_OUTPUT
+          else
+            BRANCH="${GITHUB_REF#refs/heads/}"
+            SAFE="${BRANCH//\//-}"
+            echo "tags=${{ env.GHCR_IMAGE }}:${SAFE}" >> $GITHUB_OUTPUT
           fi
 
       - name: Build and push Docker image
