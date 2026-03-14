@@ -289,6 +289,9 @@ const GameDetails: React.FC = () => {
   const [serverFiles, setServerFiles] = useState<ServerFile[]>([]);
   const [serverFilesLoading, setServerFilesLoading] = useState(false);
   const [deletingFile, setDeletingFile] = useState<Record<string, boolean>>({});
+  const [manifestInfo, setManifestInfo] = useState<{ appId: number; depots: { depotId: number; manifestGid: string }[] } | null>(null);
+  const [manifestFetching, setManifestFetching] = useState(false);
+  const [manifestUploadRef] = useState(() => React.createRef<HTMLInputElement>());
   const [saveSnapshots, setSaveSnapshots] = useState<SaveSnapshot[]>([]);
   const [savesLoading, setSavesLoading] = useState(false);
   const [savePathsInfo, setSavePathsInfo] = useState<SavePathsInfo | null>(null);
@@ -1037,6 +1040,15 @@ const GameDetails: React.FC = () => {
     }
   };
 
+  const loadManifestInfo = async (gameId: number) => {
+    try {
+      const r = await axios.get(`/api/v3/game/${gameId}/steam-manifest-info`);
+      setManifestInfo(r.data);
+    } catch {
+      setManifestInfo(null);
+    }
+  };
+
   const loadServerFiles = async () => {
     if (!game) return;
     setServerFilesLoading(true);
@@ -1047,6 +1059,47 @@ const GameDetails: React.FC = () => {
       setServerFiles([]);
     } finally {
       setServerFilesLoading(false);
+    }
+  };
+
+  const handleFetchManifest = async () => {
+    if (!game) return;
+    setManifestFetching(true);
+    try {
+      const r = await axios.post(`/api/v3/game/${game.id}/fetch-manifest`);
+      setManifestInfo(r.data);
+    } catch (err: any) {
+      setNotification({ message: err.response?.data?.error || 'Manifest fetch failed', type: 'error' });
+    }
+    setManifestFetching(false);
+  };
+
+  const handleManifestUpload = async (file: File) => {
+    if (!game) return;
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const r = await axios.post(`/api/v3/game/${game.id}/steam-manifest`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setManifestInfo(r.data);
+      setNotification({ message: 'Manifest uploaded', type: 'success' });
+    } catch (err: any) {
+      setNotification({ message: err.response?.data?.error || 'Upload failed', type: 'error' });
+    }
+  };
+
+  const handleSteamDownload = async (agentId: string) => {
+    if (!game?.steamId) return;
+    try {
+      await axios.post(`/api/v3/agent/${agentId}/steam-download`, {
+        gameId: game.id,
+        appId: game.steamId,
+        gameTitle: game.title,
+      });
+      setNotification({ message: 'Steam download job dispatched', type: 'success' });
+    } catch (err: any) {
+      setNotification({ message: err.response?.data?.error || 'Failed to dispatch Steam download', type: 'error' });
     }
   };
 
@@ -1221,6 +1274,7 @@ const GameDetails: React.FC = () => {
     loadServerFiles();
     loadSaveSnapshots();
     loadSavePathsInfo();
+    loadManifestInfo(game.id);
   }, [game?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearchTorrents = async (overrideTerm?: string) => {
@@ -1578,6 +1632,76 @@ const GameDetails: React.FC = () => {
                     onDelete={handleDeleteServerFile}
                   />
                 ))}
+              </div>
+            )}
+          </section>
+
+          {/* Steam Manifest */}
+          <section className="gd-section">
+            <div className="gd-section-head">
+              <h3 className="gd-section-title">Steam Manifest</h3>
+            </div>
+            {!game.steamId ? (
+              <div className="gd-empty">No Steam ID set — add one in Edit.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <span style={{ color: '#a6adc8', fontSize: '0.85rem' }}>App ID: {game.steamId}</span>
+                  {manifestInfo ? (
+                    <span style={{ padding: '2px 8px', background: 'rgba(166,227,161,0.15)', border: '1px solid rgba(166,227,161,0.3)', borderRadius: '4px', color: '#a6e3a1', fontSize: '0.8rem' }}>
+                      {manifestInfo.depots.length} depot{manifestInfo.depots.length !== 1 ? 's' : ''} ready
+                    </span>
+                  ) : (
+                    <span style={{ padding: '2px 8px', background: 'rgba(166,173,200,0.1)', border: '1px solid rgba(166,173,200,0.2)', borderRadius: '4px', color: '#6c7086', fontSize: '0.8rem' }}>
+                      No manifest
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    className="gd-icon-btn"
+                    onClick={handleFetchManifest}
+                    disabled={manifestFetching}
+                    title="Fetch manifest from Morrenus"
+                    style={{ padding: '4px 10px', fontSize: '0.82rem' }}
+                  >
+                    {manifestFetching ? '…' : '⬇ Fetch from Morrenus'}
+                  </button>
+                  <button
+                    className="gd-icon-btn"
+                    onClick={() => manifestUploadRef.current?.click()}
+                    title="Upload steamtoolz ZIP manually"
+                    style={{ padding: '4px 10px', fontSize: '0.82rem' }}
+                  >
+                    ⬆ Upload ZIP
+                  </button>
+                  <input
+                    ref={manifestUploadRef}
+                    type="file"
+                    accept=".zip"
+                    style={{ display: 'none' }}
+                    onChange={e => { if (e.target.files?.[0]) handleManifestUpload(e.target.files[0]); e.target.value = ''; }}
+                  />
+                </div>
+                {manifestInfo && manifestInfo.depots.length > 0 && (
+                  <div style={{ fontSize: '0.8rem', color: '#6c7086' }}>
+                    Depots: {manifestInfo.depots.map(d => d.depotId).join(', ')}
+                  </div>
+                )}
+                {agents.filter(a => a.status === 'online').length > 0 && manifestInfo && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                    {agents.filter(a => a.status === 'online').map(agent => (
+                      <button
+                        key={agent.id}
+                        className="gd-icon-btn"
+                        onClick={() => handleSteamDownload(agent.id)}
+                        style={{ padding: '4px 10px', fontSize: '0.82rem' }}
+                      >
+                        ⬇ Steam Download on {agent.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </section>

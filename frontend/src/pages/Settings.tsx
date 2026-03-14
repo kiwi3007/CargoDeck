@@ -591,6 +591,9 @@ const Settings: React.FC = () => {
   const [igdbClientId, setIgdbClientId] = useState('');
   const [igdbClientSecret, setIgdbClientSecret] = useState('');
   const [sgdbApiKey, setSgdbApiKey] = useState('');
+  const [morrenusApiKey, setMorrenusApiKey] = useState('');
+  const [morrenusExpiresAt, setMorrenusExpiresAt] = useState('');
+  const [morrenusSaving, setMorrenusSaving] = useState(false);
   const [folderPath, setFolderPath] = useState('');
   const [downloadPath, setDownloadPath] = useState('');
   const [destinationPath, setDestinationPath] = useState('');
@@ -730,6 +733,10 @@ const Settings: React.FC = () => {
       const sgdbResponse = await axios.get('/api/v3/settings/steamgriddb').catch(() => ({ data: {} }));
       setSgdbApiKey(sgdbResponse.data.apiKey || '');
 
+      const morrenusResponse = await axios.get('/api/v3/settings/morrenus').catch(() => ({ data: {} }));
+      setMorrenusApiKey(morrenusResponse.data.apiKey || '');
+      setMorrenusExpiresAt(morrenusResponse.data.expiresAt || '');
+
       const mediaResponse = await axios.get('/api/v3/media');
       setFolderPath(mediaResponse.data.folderPath);
       setDownloadPath(mediaResponse.data.downloadPath || '');
@@ -783,6 +790,30 @@ const Settings: React.FC = () => {
     } catch (error: any) {
       console.error('Error disconnecting IGDB:', error);
       alert(`${t('error')}: ${error.response?.data?.error || error.message}`);
+    }
+  };
+
+  const handleSaveMorrenus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMorrenusSaving(true);
+    try {
+      const res = await axios.post('/api/v3/settings/morrenus', { apiKey: morrenusApiKey });
+      setMorrenusApiKey(res.data.apiKey || morrenusApiKey);
+      setMorrenusExpiresAt(res.data.expiresAt || '');
+    } catch (error: any) {
+      alert(`Error: ${error.response?.data?.error || error.message}`);
+    }
+    setMorrenusSaving(false);
+  };
+
+  const handleDisconnectMorrenus = async () => {
+    if (!window.confirm('Disconnect Morrenus? Stored manifests will not be deleted.')) return;
+    try {
+      await axios.delete('/api/v3/settings/morrenus');
+      setMorrenusApiKey('');
+      setMorrenusExpiresAt('');
+    } catch (error: any) {
+      alert(`Error: ${error.response?.data?.error || error.message}`);
     }
   };
 
@@ -1474,6 +1505,71 @@ const Settings: React.FC = () => {
                     type="button"
                     className="btn-delete"
                     onClick={handleDisconnectSteamGridDB}
+                    style={{ marginLeft: '10px' }}
+                  >
+                    {t('disconnect')}
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* Morrenus */}
+          <div className="settings-section">
+            <div className="section-header-with-logo">
+              <span style={{ fontSize: '18px', fontWeight: 700, color: '#cdd6f4' }}>Morrenus</span>
+            </div>
+            <p className="settings-description">
+              Automatically fetches Steam depot keys and manifest IDs for manifest-based downloads.
+              Get your API key at <a href="https://manifest.morrenus.xyz/api-keys/user" target="_blank" rel="noopener noreferrer">manifest.morrenus.xyz</a>.
+            </p>
+            {morrenusExpiresAt && (() => {
+              const exp = new Date(morrenusExpiresAt);
+              const now = new Date();
+              const diffMs = exp.getTime() - now.getTime();
+              const diffDays = diffMs / (1000 * 60 * 60 * 24);
+              if (diffMs < 0) {
+                return (
+                  <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'rgba(243,139,168,0.12)', border: '1px solid rgba(243,139,168,0.3)', borderRadius: '6px', color: '#f38ba8', fontSize: '0.85rem' }}>
+                    API key expired on {exp.toLocaleDateString()}.{' '}
+                    <a href="https://manifest.morrenus.xyz/api-keys/user" target="_blank" rel="noopener noreferrer" style={{ color: '#f38ba8' }}>Renew here.</a>
+                  </div>
+                );
+              } else if (diffDays < 3) {
+                return (
+                  <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'rgba(250,179,135,0.12)', border: '1px solid rgba(250,179,135,0.3)', borderRadius: '6px', color: '#fab387', fontSize: '0.85rem' }}>
+                    API key expires on {exp.toLocaleDateString()} — expiring soon.{' '}
+                    <a href="https://manifest.morrenus.xyz/api-keys/user" target="_blank" rel="noopener noreferrer" style={{ color: '#fab387' }}>Renew here.</a>
+                  </div>
+                );
+              } else {
+                return (
+                  <div style={{ marginBottom: '12px', color: '#a6e3a1', fontSize: '0.85rem' }}>
+                    Key valid until {exp.toLocaleDateString()}.
+                  </div>
+                );
+              }
+            })()}
+            <form onSubmit={handleSaveMorrenus}>
+              <div className="form-group">
+                <label htmlFor="morrenus-api-key">API Key</label>
+                <input
+                  type="password"
+                  id="morrenus-api-key"
+                  placeholder="Morrenus API Key"
+                  value={morrenusApiKey}
+                  onChange={(e) => setMorrenusApiKey(e.target.value)}
+                />
+              </div>
+              <div className="button-group">
+                <button type="submit" className="btn-primary" disabled={morrenusSaving}>
+                  {morrenusSaving ? 'Saving…' : t('save')}
+                </button>
+                {morrenusApiKey && (
+                  <button
+                    type="button"
+                    className="btn-delete"
+                    onClick={handleDisconnectMorrenus}
                     style={{ marginLeft: '10px' }}
                   >
                     {t('disconnect')}

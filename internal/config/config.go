@@ -285,6 +285,22 @@ func generateToken() string {
 	return fmt.Sprintf("%x", b)
 }
 
+// ---- Morrenus ----
+
+type MorrenusSettings struct {
+	APIKey    string `json:"apiKey"`
+	ExpiresAt string `json:"expiresAt"` // RFC3339, populated from /user/stats
+}
+
+func (s MorrenusSettings) IsConfigured() bool { return s.APIKey != "" }
+
+func (s *Service) LoadMorrenus() MorrenusSettings {
+	return load(filepath.Join(s.dir, "morrenus.json"), MorrenusSettings{})
+}
+func (s *Service) SaveMorrenus(v MorrenusSettings) error {
+	return save(filepath.Join(s.dir, "morrenus.json"), v)
+}
+
 // ---- Discord ----
 
 type DiscordSettings struct {

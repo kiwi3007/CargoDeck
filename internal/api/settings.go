@@ -1,6 +1,8 @@
 package api
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/kiwi3007/cargodeck/internal/config"
@@ -306,4 +308,60 @@ func (h *Handler) SaveDiscord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, map[string]string{"message": "Discord settings saved"})
+}
+
+// ---- Morrenus ----
+
+func (h *Handler) GetMorrenus(w http.ResponseWriter, r *http.Request) {
+	cfg := h.cfg.LoadMorrenus()
+	// Mask the key but expose ExpiresAt so the UI can warn about expiry
+	masked := config.MorrenusSettings{ExpiresAt: cfg.ExpiresAt}
+	if cfg.APIKey != "" {
+		masked.APIKey = maskSentinel
+	}
+	jsonOK(w, masked)
+}
+
+func (h *Handler) SaveMorrenus(w http.ResponseWriter, r *http.Request) {
+	var v config.MorrenusSettings
+	if err := decodeBody(r, &v); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	if v.APIKey == maskSentinel {
+		existing := h.cfg.LoadMorrenus()
+		v.APIKey = existing.APIKey
+	}
+
+	// Fetch expiry from Morrenus /user/stats
+	if v.APIKey != "" {
+		statsURL := fmt.Sprintf("https://manifest.morrenus.xyz/api/v1/user/stats?api_key=%s", v.APIKey)
+		resp, err := http.Get(statsURL) //nolint:gosec
+		if err == nil {
+			defer resp.Body.Close()
+			var stats struct {
+				APIKeyExpiresAt string `json:"api_key_expires_at"`
+			}
+			if resp.StatusCode == http.StatusOK {
+				if json.NewDecoder(resp.Body).Decode(&stats) == nil && stats.APIKeyExpiresAt != "" {
+					v.ExpiresAt = stats.APIKeyExpiresAt
+				}
+			}
+		}
+	}
+
+	if err := h.cfg.SaveMorrenus(v); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	// Return masked key + real expiry so the UI can update immediately
+	jsonOK(w, config.MorrenusSettings{APIKey: maskSentinel, ExpiresAt: v.ExpiresAt})
+}
+
+func (h *Handler) DeleteMorrenus(w http.ResponseWriter, r *http.Request) {
+	if err := h.cfg.SaveMorrenus(config.MorrenusSettings{}); err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]string{"message": "Morrenus settings cleared"})
 }

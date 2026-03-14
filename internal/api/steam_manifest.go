@@ -250,6 +250,68 @@ func parseSteamtoolzZIP(data []byte) (*SteamManifestInfo, error) {
 	}, nil
 }
 
+// ---- POST /api/v3/game/{id}/fetch-manifest ----
+// Fetches a steamtoolz-compatible manifest ZIP from Morrenus by the game's SteamID.
+func (h *Handler) FetchManifestFromMorrenus(w http.ResponseWriter, r *http.Request) {
+	gameID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, 400, "invalid game id")
+		return
+	}
+
+	game, err := h.repo.GetGameByID(gameID)
+	if err != nil || game == nil {
+		jsonErr(w, 404, "game not found")
+		return
+	}
+	if game.SteamID == nil {
+		jsonErr(w, 400, "game has no Steam ID")
+		return
+	}
+
+	morrenus := h.cfg.LoadMorrenus()
+	if !morrenus.IsConfigured() {
+		jsonErr(w, 404, "Morrenus not configured — add an API key in Settings")
+		return
+	}
+
+	manifestURL := fmt.Sprintf("https://manifest.morrenus.xyz/api/v1/manifest/%d?api_key=%s", *game.SteamID, morrenus.APIKey)
+	zipData, err := downloadZIP(manifestURL)
+	if err != nil {
+		jsonErr(w, 502, "Morrenus fetch failed: "+err.Error())
+		return
+	}
+
+	info, err := parseSteamtoolzZIP(zipData)
+	if err != nil {
+		jsonErr(w, 422, "invalid ZIP from Morrenus: "+err.Error())
+		return
+	}
+	// Use the game's known SteamID if the Lua filename didn't encode it
+	if info.AppID == 0 {
+		info.AppID = *game.SteamID
+	}
+	info.Source = manifestURL
+
+	dir := h.steamManifestDir(gameID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		jsonErr(w, 500, "cannot create manifest dir: "+err.Error())
+		return
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifests.zip"), zipData, 0o644); err != nil {
+		jsonErr(w, 500, "write ZIP failed: "+err.Error())
+		return
+	}
+	infoJSON, _ := json.MarshalIndent(info, "", "  ")
+	if err := os.WriteFile(filepath.Join(dir, "info.json"), infoJSON, 0o644); err != nil {
+		jsonErr(w, 500, "write info failed: "+err.Error())
+		return
+	}
+
+	log.Printf("[SteamManifest] Morrenus: stored %d depots for game %d (appId %d)", len(info.Depots), gameID, info.AppID)
+	jsonOK(w, info)
+}
+
 // reAddApp matches: addappid(depotId, 1, "hexKey")
 var reAddApp = regexp.MustCompile(`addappid\((\d+),\s*\d+,\s*"([0-9a-fA-F]+)"\)`)
 

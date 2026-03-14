@@ -138,6 +138,7 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Post("/{id}/steam-manifest", h.SetSteamManifest)
 		r.Get("/{id}/steam-manifest-info", h.GetSteamManifestInfo)
 		r.With(h.agentAuthMiddleware).Get("/{id}/steam-manifest-zip", h.ServeManifestZIP)
+		r.Post("/{id}/fetch-manifest", h.FetchManifestFromMorrenus)
 	})
 
 	// Platforms
@@ -178,6 +179,10 @@ func (h *Handler) NewRouter() http.Handler {
 
 		r.Get("/discord", h.GetDiscord)
 		r.Post("/discord", h.SaveDiscord)
+
+		r.Get("/morrenus", h.GetMorrenus)
+		r.Post("/morrenus", h.SaveMorrenus)
+		r.Delete("/morrenus", h.DeleteMorrenus)
 	})
 
 	// Media (scan)
