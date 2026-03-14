@@ -292,6 +292,7 @@ const GameDetails: React.FC = () => {
   const [manifestInfo, setManifestInfo] = useState<{ appId: number; depots: { depotId: number; manifestGid: string }[] } | null>(null);
   const [manifestFetching, setManifestFetching] = useState(false);
   const [manifestUploadRef] = useState(() => React.createRef<HTMLInputElement>());
+  const [steamDownloading, setSteamDownloading] = useState(false);
   const [saveSnapshots, setSaveSnapshots] = useState<SaveSnapshot[]>([]);
   const [savesLoading, setSavesLoading] = useState(false);
   const [savePathsInfo, setSavePathsInfo] = useState<SavePathsInfo | null>(null);
@@ -1089,18 +1090,16 @@ const GameDetails: React.FC = () => {
     }
   };
 
-  const handleSteamDownload = async (agentId: string) => {
-    if (!game?.steamId) return;
+  const handleSteamDownload = async () => {
+    if (!game) return;
+    setSteamDownloading(true);
     try {
-      await axios.post(`/api/v3/agent/${agentId}/steam-download`, {
-        gameId: game.id,
-        appId: game.steamId,
-        gameTitle: game.title,
-      });
-      setNotification({ message: 'Steam download job dispatched', type: 'success' });
+      const r = await axios.post(`/api/v3/game/${game.id}/steam-download`);
+      setNotification({ message: `Steam download started (job ${r.data.jobId})`, type: 'success' });
     } catch (err: any) {
-      setNotification({ message: err.response?.data?.error || 'Failed to dispatch Steam download', type: 'error' });
+      setNotification({ message: err.response?.data?.error || 'Failed to start Steam download', type: 'error' });
     }
+    setSteamDownloading(false);
   };
 
   const handleDeleteServerFile = async (file: ServerFile) => {
@@ -1688,18 +1687,16 @@ const GameDetails: React.FC = () => {
                     Depots: {manifestInfo.depots.map(d => d.depotId).join(', ')}
                   </div>
                 )}
-                {agents.filter(a => a.status === 'online').length > 0 && manifestInfo && (
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
-                    {agents.filter(a => a.status === 'online').map(agent => (
-                      <button
-                        key={agent.id}
-                        className="gd-icon-btn"
-                        onClick={() => handleSteamDownload(agent.id)}
-                        style={{ padding: '4px 10px', fontSize: '0.82rem' }}
-                      >
-                        ⬇ Steam Download on {agent.name}
-                      </button>
-                    ))}
+                {manifestInfo && manifestInfo.depots.length > 0 && (
+                  <div style={{ marginTop: '4px' }}>
+                    <button
+                      className="gd-icon-btn"
+                      onClick={handleSteamDownload}
+                      disabled={steamDownloading}
+                      style={{ padding: '4px 10px', fontSize: '0.82rem' }}
+                    >
+                      {steamDownloading ? '…' : '⬇ Steam Download'}
+                    </button>
                   </div>
                 )}
               </div>

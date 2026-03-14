@@ -84,6 +84,9 @@ function useSSE(password: string) {
         es.addEventListener('SAVE_CONFLICT', (e: MessageEvent) => {
           window.dispatchEvent(new CustomEvent('SAVE_CONFLICT_EVENT', { detail: e.data }));
         });
+        es.addEventListener('STEAM_DOWNLOAD_PROGRESS', (e: MessageEvent) => {
+          window.dispatchEvent(new CustomEvent('STEAM_DOWNLOAD_PROGRESS_EVENT', { detail: e.data }));
+        });
         es.onerror = () => {
           es?.close();
           // Reconnect after 5 seconds on error

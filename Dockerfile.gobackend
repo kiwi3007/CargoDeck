@@ -36,8 +36,21 @@ RUN CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w -X main.ver
 FROM alpine:3.20
 WORKDIR /app
 
-# ca-certificates for HTTPS, unrar/p7zip for post-processor archive extraction
-RUN apk add --no-cache ca-certificates p7zip
+# ca-certificates for HTTPS, unrar/p7zip for post-processor archive extraction,
+# wget/unzip for DDMod, icu-libs/libstdc++ for .NET self-contained runtime
+RUN apk add --no-cache ca-certificates p7zip wget unzip icu-libs libstdc++
+
+# DepotDownloaderMod — server-side Steam CDN downloader (linux-x64 self-contained .NET binary)
+RUN DDMVER=$(wget -qO- https://api.github.com/repos/SteamAutoCracks/DepotDownloaderMod/releases/latest \
+      | grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/') && \
+    wget -q "https://github.com/SteamAutoCracks/DepotDownloaderMod/releases/download/v${DDMVER}/DepotDownloaderMod-linux-x64.zip" \
+      -O /tmp/ddm.zip && \
+    mkdir -p /app/depotdownloadermod && \
+    unzip /tmp/ddm.zip -d /app/depotdownloadermod && \
+    chmod +x /app/depotdownloadermod/DepotDownloader && \
+    rm /tmp/ddm.zip
+
+ENV PLAYERR_DDM_BIN=/app/depotdownloadermod/DepotDownloader
 
 COPY --from=backend /app/cargodeck /app/cargodeck
 COPY --from=backend /app/agents  /app/agents

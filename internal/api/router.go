@@ -12,6 +12,7 @@ import (
 
 	"github.com/kiwi3007/cargodeck/internal/agent"
 	"github.com/kiwi3007/cargodeck/internal/config"
+	"github.com/kiwi3007/cargodeck/internal/ddm"
 	"github.com/kiwi3007/cargodeck/internal/manifest"
 	"github.com/kiwi3007/cargodeck/internal/monitor"
 	"github.com/kiwi3007/cargodeck/internal/repository"
@@ -34,6 +35,7 @@ type Handler struct {
 	agentBroker   *agent.AgentBroker
 	manifest      *manifest.Service
 	checker       *updater.Checker
+	ddm           *ddm.Executor
 	browsePending   sync.Map // requestId → chan agent.BrowseDirResult
 	protonPending   sync.Map // requestId → chan agent.ListProtonResult
 	installTempDirs sync.Map // gameID (int) → tempDir (string); cleaned up after agent job completes
@@ -52,6 +54,7 @@ func NewHandler(
 	agentBroker *agent.AgentBroker,
 	manifestSvc *manifest.Service,
 	checker *updater.Checker,
+	ddmExec *ddm.Executor,
 ) *Handler {
 	return &Handler{
 		repo:          repo,
@@ -66,6 +69,7 @@ func NewHandler(
 		agentBroker:   agentBroker,
 		manifest:      manifestSvc,
 		checker:       checker,
+		ddm:           ddmExec,
 	}
 }
 
@@ -139,6 +143,7 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Get("/{id}/steam-manifest-info", h.GetSteamManifestInfo)
 		r.With(h.agentAuthMiddleware).Get("/{id}/steam-manifest-zip", h.ServeManifestZIP)
 		r.Post("/{id}/fetch-manifest", h.FetchManifestFromMorrenus)
+		r.Post("/{id}/steam-download", h.SteamDownload)
 	})
 
 	// Platforms
@@ -281,10 +286,6 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Post("/{agentId}/uninstall", h.DispatchUninstallAgent)
 		r.Post("/{agentId}/upload-save", h.DispatchUploadSave)
 		r.Post("/{agentId}/rename-prefix", h.DispatchRenamePrefix)
-		r.Post("/{agentId}/setup-accela", h.DispatchSetupAccela)
-		r.Post("/{agentId}/setup-depot-downloader", h.DispatchSetupDepotDownloader)
-		r.Post("/{agentId}/steam-download", h.DispatchSteamDownload)
-
 		// Agent-authenticated callbacks
 		r.With(h.agentAuthMiddleware).Post("/{agentId}/games", h.ReportInstalledGames)
 		r.With(h.agentAuthMiddleware).Post("/log", h.ReceiveAgentLog)

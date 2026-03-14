@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kiwi3007/cargodeck/internal/ddm"
 )
 
 // ManifestEntry describes one depot's manifest data parsed from a steamtoolz ZIP.
@@ -359,4 +360,73 @@ func parseLua(lua string) ([]ManifestEntry, error) {
 		})
 	}
 	return entries, nil
+}
+
+// ---- POST /api/v3/game/{id}/steam-download ----
+// Triggers a server-side DepotDownloaderMod download using stored manifest data.
+// Returns immediately with { "jobId": "..." }; progress is emitted via SSE
+// as STEAM_DOWNLOAD_PROGRESS events.
+func (h *Handler) SteamDownload(w http.ResponseWriter, r *http.Request) {
+	gameID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		jsonErr(w, 400, "invalid game id")
+		return
+	}
+
+	game, err := h.repo.GetGameByID(gameID)
+	if err != nil || game == nil {
+		jsonErr(w, 404, "game not found")
+		return
+	}
+	if game.SteamID == nil {
+		jsonErr(w, 400, "game has no Steam ID")
+		return
+	}
+
+	info, err := h.loadSteamManifestInfo(gameID)
+	if err != nil {
+		if os.IsNotExist(err) {
+			jsonErr(w, 404, "no manifest stored for this game — upload or fetch a manifest first")
+			return
+		}
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if len(info.Depots) == 0 {
+		jsonErr(w, 400, "manifest contains no depots")
+		return
+	}
+
+	if !h.ddm.IsAvailable() {
+		jsonErr(w, 503, "DepotDownloaderMod binary not found — check PLAYERR_DDM_BIN or rebuild the container")
+		return
+	}
+
+	media := h.cfg.LoadMedia()
+
+	depots := make([]ddm.DepotEntry, len(info.Depots))
+	for i, d := range info.Depots {
+		depots[i] = ddm.DepotEntry{
+			DepotID:     d.DepotID,
+			DepotKey:    d.DepotKey,
+			ManifestGID: d.ManifestGID,
+			AppToken:    d.AppToken,
+		}
+	}
+
+	jobID, err := h.ddm.Download(
+		gameID,
+		info.AppID,
+		game.Title,
+		media.DownloadPath,
+		h.steamManifestDir(gameID),
+		depots,
+	)
+	if err != nil {
+		jsonErr(w, 409, err.Error()) // 409 = already running
+		return
+	}
+
+	log.Printf("[DDM] Started server-side download for game %d (app %d), job %s", gameID, info.AppID, jobID)
+	jsonOK(w, map[string]string{"jobId": jobID})
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/kiwi3007/cargodeck/internal/api"
 	"github.com/kiwi3007/cargodeck/internal/config"
 	dbpkg "github.com/kiwi3007/cargodeck/internal/db"
+	"github.com/kiwi3007/cargodeck/internal/ddm"
 	"github.com/kiwi3007/cargodeck/internal/manifest"
 	"github.com/kiwi3007/cargodeck/internal/monitor"
 	"github.com/kiwi3007/cargodeck/internal/repository"
@@ -73,8 +74,11 @@ func main() {
 	// ---- Update checker ----
 	updateChecker := updater.NewChecker(repo, cfg, broker)
 
+	// ---- DDM executor (server-side Steam CDN downloader) ----
+	ddmExec := ddm.NewExecutor(ddm.DefaultConfig(), broker)
+
 	// ---- API ----
-	handler := api.NewHandler(repo, cfg, broker, scan, importStatus, processor, linkStore, agentRegistry, agentJobs, agentBroker, manifestSvc, updateChecker)
+	handler := api.NewHandler(repo, cfg, broker, scan, importStatus, processor, linkStore, agentRegistry, agentJobs, agentBroker, manifestSvc, updateChecker, ddmExec)
 	router := handler.NewRouter()
 
 	// ---- Auth warning ----
