@@ -2580,7 +2580,7 @@ func (c *Client) setupDepotDownloader() {
 	log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER: installed at %s", binPath)
 
 	// Also install DepotDownloaderMod alongside the standard tool.
-	go c.setupDepotDownloaderMod()
+	go func() { _ = c.setupDepotDownloaderMod() }()
 }
 
 // depotDownloaderAssetURL resolves the download URL for the current platform.
@@ -2635,46 +2635,46 @@ func depotDownloaderModBin(installDir string) string {
 
 // setupDepotDownloaderMod downloads the DepotDownloaderMod self-contained binary.
 // It is invoked by the SETUP_DEPOT_DOWNLOADER SSE event alongside the standard DepotDownloader.
-func (c *Client) setupDepotDownloaderMod() {
+func (c *Client) setupDepotDownloaderMod() error {
 	home, _ := os.UserHomeDir()
 	installDir := filepath.Join(home, depotDownloaderModDir)
 	binPath := depotDownloaderModBin(installDir)
 
 	if _, err := os.Stat(binPath); err == nil {
 		log.Printf("[Agent] DepotDownloaderMod already installed at %s", binPath)
-		return
+		return nil
 	}
 
 	assetURL, err := depotDownloaderModAssetURL()
 	if err != nil {
 		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: %v", err)
-		return
+		return err
 	}
 
 	log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: downloading %s", assetURL)
 	resp, err := c.http.Get(assetURL)
 	if err != nil {
 		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: download error: %v", err)
-		return
+		return err
 	}
 	defer resp.Body.Close()
 
 	tmp, err := os.CreateTemp("", "depotdownloadermod-*.zip")
 	if err != nil {
 		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: temp file: %v", err)
-		return
+		return err
 	}
 	defer os.Remove(tmp.Name())
 	if _, err := io.Copy(tmp, resp.Body); err != nil {
 		tmp.Close()
 		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: write: %v", err)
-		return
+		return err
 	}
 	tmp.Close()
 
 	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: mkdir: %v", err)
-		return
+		return err
 	}
 
 	cmd := exec.Command("unzip", "-o", tmp.Name(), "-d", installDir)
@@ -2682,11 +2682,12 @@ func (c *Client) setupDepotDownloaderMod() {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: unzip failed: %v", err)
-		return
+		return err
 	}
 
 	os.Chmod(binPath, 0o755)
 	log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: installed at %s", binPath)
+	return nil
 }
 
 // depotDownloaderModAssetURL resolves the download URL for DepotDownloaderMod for this platform.
@@ -2827,9 +2828,12 @@ func (c *Client) steamDownloadWithManifest(job agent.SteamDownloadJob, gameDir, 
 	home, _ := os.UserHomeDir()
 	ddmBin := depotDownloaderModBin(filepath.Join(home, depotDownloaderModDir))
 	if _, err := os.Stat(ddmBin); err != nil {
-		msg := "DepotDownloaderMod not installed — run setup-depot-downloader first"
-		report(agent.JobFailed, msg, 0)
-		return fmt.Errorf(msg)
+		report(agent.JobDownloading, "Installing DepotDownloaderMod...", 1)
+		if installErr := c.setupDepotDownloaderMod(); installErr != nil {
+			msg := "DepotDownloaderMod install failed: " + installErr.Error()
+			report(agent.JobFailed, msg, 0)
+			return fmt.Errorf(msg)
+		}
 	}
 
 	// Download manifests.zip from server
