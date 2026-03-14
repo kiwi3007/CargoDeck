@@ -2,6 +2,7 @@
 package agentclient
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"crypto/hmac"
@@ -381,6 +382,17 @@ func (c *Client) listenSSE() error {
 				}
 			case "SETUP_ACCELA":
 				go c.setupAccela()
+			case "SETUP_DEPOT_DOWNLOADER":
+				go c.setupDepotDownloader()
+			case "STEAM_DOWNLOAD":
+				if dataLine != "" {
+					var job agent.SteamDownloadJob
+					if err := json.Unmarshal([]byte(dataLine), &job); err != nil {
+						log.Printf("[Agent] Bad STEAM_DOWNLOAD JSON: %v", err)
+					} else {
+						go c.steamDownload(job)
+					}
+				}
 			}
 			eventType = ""
 			dataLine = ""
@@ -2325,38 +2337,654 @@ func (c *Client) checkAndUpdate() {
 	os.Exit(1) // systemd Restart=on-failure will restart with the new binary
 }
 
-// setupAccela installs ACCELA + SLSsteam on the agent machine via enter-the-wired.
+// setupAccela installs ACCELA on the agent machine.
+// All steps are user-space only — no sudo or pacman required.
+//
+//  1. Install .NET SDK 9 via the official installer (to ~/.dotnet)
+//  2. Download the latest ACCELA AppImage from GitHub releases
+//  3. Extract to ~/.local/share/ACCELA
+//  4. Write the ACCELA config file
 func (c *Client) setupAccela() {
-	const scriptURL = "https://raw.githubusercontent.com/ciscosweater/enter-the-wired/main/enter-the-wired"
-	log.Printf("[Agent] SETUP_ACCELA: downloading enter-the-wired from %s", scriptURL)
+	log.Printf("[Agent] SETUP_ACCELA: starting")
 
-	resp, err := c.http.Get(scriptURL)
+	home, err := os.UserHomeDir()
 	if err != nil {
-		log.Printf("[Agent] SETUP_ACCELA: download failed: %v", err)
+		log.Printf("[Agent] SETUP_ACCELA: cannot determine home dir: %v", err)
+		return
+	}
+
+	if err := accelaInstallDotnet(c, home); err != nil {
+		log.Printf("[Agent] SETUP_ACCELA: .NET install failed: %v", err)
+		return
+	}
+
+	if err := accelaInstallAppImage(c, home); err != nil {
+		log.Printf("[Agent] SETUP_ACCELA: ACCELA install failed: %v", err)
+		return
+	}
+
+	if err := accelaWriteConfig(home); err != nil {
+		log.Printf("[Agent] SETUP_ACCELA: config write failed: %v", err)
+		return
+	}
+
+	log.Printf("[Agent] SETUP_ACCELA: done — ACCELA installed at %s/.local/share/ACCELA", home)
+}
+
+// accelaInstallDotnet downloads and runs the official .NET 9 install script.
+// Installs to ~/.dotnet with no sudo required.
+func accelaInstallDotnet(c *Client, home string) error {
+	dotnetBin := filepath.Join(home, ".dotnet", "dotnet")
+	if _, err := os.Stat(dotnetBin); err == nil {
+		log.Printf("[Agent] SETUP_ACCELA: .NET already installed at %s", dotnetBin)
+		return nil
+	}
+
+	log.Printf("[Agent] SETUP_ACCELA: downloading .NET 9 installer...")
+	resp, err := c.http.Get("https://dot.net/v1/dotnet-install.sh")
+	if err != nil {
+		return fmt.Errorf("download dotnet-install.sh: %w", err)
+	}
+	defer resp.Body.Close()
+	script, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read dotnet-install.sh: %w", err)
+	}
+
+	tmp, err := os.CreateTemp("", "dotnet-install-*.sh")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	tmp.Write(script)
+	tmp.Close()
+	os.Chmod(tmp.Name(), 0o755)
+
+	log.Printf("[Agent] SETUP_ACCELA: installing .NET 9 SDK...")
+	cmd := exec.Command("bash", tmp.Name(), "--channel", "9.0", "--install-dir", filepath.Join(home, ".dotnet"))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("dotnet-install.sh: %w", err)
+	}
+	log.Printf("[Agent] SETUP_ACCELA: .NET 9 installed")
+	return nil
+}
+
+// accelaInstallAppImage fetches the latest ACCELA AppImage from GitHub releases
+// and extracts it to ~/.local/share/ACCELA.
+func accelaInstallAppImage(c *Client, home string) error {
+	installDir := filepath.Join(home, ".local", "share", "ACCELA")
+
+	// Check if already installed
+	if data, err := os.ReadFile(filepath.Join(installDir, ".version")); err == nil {
+		log.Printf("[Agent] SETUP_ACCELA: ACCELA already installed (version %s)", strings.TrimSpace(string(data)))
+		return nil
+	}
+
+	log.Printf("[Agent] SETUP_ACCELA: fetching latest ACCELA release info...")
+	resp, err := c.http.Get("https://api.github.com/repos/ciscosweater/enter-the-wired/releases/latest")
+	if err != nil {
+		return fmt.Errorf("github API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		TagName string `json:"tag_name"`
+		Assets  []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return fmt.Errorf("decode release: %w", err)
+	}
+
+	var assetURL string
+	for _, a := range release.Assets {
+		if strings.HasSuffix(a.Name, "-linux-appimage.tar.gz") {
+			assetURL = a.BrowserDownloadURL
+			break
+		}
+	}
+	if assetURL == "" {
+		return fmt.Errorf("no AppImage asset found in release %s", release.TagName)
+	}
+
+	log.Printf("[Agent] SETUP_ACCELA: downloading ACCELA %s...", release.TagName)
+	dlResp, err := c.http.Get(assetURL)
+	if err != nil {
+		return fmt.Errorf("download AppImage: %w", err)
+	}
+	defer dlResp.Body.Close()
+
+	tmp, err := os.CreateTemp("", "accela-*.tar.gz")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := io.Copy(tmp, dlResp.Body); err != nil {
+		tmp.Close()
+		return fmt.Errorf("save AppImage archive: %w", err)
+	}
+	tmp.Close()
+
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		return err
+	}
+
+	log.Printf("[Agent] SETUP_ACCELA: extracting to %s...", installDir)
+	cmd := exec.Command("tar", "-xzf", tmp.Name(), "-C", installDir, "--strip-components=1")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("extract: %w", err)
+	}
+
+	// Mark installed version
+	os.WriteFile(filepath.Join(installDir, ".version"), []byte(release.TagName), 0o644)
+	log.Printf("[Agent] SETUP_ACCELA: ACCELA %s extracted", release.TagName)
+	return nil
+}
+
+// accelaWriteConfig writes the ACCELA config file with CargoDeck-appropriate defaults.
+// Existing keys are preserved; only missing keys are added.
+func accelaWriteConfig(home string) error {
+	cfgDir := filepath.Join(home, ".config", "Tachibana Labs")
+	cfgPath := filepath.Join(cfgDir, "ACCELA.conf")
+
+	defaults := [][2]string{
+		{"auto_skip_single_choice", "true"},
+		{"library_mode", "true"},
+		{"max_downloads", "16"},
+		{"sls_config_management", "true"},
+		{"slssteam_mode", "true"},
+		{"use_steamless", "true"},
+	}
+
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		return err
+	}
+
+	existing, _ := os.ReadFile(cfgPath)
+	content := string(existing)
+	if !strings.Contains(content, "[General]") {
+		content = "[General]\n" + content
+	}
+	for _, kv := range defaults {
+		if !strings.Contains(content, kv[0]+"=") {
+			content += kv[0] + "=" + kv[1] + "\n"
+		}
+	}
+
+	return os.WriteFile(cfgPath, []byte(content), 0o644)
+}
+
+// ---- DepotDownloader / DepotDownloaderMod setup + Steam download ----
+
+const depotDownloaderDir    = ".config/playerr-agent/depotdownloader"
+const depotDownloaderModDir = ".config/playerr-agent/depotdownloadermod"
+
+// setupDepotDownloader downloads the DepotDownloader self-contained binary for this platform.
+func (c *Client) setupDepotDownloader() {
+	home, _ := os.UserHomeDir()
+	installDir := filepath.Join(home, depotDownloaderDir)
+	binPath := depotDownloaderBin(installDir)
+
+	if _, err := os.Stat(binPath); err == nil {
+		log.Printf("[Agent] DepotDownloader already installed at %s", binPath)
+		return
+	}
+
+	assetURL, err := depotDownloaderAssetURL()
+	if err != nil {
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER: %v", err)
+		return
+	}
+
+	log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER: downloading %s", assetURL)
+	resp, err := c.http.Get(assetURL)
+	if err != nil {
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER: download error: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		log.Printf("[Agent] SETUP_ACCELA: unexpected HTTP %d from %s", resp.StatusCode, scriptURL)
-		return
-	}
-
-	script, err := io.ReadAll(resp.Body)
+	tmp, err := os.CreateTemp("", "depotdownloader-*.zip")
 	if err != nil {
-		log.Printf("[Agent] SETUP_ACCELA: read failed: %v", err)
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER: temp file: %v", err)
+		return
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := io.Copy(tmp, resp.Body); err != nil {
+		tmp.Close()
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER: write: %v", err)
+		return
+	}
+	tmp.Close()
+
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER: mkdir: %v", err)
 		return
 	}
 
-	cmd := exec.Command("bash", "-s")
-	cmd.Stdin = bytes.NewReader(script)
+	cmd := exec.Command("unzip", "-o", tmp.Name(), "-d", installDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	log.Printf("[Agent] SETUP_ACCELA: running enter-the-wired...")
 	if err := cmd.Run(); err != nil {
-		log.Printf("[Agent] SETUP_ACCELA: enter-the-wired exited with error: %v", err)
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER: unzip failed: %v", err)
 		return
 	}
-	log.Printf("[Agent] SETUP_ACCELA: done")
+
+	os.Chmod(binPath, 0o755)
+	log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER: installed at %s", binPath)
+
+	// Also install DepotDownloaderMod alongside the standard tool.
+	go c.setupDepotDownloaderMod()
+}
+
+// depotDownloaderAssetURL resolves the download URL for the current platform.
+func depotDownloaderAssetURL() (string, error) {
+	resp, err := http.Get("https://api.github.com/repos/SteamRE/DepotDownloader/releases/latest")
+	if err != nil {
+		return "", fmt.Errorf("github API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		Assets []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", fmt.Errorf("decode: %w", err)
+	}
+
+	// Match platform: e.g. "DepotDownloader-linux-x64.zip"
+	var goosMap = map[string]string{"linux": "linux", "darwin": "macos", "windows": "windows"}
+	var goarchMap = map[string]string{"amd64": "x64", "arm64": "arm64", "arm": "arm"}
+	osName := goosMap[runtime.GOOS]
+	archName := goarchMap[runtime.GOARCH]
+	want := fmt.Sprintf("DepotDownloader-%s-%s.zip", osName, archName)
+
+	for _, a := range release.Assets {
+		if a.Name == want {
+			return a.BrowserDownloadURL, nil
+		}
+	}
+	return "", fmt.Errorf("no asset found for %s", want)
+}
+
+// depotDownloaderBin returns the path to the DepotDownloader binary in installDir.
+func depotDownloaderBin(installDir string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(installDir, "DepotDownloader.exe")
+	}
+	return filepath.Join(installDir, "DepotDownloader")
+}
+
+// depotDownloaderModBin returns the path to the DepotDownloaderMod binary in installDir.
+// DepotDownloaderMod uses the same binary name as DepotDownloader in its releases.
+func depotDownloaderModBin(installDir string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(installDir, "DepotDownloader.exe")
+	}
+	return filepath.Join(installDir, "DepotDownloader")
+}
+
+// setupDepotDownloaderMod downloads the DepotDownloaderMod self-contained binary.
+// It is invoked by the SETUP_DEPOT_DOWNLOADER SSE event alongside the standard DepotDownloader.
+func (c *Client) setupDepotDownloaderMod() {
+	home, _ := os.UserHomeDir()
+	installDir := filepath.Join(home, depotDownloaderModDir)
+	binPath := depotDownloaderModBin(installDir)
+
+	if _, err := os.Stat(binPath); err == nil {
+		log.Printf("[Agent] DepotDownloaderMod already installed at %s", binPath)
+		return
+	}
+
+	assetURL, err := depotDownloaderModAssetURL()
+	if err != nil {
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: %v", err)
+		return
+	}
+
+	log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: downloading %s", assetURL)
+	resp, err := c.http.Get(assetURL)
+	if err != nil {
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: download error: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	tmp, err := os.CreateTemp("", "depotdownloadermod-*.zip")
+	if err != nil {
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: temp file: %v", err)
+		return
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := io.Copy(tmp, resp.Body); err != nil {
+		tmp.Close()
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: write: %v", err)
+		return
+	}
+	tmp.Close()
+
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: mkdir: %v", err)
+		return
+	}
+
+	cmd := exec.Command("unzip", "-o", tmp.Name(), "-d", installDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: unzip failed: %v", err)
+		return
+	}
+
+	os.Chmod(binPath, 0o755)
+	log.Printf("[Agent] SETUP_DEPOT_DOWNLOADER_MOD: installed at %s", binPath)
+}
+
+// depotDownloaderModAssetURL resolves the download URL for DepotDownloaderMod for this platform.
+func depotDownloaderModAssetURL() (string, error) {
+	resp, err := http.Get("https://api.github.com/repos/SteamAutoCracks/DepotDownloaderMod/releases/latest")
+	if err != nil {
+		return "", fmt.Errorf("github API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		Assets []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", fmt.Errorf("decode: %w", err)
+	}
+
+	var goosMap = map[string]string{"linux": "linux", "darwin": "linux", "windows": "windows"}
+	var goarchMap = map[string]string{"amd64": "x64", "arm64": "arm64"}
+	osName := goosMap[runtime.GOOS]
+	archName := goarchMap[runtime.GOARCH]
+	if archName == "" {
+		archName = "x64"
+	}
+	want := fmt.Sprintf("DepotDownloaderMod-%s-%s.zip", osName, archName)
+
+	for _, a := range release.Assets {
+		if a.Name == want {
+			return a.BrowserDownloadURL, nil
+		}
+	}
+	// Fallback: first linux zip
+	for _, a := range release.Assets {
+		if strings.Contains(a.Name, "linux") && strings.HasSuffix(a.Name, ".zip") {
+			return a.BrowserDownloadURL, nil
+		}
+	}
+	return "", fmt.Errorf("no asset found for %s/%s", osName, archName)
+}
+
+// reportSteamProgress POSTs a progress update for a SteamDownloadJob.
+func (c *Client) reportSteamProgress(jobID string, status agent.JobStatus, message string, pct int) {
+	prog := agent.JobProgress{JobID: jobID, Status: status, Message: message, Percent: pct}
+	body, _ := json.Marshal(prog)
+	req, err := http.NewRequest("POST", c.cfg.ServerURL+"/api/v3/agent/progress", bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.authToken())
+	if resp, err := c.http.Do(req); err == nil {
+		resp.Body.Close()
+	}
+}
+
+// steamDownload downloads a game from Steam CDN.
+// If the job includes ManifestEntries (depot keys + manifest GIDs), it uses
+// DepotDownloaderMod with the binary manifest files downloaded from the server.
+// Otherwise it falls back to anonymous DepotDownloader.
+func (c *Client) steamDownload(job agent.SteamDownloadJob) {
+	log.Printf("[Agent] STEAM_DOWNLOAD: app %d (%s)", job.AppID, job.GameTitle)
+
+	report := func(status agent.JobStatus, message string, pct int) {
+		c.reportSteamProgress(job.JobID, status, message, pct)
+	}
+
+	// Resolve the steamapps directory
+	steamRoot := launcher.FindSteamRoot()
+	if steamRoot == "" {
+		report(agent.JobFailed, "Steam root not found", 0)
+		return
+	}
+	steamapps := filepath.Join(steamRoot, "steamapps")
+
+	gameDir := job.InstallDir
+	if gameDir == "" {
+		gameDir = filepath.Join(steamapps, "common", job.GameTitle)
+	}
+	if err := os.MkdirAll(gameDir, 0o755); err != nil {
+		report(agent.JobFailed, "Cannot create game dir: "+err.Error(), 0)
+		return
+	}
+
+	osTarget := job.OS
+	if osTarget == "" {
+		osTarget = "linux"
+	}
+
+	var runErr error
+
+	if len(job.ManifestEntries) > 0 && job.ManifestGameID > 0 {
+		runErr = c.steamDownloadWithManifest(job, gameDir, osTarget, report)
+	} else {
+		runErr = c.steamDownloadAnonymous(job, gameDir, osTarget, report)
+	}
+
+	if runErr != nil {
+		return // error already reported
+	}
+
+	// Write appmanifest ACF so Steam sees the game as installed
+	report(agent.JobInstalling, "Writing Steam manifest...", 95)
+	acfPath := filepath.Join(steamapps, fmt.Sprintf("appmanifest_%d.acf", job.AppID))
+	if err := writeAppManifest(acfPath, job.AppID, job.GameTitle, gameDir); err != nil {
+		report(agent.JobFailed, "Write ACF failed: "+err.Error(), 95)
+		return
+	}
+
+	log.Printf("[Agent] STEAM_DOWNLOAD: done — manifest at %s", acfPath)
+	report(agent.JobDone, "Download complete", 100)
+}
+
+// steamDownloadAnonymous uses plain DepotDownloader with anonymous login.
+func (c *Client) steamDownloadAnonymous(job agent.SteamDownloadJob, gameDir, osTarget string, report func(agent.JobStatus, string, int)) error {
+	home, _ := os.UserHomeDir()
+	ddBin := depotDownloaderBin(filepath.Join(home, depotDownloaderDir))
+	if _, err := os.Stat(ddBin); err != nil {
+		msg := "DepotDownloader not installed — run setup-depot-downloader first"
+		report(agent.JobFailed, msg, 0)
+		return fmt.Errorf(msg)
+	}
+
+	log.Printf("[Agent] STEAM_DOWNLOAD: anonymous app %d (os=%s) → %s", job.AppID, osTarget, gameDir)
+	report(agent.JobDownloading, "Starting anonymous download...", 5)
+
+	return c.runDepotDownloaderStreaming(ddBin, []string{
+		"-app", fmt.Sprintf("%d", job.AppID),
+		"-os", osTarget,
+		"-dir", gameDir,
+	}, report)
+}
+
+// steamDownloadWithManifest uses DepotDownloaderMod with depot keys and binary manifest files.
+func (c *Client) steamDownloadWithManifest(job agent.SteamDownloadJob, gameDir, osTarget string, report func(agent.JobStatus, string, int)) error {
+	home, _ := os.UserHomeDir()
+	ddmBin := depotDownloaderModBin(filepath.Join(home, depotDownloaderModDir))
+	if _, err := os.Stat(ddmBin); err != nil {
+		msg := "DepotDownloaderMod not installed — run setup-depot-downloader first"
+		report(agent.JobFailed, msg, 0)
+		return fmt.Errorf(msg)
+	}
+
+	// Download manifests.zip from server
+	report(agent.JobDownloading, "Downloading manifest files...", 3)
+	manifestsZipURL := fmt.Sprintf("%s/api/v3/game/%d/steam-manifest-zip", c.cfg.ServerURL, job.ManifestGameID)
+	req, _ := http.NewRequest("GET", manifestsZipURL, nil)
+	req.Header.Set("Authorization", "Bearer "+c.authToken())
+	resp, err := c.http.Do(req)
+	if err != nil {
+		report(agent.JobFailed, "Manifest download failed: "+err.Error(), 3)
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		msg := fmt.Sprintf("Manifest download HTTP %d", resp.StatusCode)
+		report(agent.JobFailed, msg, 3)
+		return fmt.Errorf(msg)
+	}
+
+	zipData, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	if err != nil {
+		report(agent.JobFailed, "Read manifest ZIP: "+err.Error(), 3)
+		return err
+	}
+
+	// Extract ZIP to temp dir
+	tmpDir, err := os.MkdirTemp("", "cargodeck-manifests-*")
+	if err != nil {
+		report(agent.JobFailed, "Temp dir: "+err.Error(), 3)
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	if err := extractZIP(zipData, tmpDir); err != nil {
+		report(agent.JobFailed, "Extract manifests: "+err.Error(), 3)
+		return err
+	}
+
+	// Write depot keys file
+	keysFile := filepath.Join(tmpDir, "depotkeys.txt")
+	var keysLines strings.Builder
+	for _, e := range job.ManifestEntries {
+		fmt.Fprintf(&keysLines, "%d;%s\n", e.DepotID, e.DepotKey)
+	}
+	if err := os.WriteFile(keysFile, []byte(keysLines.String()), 0o644); err != nil {
+		report(agent.JobFailed, "Write depotkeys: "+err.Error(), 5)
+		return err
+	}
+
+	log.Printf("[Agent] STEAM_DOWNLOAD_MOD: app %d, %d depot(s), dir=%s", job.AppID, len(job.ManifestEntries), gameDir)
+	report(agent.JobDownloading, "Starting manifest download...", 5)
+
+	// Run DepotDownloaderMod for each manifest entry that has a binary manifest file.
+	total := len(job.ManifestEntries)
+	for i, entry := range job.ManifestEntries {
+		if entry.ManifestGID == "" {
+			continue // main app entry (no depot manifest)
+		}
+
+		// Find the matching .manifest file
+		manifestFile := filepath.Join(tmpDir, fmt.Sprintf("%d_%s.manifest", entry.DepotID, entry.ManifestGID))
+		if _, err := os.Stat(manifestFile); err != nil {
+			log.Printf("[Agent] STEAM_DOWNLOAD_MOD: no manifest file for depot %d, skipping", entry.DepotID)
+			continue
+		}
+
+		pctBase := 5 + (85*i/total)
+		report(agent.JobDownloading, fmt.Sprintf("Downloading depot %d...", entry.DepotID), pctBase)
+
+		args := []string{
+			"-app", fmt.Sprintf("%d", job.AppID),
+			"-depot", fmt.Sprintf("%d", entry.DepotID),
+			"-manifest", entry.ManifestGID,
+			"-manifestfile", manifestFile,
+			"-depotkeys", keysFile,
+			"-dir", gameDir,
+		}
+		if entry.AppToken != 0 {
+			args = append(args, "-apptoken", fmt.Sprintf("%d", entry.AppToken))
+		}
+
+		if err := c.runDepotDownloaderStreaming(ddmBin, args, report); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// runDepotDownloaderStreaming runs a DepotDownloader(Mod) command, streaming output as progress.
+func (c *Client) runDepotDownloaderStreaming(bin string, args []string, report func(agent.JobStatus, string, int)) error {
+	cmd := exec.Command(bin, args...)
+	pr, pw := io.Pipe()
+	cmd.Stdout = pw
+	cmd.Stderr = pw
+	go func() {
+		scanner := bufio.NewScanner(pr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			log.Printf("[DepotDownloader] %s", line)
+			report(agent.JobDownloading, line, 10)
+		}
+	}()
+	runErr := cmd.Run()
+	pw.Close()
+	if runErr != nil {
+		report(agent.JobFailed, "Download failed: "+runErr.Error(), 10)
+		return runErr
+	}
+	return nil
+}
+
+// extractZIP extracts all files from zipData into destDir.
+func extractZIP(zipData []byte, destDir string) error {
+	zr, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+	if err != nil {
+		return err
+	}
+	for _, f := range zr.File {
+		outPath := filepath.Join(destDir, filepath.Base(f.Name))
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		data, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(outPath, data, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeAppManifest writes a minimal Steam appmanifest_APPID.acf file.
+func writeAppManifest(path string, appID int, gameTitle, gameDir string) error {
+	folderName := filepath.Base(gameDir)
+	acf := fmt.Sprintf(`"AppState"
+{
+	"appid"		"%d"
+	"Universe"	"1"
+	"name"		"%s"
+	"StateFlags"	"4"
+	"installdir"	"%s"
+	"LastUpdated"	"%d"
+	"SizeOnDisk"	"0"
+	"buildid"	"0"
+	"InstalledDepots"
+	{
+	}
+}
+`, appID, gameTitle, folderName, time.Now().Unix())
+
+	log.Printf("[Agent] Writing ACF: %s", path)
+	return os.WriteFile(path, []byte(acf), 0o644)
 }

@@ -62,6 +62,26 @@ type SetupAccelaJob struct {
 	JobID string `json:"jobId"`
 }
 
+// ManifestEntry describes one depot included in a steamtoolz manifest ZIP.
+type ManifestEntry struct {
+	DepotID     int    `json:"depotId"`
+	DepotKey    string `json:"depotKey"`    // hex depot encryption key
+	ManifestGID string `json:"manifestGid"` // manifest version ID
+	AppToken    int64  `json:"appToken"`    // Steam app access token
+}
+
+// SteamDownloadJob is pushed to the agent to download a game from Steam CDN
+// via DepotDownloaderMod (with manifest data) or anonymously via DepotDownloader.
+type SteamDownloadJob struct {
+	JobID           string          `json:"jobId"`
+	AppID           int             `json:"appId"`
+	GameTitle       string          `json:"gameTitle"`            // used as the steamapps/common subfolder name
+	InstallDir      string          `json:"installDir"`           // override default steamapps/common location
+	OS              string          `json:"os"`                   // "linux" or "windows"; defaults to "linux"
+	ManifestEntries []ManifestEntry `json:"manifestEntries,omitempty"` // non-empty = use DepotDownloaderMod
+	ManifestGameID  int             `json:"manifestGameId,omitempty"`  // CargoDeck gameId for manifest-zip download
+}
+
 // ListProtonJob is pushed to the agent to enumerate available Proton versions.
 type ListProtonJob struct {
 	RequestID string `json:"requestId"`

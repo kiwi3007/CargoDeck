@@ -133,6 +133,11 @@ func (h *Handler) NewRouter() http.Handler {
 
 		// Bulk update check for all games with a known version
 		r.Post("/check-update", h.CheckAllUpdates)
+
+		// Steam manifest: store/retrieve steamtoolz ZIP data for manifest-based downloads
+		r.Post("/{id}/steam-manifest", h.SetSteamManifest)
+		r.Get("/{id}/steam-manifest-info", h.GetSteamManifestInfo)
+		r.With(h.agentAuthMiddleware).Get("/{id}/steam-manifest-zip", h.ServeManifestZIP)
 	})
 
 	// Platforms
@@ -272,6 +277,8 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Post("/{agentId}/upload-save", h.DispatchUploadSave)
 		r.Post("/{agentId}/rename-prefix", h.DispatchRenamePrefix)
 		r.Post("/{agentId}/setup-accela", h.DispatchSetupAccela)
+		r.Post("/{agentId}/setup-depot-downloader", h.DispatchSetupDepotDownloader)
+		r.Post("/{agentId}/steam-download", h.DispatchSteamDownload)
 
 		// Agent-authenticated callbacks
 		r.With(h.agentAuthMiddleware).Post("/{agentId}/games", h.ReportInstalledGames)

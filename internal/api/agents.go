@@ -1245,6 +1245,77 @@ func (h *Handler) DispatchSetupAccela(w http.ResponseWriter, r *http.Request) {
 	h.dispatchSimpleJob(w, r, "SETUP_ACCELA", "ACCELA setup requested")
 }
 
+// ---- Dispatch SETUP_DEPOT_DOWNLOADER ----
+
+func (h *Handler) DispatchSetupDepotDownloader(w http.ResponseWriter, r *http.Request) {
+	h.dispatchSimpleJob(w, r, "SETUP_DEPOT_DOWNLOADER", "DepotDownloader setup requested")
+}
+
+// ---- Dispatch STEAM_DOWNLOAD ----
+
+type steamDownloadRequest struct {
+	GameID     int    `json:"gameId"`     // CargoDeck game ID (for manifest lookup)
+	AppID      int    `json:"appId"`
+	GameTitle  string `json:"gameTitle"`
+	InstallDir string `json:"installDir,omitempty"`
+	OS         string `json:"os,omitempty"` // "linux" or "windows"
+}
+
+func (h *Handler) DispatchSteamDownload(w http.ResponseWriter, r *http.Request) {
+	agentID := chi.URLParam(r, "agentId")
+	if _, ok := h.agentRegistry.Get(agentID); !ok {
+		jsonErr(w, 404, "agent not found")
+		return
+	}
+
+	var req steamDownloadRequest
+	if err := decodeBody(r, &req); err != nil {
+		jsonErr(w, 400, err.Error())
+		return
+	}
+	if req.AppID == 0 || req.GameTitle == "" {
+		jsonErr(w, 400, "appId and gameTitle required")
+		return
+	}
+	if req.OS == "" {
+		req.OS = "linux"
+	}
+
+	jobID := fmt.Sprintf("steam-%d-%d", req.AppID, time.Now().UnixMilli())
+	job := agent.SteamDownloadJob{
+		JobID:      jobID,
+		AppID:      req.AppID,
+		GameTitle:  req.GameTitle,
+		InstallDir: req.InstallDir,
+		OS:         req.OS,
+	}
+
+	// If the game has stored manifest data, include it so the agent can use DepotDownloaderMod.
+	if req.GameID > 0 {
+		if info, err := h.loadSteamManifestInfo(req.GameID); err == nil && len(info.Depots) > 0 {
+			var entries []agent.ManifestEntry
+			for _, d := range info.Depots {
+				entries = append(entries, agent.ManifestEntry{
+					DepotID:     d.DepotID,
+					DepotKey:    d.DepotKey,
+					ManifestGID: d.ManifestGID,
+					AppToken:    d.AppToken,
+				})
+			}
+			job.ManifestEntries = entries
+			// Agent will download the ZIP using its own cfg.ServerURL + this gameId.
+			job.ManifestGameID = req.GameID
+			log.Printf("[Agent] STEAM_DOWNLOAD: attaching %d manifest entries for game %d", len(entries), req.GameID)
+		}
+	}
+
+	payload, _ := json.Marshal(job)
+	h.agentBroker.Send(agentID, "STEAM_DOWNLOAD", string(payload))
+	h.agentRegistry.TrackJob(agentID, jobID, req.GameTitle, 0)
+	log.Printf("[Agent] Dispatched STEAM_DOWNLOAD → agent %s (app %d)", agentID, req.AppID)
+	jsonOK(w, map[string]string{"jobId": jobID})
+}
+
 func serverIsMultiPartNotFirst(name string) bool {
 	lower := strings.ToLower(name)
 	if strings.Contains(lower, ".part") {
