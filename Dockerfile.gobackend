@@ -32,29 +32,37 @@ RUN CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w -X main.ver
     CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o /app/agents/osx-arm64/cargodeck-agent    ./cmd/agent/ && \
     echo "${VERSION}" > /app/agents/version.txt
 
-# Stage 3: Minimal runtime image (~15MB)
+# Stage 3: Build DepotDownloaderMod from source
+# DDMod only ships Windows binaries; we build a self-contained linux-musl-x64 binary.
+# Uses -r linux-musl-x64 so it runs on Alpine (musl libc) without extra libs.
+# InvariantGlobalization=true is already set in the .csproj so no ICU needed.
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS ddm-builder
+RUN git clone --depth=1 https://github.com/SteamAutoCracks/DepotDownloaderMod /ddm
+WORKDIR /ddm/DepotDownloader
+RUN dotnet publish -c Release \
+    -r linux-musl-x64 \
+    --self-contained true \
+    -p:PublishSingleFile=true \
+    -p:DebugType=none \
+    -p:DebugSymbols=false \
+    -o /ddm-out && \
+    # Binary name comes from AssemblyName in .csproj; move to a known name
+    mv /ddm-out/Depot* /ddm-out/DepotDownloader 2>/dev/null || true
+
+# Stage 4: Minimal runtime image (~15MB)
 FROM alpine:3.20
 WORKDIR /app
 
-# ca-certificates for HTTPS, unrar/p7zip for post-processor archive extraction,
-# wget/unzip for DDMod, icu-libs/libstdc++ for .NET self-contained runtime
-RUN apk add --no-cache ca-certificates p7zip wget unzip icu-libs libstdc++
-
-# DepotDownloaderMod — server-side Steam CDN downloader (linux-x64 self-contained .NET binary)
-RUN DDMVER=$(wget -qO- https://api.github.com/repos/SteamAutoCracks/DepotDownloaderMod/releases/latest \
-      | grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/') && \
-    wget -q "https://github.com/SteamAutoCracks/DepotDownloaderMod/releases/download/v${DDMVER}/DepotDownloaderMod-linux-x64.zip" \
-      -O /tmp/ddm.zip && \
-    mkdir -p /app/depotdownloadermod && \
-    unzip /tmp/ddm.zip -d /app/depotdownloadermod && \
-    chmod +x /app/depotdownloadermod/DepotDownloader && \
-    rm /tmp/ddm.zip
-
-ENV PLAYERR_DDM_BIN=/app/depotdownloadermod/DepotDownloader
+# ca-certificates for HTTPS, p7zip for post-processor archive extraction
+RUN apk add --no-cache ca-certificates p7zip
 
 COPY --from=backend /app/cargodeck /app/cargodeck
 COPY --from=backend /app/agents  /app/agents
 COPY --from=frontend /src/_output/UI /app/_output/UI
+
+# DepotDownloaderMod — self-contained musl binary built from source
+COPY --from=ddm-builder /ddm-out/DepotDownloader /app/depotdownloadermod/DepotDownloader
+RUN chmod +x /app/depotdownloadermod/DepotDownloader
 
 RUN mkdir -p /config /media
 VOLUME /config
@@ -63,5 +71,6 @@ EXPOSE 2727
 ENV CARGODECK_PORT=2727
 ENV CARGODECK_IP=0.0.0.0
 ENV CARGODECK_CONFIG_DIR=/
+ENV PLAYERR_DDM_BIN=/app/depotdownloadermod/DepotDownloader
 
 ENTRYPOINT ["/app/cargodeck"]
