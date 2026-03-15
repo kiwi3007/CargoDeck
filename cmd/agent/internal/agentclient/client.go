@@ -333,11 +333,16 @@ func (c *Client) listenSSE() error {
 						LaunchArgs string `json:"launchArgs"`
 						EnvVars    string `json:"envVars"`
 						ProtonPath string `json:"protonPath"`
+						UseSLS     *bool  `json:"useSLS"` // pointer: absent = true (default)
 					}
 					if err := json.Unmarshal([]byte(dataLine), &req); err != nil {
 						log.Printf("[Agent] Bad SET_LAUNCH_ARGS JSON: %v", err)
 					} else {
-						go c.setRunScriptSettings(req.Title, req.LaunchArgs, req.EnvVars, req.ProtonPath)
+						useSLS := true
+						if req.UseSLS != nil {
+							useSLS = *req.UseSLS
+						}
+						go c.setRunScriptSettings(req.Title, req.LaunchArgs, req.EnvVars, req.ProtonPath, useSLS)
 					}
 				}
 			case "LIST_PROTON":
@@ -381,6 +386,8 @@ func (c *Client) listenSSE() error {
 				}
 			case "SETUP_ACCELA":
 				go c.setupAccela()
+			case "SETUP_SLSSTEAM":
+				go c.setupSLSSteam()
 			}
 			eventType = ""
 			dataLine = ""
@@ -542,7 +549,7 @@ shortcut:
 	// If a shortcut already exists (e.g. created by another device), skip adding a duplicate.
 	c.reportProgress(job, agent.JobCreatingShortcut, "Creating Steam shortcut...", 95)
 	if gameExe != "" {
-		scriptPath := createRunScript(job.GameTitle, gameExe, wineprefix, job.LaunchArgs, job.EnvVars, job.ProtonPath, job.SteamID)
+		scriptPath := createRunScript(job.GameTitle, gameExe, wineprefix, job.LaunchArgs, job.EnvVars, job.ProtonPath, job.SteamID, job.UseSLS)
 		entry := launcher.ShortcutEntry{
 			// Title-based AppID is identical on all platforms (Linux, Windows, macOS)
 			// so dual-boot / shared Steam installs produce one shortcut updated in-place.
@@ -850,8 +857,9 @@ func isGameExe(lower string) bool {
 // launchArgs are extra arguments appended after the exe and before "$@".
 // envVars is a newline-separated list of KEY=VALUE pairs exported before the runner.
 // protonPath overrides the auto-selected Proton binary when non-empty.
+// useSLS controls whether the SLSsteam LD_AUDIT block is injected.
 // Returns the script path, or "" if no runner is available and not on Windows.
-func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars, protonPath string, steamID int) string {
+func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars, protonPath string, steamID int, useSLS bool) string {
 	scriptDir := filepath.Join(homeDir(), "Games", safeName(gameTitle))
 	_ = os.MkdirAll(scriptDir, 0755)
 
@@ -920,6 +928,20 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars, proton
 		steamIDComment = fmt.Sprintf("# STEAM_ID: %d\n", steamID)
 	}
 
+	// Embed useSLS as a comment (only when false) so parseRunScript can recover it on regen.
+	useSlsComment := ""
+	if !useSLS {
+		useSlsComment = "# USE_SLS: false\n"
+	}
+
+	// slsBlock activates SLSsteam (LD_AUDIT injection) at runtime if the .so is installed.
+	// Using a runtime check means the script works with/without SLSsteam installed.
+	slsBlock := ""
+	if useSLS {
+		slsBlock = "_SLS_LIB=\"$HOME/.local/share/SLSsteam/SLSsteam.so\"\n" +
+			"[ -f \"$_SLS_LIB\" ] && export LD_AUDIT=\"$_SLS_LIB\"\n"
+	}
+
 	switch runner.Type {
 	case launcher.RunnerUMU:
 		content = fmt.Sprintf(
@@ -928,6 +950,7 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars, proton
 				envVarsComment+
 				protonPathComment+
 				steamIDComment+
+				useSlsComment+
 				"LOG=%q\n"+
 				"mkdir -p %q\n"+
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
@@ -935,6 +958,7 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars, proton
 				"export PROTONPATH=%q\n"+
 				"export GAMEID=0\n"+
 				envVarsBlock+
+				slsBlock+
 				"%q %q"+argsSuffix+" \"$@\" >> \"$LOG\" 2>&1\n"+
 				"touch %q\n",
 			logFile, filepath.Join(wineprefix, "pfx"),
@@ -950,6 +974,7 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars, proton
 				envVarsComment+
 				protonPathComment+
 				steamIDComment+
+				useSlsComment+
 				"LOG=%q\n"+
 				"mkdir -p %q\n"+
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
@@ -958,6 +983,7 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars, proton
 				"export STEAM_COMPAT_APP_ID=0\n"+
 				"export PROTON_LOG=1\n"+
 				envVarsBlock+
+				slsBlock+
 				"%q run %q"+argsSuffix+" \"$@\" >> \"$LOG\" 2>&1\n"+
 				"touch %q\n",
 			logFile, filepath.Join(wineprefix, "pfx"),
@@ -968,11 +994,13 @@ func createRunScript(gameTitle, gameExe, wineprefix, launchArgs, envVars, proton
 				launchArgsComment+
 				envVarsComment+
 				protonPathComment+
+				useSlsComment+
 				"LOG=%q\n"+
 				"mkdir -p %q\n"+
 				"echo \"=== Launch $(date) ===\" >> \"$LOG\"\n"+
 				"export WINEPREFIX=%q\n"+
 				envVarsBlock+
+				slsBlock+
 				"%q %q"+argsSuffix+" \"$@\" >> \"$LOG\" 2>&1\n"+
 				"touch %q\n",
 			logFile, wineprefix,
@@ -1251,7 +1279,7 @@ func (c *Client) scanInstalledGames() {
 			// Resolve the active exe and all candidates.
 			// For Wine/Proton installs the real exe is inside the prefix, not gameDir.
 			if scriptPath != "" {
-				wineprefix, parsedExe, _, _, _, _ := parseRunScript(scriptPath)
+				wineprefix, parsedExe, _, _, _, _, _ := parseRunScript(scriptPath)
 				if parsedExe != "" {
 					exePath = parsedExe
 				}
@@ -1702,8 +1730,8 @@ func (c *Client) regenerateScripts(steamIDs map[string]int) {
 		if _, err := os.Stat(scriptPath); err != nil {
 			continue // no run.sh, skip
 		}
-		// Parse wineprefix, exe, launch args, env vars, and proton path from existing script
-		wineprefix, gameExe, launchArgs, envVars, protonPath, steamID := parseRunScript(scriptPath)
+		// Parse wineprefix, exe, launch args, env vars, proton path, and SLS flag from existing script
+		wineprefix, gameExe, launchArgs, envVars, protonPath, steamID, useSLS := parseRunScript(scriptPath)
 		// Fill in steamID from server-provided map when the existing script has none.
 		// This fixes games installed before their Steam ID was set in the library.
 		if steamID == 0 {
@@ -1728,7 +1756,7 @@ func (c *Client) regenerateScripts(steamIDs map[string]int) {
 			wineprefix = filepath.Join(homeDir(), ".local", "share", "playerr", "prefix_"+safeName(e.Name()))
 			log.Printf("[Agent] regenerateScripts: no wineprefix found for %q, using %s", e.Name(), wineprefix)
 		}
-		newPath := createRunScript(e.Name(), gameExe, wineprefix, launchArgs, envVars, protonPath, steamID)
+		newPath := createRunScript(e.Name(), gameExe, wineprefix, launchArgs, envVars, protonPath, steamID, useSLS)
 		if newPath != "" {
 			n++
 			log.Printf("[Agent] Regenerated run.sh for %q", e.Name())
@@ -1743,9 +1771,9 @@ func (c *Client) regenerateScripts(steamIDs map[string]int) {
 func (c *Client) changeGameExe(title, exePath string) {
 	scriptDir := filepath.Join(homeDir(), "Games", safeName(title))
 	scriptPath := filepath.Join(scriptDir, "run.sh")
-	wineprefix, _, launchArgs, envVars, protonPath, steamID := parseRunScript(scriptPath)
+	wineprefix, _, launchArgs, envVars, protonPath, steamID, useSLS := parseRunScript(scriptPath)
 
-	newScript := createRunScript(title, exePath, wineprefix, launchArgs, envVars, protonPath, steamID)
+	newScript := createRunScript(title, exePath, wineprefix, launchArgs, envVars, protonPath, steamID, useSLS)
 	if newScript == "" {
 		log.Printf("[Agent] changeGameExe: no runner available for %q", title)
 		return
@@ -1767,22 +1795,23 @@ func (c *Client) changeGameExe(title, exePath string) {
 	go c.scanInstalledGames()
 }
 
-// setRunScriptSettings rewrites run.sh to update per-device launch arguments, env vars, and proton override
+// setRunScriptSettings rewrites run.sh to update per-device launch arguments, env vars, proton override, and SLS flag
 // without requiring a full reinstall.
-func (c *Client) setRunScriptSettings(title, launchArgs, envVars, protonPath string) {
+func (c *Client) setRunScriptSettings(title, launchArgs, envVars, protonPath string, useSLS bool) {
 	scriptPath := filepath.Join(homeDir(), "Games", safeName(title), "run.sh")
-	wineprefix, gameExe, _, _, _, steamID := parseRunScript(scriptPath)
+	wineprefix, gameExe, _, _, _, steamID, _ := parseRunScript(scriptPath)
 	if gameExe == "" {
 		log.Printf("[Agent] setRunScriptSettings: cannot parse exe from run.sh for %q — reinstall to apply settings", title)
 		return
 	}
-	createRunScript(title, gameExe, wineprefix, launchArgs, envVars, protonPath, steamID)
-	log.Printf("[Agent] Updated run settings for %q: args=%q envVars=%q protonPath=%q", title, launchArgs, envVars, protonPath)
+	createRunScript(title, gameExe, wineprefix, launchArgs, envVars, protonPath, steamID, useSLS)
+	log.Printf("[Agent] Updated run settings for %q: args=%q envVars=%q protonPath=%q useSLS=%v", title, launchArgs, envVars, protonPath, useSLS)
 }
 
-// parseRunScript extracts the WINEPREFIX path, game exe path, launch args, env vars, proton path, and Steam ID from a run.sh.
-// Returns ("", "", "", "", "", 0) if the script cannot be parsed.
-func parseRunScript(scriptPath string) (wineprefix, gameExe, launchArgs, envVars, protonPath string, steamID int) {
+// parseRunScript extracts the WINEPREFIX path, game exe path, launch args, env vars, proton path, Steam ID, and useSLS from a run.sh.
+// Returns ("", "", "", "", "", 0, true) if the script cannot be parsed.
+func parseRunScript(scriptPath string) (wineprefix, gameExe, launchArgs, envVars, protonPath string, steamID int, useSLS bool) {
+	useSLS = true // default: SLS on
 	data, err := os.ReadFile(scriptPath)
 	if err != nil {
 		return
@@ -1805,6 +1834,10 @@ func parseRunScript(scriptPath string) (wineprefix, gameExe, launchArgs, envVars
 		// Embedded Steam App ID written by createRunScript
 		if strings.HasPrefix(line, "# STEAM_ID:") {
 			fmt.Sscanf(strings.TrimSpace(strings.TrimPrefix(line, "# STEAM_ID:")), "%d", &steamID)
+		}
+		// Embedded SLS flag (only written when false; absence means true)
+		if line == "# USE_SLS: false" {
+			useSLS = false
 		}
 		// WINEPREFIX is used by UMU and Wine runners
 		if strings.HasPrefix(line, "export WINEPREFIX=") {
@@ -2017,7 +2050,7 @@ func (c *Client) listProton(job agent.ListProtonJob) {
 // updates the WINEPREFIX / STEAM_COMPAT_DATA_PATH line in run.sh to match.
 func (c *Client) renamePrefix(job agent.RenamePrefixJob) {
 	scriptPath := filepath.Join(homeDir(), "Games", safeName(job.GameTitle), "run.sh")
-	currentPrefix, _, _, _, _, _ := parseRunScript(scriptPath)
+	currentPrefix, _, _, _, _, _, _ := parseRunScript(scriptPath)
 
 	newPrefix := filepath.Join(homeDir(), ".local", "share", "playerr", "prefix_"+safeName(job.GameTitle))
 
@@ -2332,6 +2365,7 @@ func (c *Client) checkAndUpdate() {
 //  2. Download the latest ACCELA AppImage from GitHub releases
 //  3. Extract to ~/.local/share/ACCELA
 //  4. Write the ACCELA config file
+//  5. Install SLSsteam alongside ACCELA (non-fatal)
 func (c *Client) setupAccela() {
 	log.Printf("[Agent] SETUP_ACCELA: starting")
 
@@ -2355,6 +2389,9 @@ func (c *Client) setupAccela() {
 		log.Printf("[Agent] SETUP_ACCELA: config write failed: %v", err)
 		return
 	}
+
+	// Install SLSsteam alongside ACCELA. Non-fatal — ACCELA still works without it.
+	c.setupSLSSteam()
 
 	log.Printf("[Agent] SETUP_ACCELA: done — ACCELA installed at %s/.local/share/ACCELA", home)
 }
@@ -2506,5 +2543,143 @@ func accelaWriteConfig(home string) error {
 	}
 
 	return os.WriteFile(cfgPath, []byte(content), 0o644)
+}
+
+// setupSLSSteam installs SLSsteam on the agent machine.
+// Downloads the latest SLSsteam-Any.7z from GitHub and extracts SLSsteam.so to
+// ~/.local/share/SLSsteam/. Requires 7z or 7za to be available.
+// SLSsteam is activated at game launch via LD_AUDIT in run.sh.
+func (c *Client) setupSLSSteam() {
+	log.Printf("[Agent] SETUP_SLSSTEAM: starting")
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: cannot determine home dir: %v", err)
+		return
+	}
+
+	installDir := filepath.Join(home, ".local", "share", "SLSsteam")
+	soPath := filepath.Join(installDir, "SLSsteam.so")
+
+	// Check installed version
+	if data, err := os.ReadFile(filepath.Join(installDir, ".version")); err == nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: already installed (version %s)", strings.TrimSpace(string(data)))
+		return
+	}
+
+	log.Printf("[Agent] SETUP_SLSSTEAM: fetching latest release info...")
+	resp, err := c.http.Get("https://api.github.com/repos/AceSLS/SLSsteam/releases/latest")
+	if err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: github API error: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		TagName string `json:"tag_name"`
+		Assets  []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: decode release: %v", err)
+		return
+	}
+
+	var assetURL string
+	for _, a := range release.Assets {
+		if strings.HasSuffix(a.Name, "-Any.7z") {
+			assetURL = a.BrowserDownloadURL
+			break
+		}
+	}
+	if assetURL == "" {
+		log.Printf("[Agent] SETUP_SLSSTEAM: no SLSsteam-Any.7z in release %s", release.TagName)
+		return
+	}
+
+	log.Printf("[Agent] SETUP_SLSSTEAM: downloading SLSsteam %s...", release.TagName)
+	dlResp, err := c.http.Get(assetURL)
+	if err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: download error: %v", err)
+		return
+	}
+	defer dlResp.Body.Close()
+
+	tmp, err := os.CreateTemp("", "slssteam-*.7z")
+	if err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: temp file: %v", err)
+		return
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := io.Copy(tmp, dlResp.Body); err != nil {
+		tmp.Close()
+		log.Printf("[Agent] SETUP_SLSSTEAM: save archive: %v", err)
+		return
+	}
+	tmp.Close()
+
+	// Extract to a temporary directory, then locate SLSsteam.so inside.
+	tmpExtract, err := os.MkdirTemp("", "slssteam-extract-*")
+	if err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: tempdir: %v", err)
+		return
+	}
+	defer os.RemoveAll(tmpExtract)
+
+	extracted := false
+	for _, bin := range []string{"7z", "7za"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			continue
+		}
+		log.Printf("[Agent] SETUP_SLSSTEAM: extracting with %s...", bin)
+		cmd := exec.Command(bin, "x", tmp.Name(), "-o"+tmpExtract, "-y")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err == nil {
+			extracted = true
+			break
+		}
+	}
+	if !extracted {
+		log.Printf("[Agent] SETUP_SLSSTEAM: extraction failed — is 7z installed?")
+		return
+	}
+
+	// Walk the extracted tree to find SLSsteam.so.
+	var soSrc string
+	_ = filepath.Walk(tmpExtract, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() && strings.EqualFold(filepath.Base(path), "SLSsteam.so") {
+			soSrc = path
+			return fmt.Errorf("found")
+		}
+		return nil
+	})
+	if soSrc == "" {
+		log.Printf("[Agent] SETUP_SLSSTEAM: SLSsteam.so not found in archive")
+		return
+	}
+
+	if err := os.MkdirAll(installDir, 0o755); err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: mkdir: %v", err)
+		return
+	}
+
+	// Move .so to install dir; fall back to copy if cross-device.
+	if err := os.Rename(soSrc, soPath); err != nil {
+		srcData, readErr := os.ReadFile(soSrc)
+		if readErr != nil {
+			log.Printf("[Agent] SETUP_SLSSTEAM: copy .so: %v", readErr)
+			return
+		}
+		if writeErr := os.WriteFile(soPath, srcData, 0o755); writeErr != nil {
+			log.Printf("[Agent] SETUP_SLSSTEAM: write .so: %v", writeErr)
+			return
+		}
+	}
+
+	os.WriteFile(filepath.Join(installDir, ".version"), []byte(release.TagName), 0o644)
+	log.Printf("[Agent] SETUP_SLSSTEAM: installed SLSsteam %s at %s", release.TagName, soPath)
 }
 

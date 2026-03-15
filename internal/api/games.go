@@ -226,6 +226,7 @@ func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 		LaunchArgs string `json:"launchArgs"`
 		EnvVars    string `json:"envVars"`
 		ProtonPath string `json:"protonPath"`
+		UseSLS     *bool  `json:"useSLS"` // pointer so omitted = true (default on)
 	}
 	if err := decodeBody(r, &req); err != nil {
 		jsonErr(w, 400, err.Error())
@@ -235,7 +236,11 @@ func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "agentId required")
 		return
 	}
-	s := repository.AgentRunSettings{LaunchArgs: req.LaunchArgs, EnvVars: req.EnvVars, ProtonPath: req.ProtonPath}
+	useSLS := true
+	if req.UseSLS != nil {
+		useSLS = *req.UseSLS
+	}
+	s := repository.AgentRunSettings{LaunchArgs: req.LaunchArgs, EnvVars: req.EnvVars, ProtonPath: req.ProtonPath, UseSLS: useSLS}
 	if err := h.repo.SetAgentRunSettings(id, req.AgentID, s); err != nil {
 		jsonErr(w, 500, err.Error())
 		return
@@ -246,10 +251,11 @@ func (h *Handler) SetAgentLaunchArgs(w http.ResponseWriter, r *http.Request) {
 		LaunchArgs string `json:"launchArgs"`
 		EnvVars    string `json:"envVars"`
 		ProtonPath string `json:"protonPath"`
+		UseSLS     bool   `json:"useSLS"`
 	}
 	game, _ := h.repo.GetGameByID(id)
 	if game != nil {
-		data, _ := json.Marshal(payload{Title: game.Title, LaunchArgs: req.LaunchArgs, EnvVars: req.EnvVars, ProtonPath: req.ProtonPath})
+		data, _ := json.Marshal(payload{Title: game.Title, LaunchArgs: req.LaunchArgs, EnvVars: req.EnvVars, ProtonPath: req.ProtonPath, UseSLS: useSLS})
 		h.agentBroker.Send(req.AgentID, "SET_LAUNCH_ARGS", string(data))
 	}
 	jsonOK(w, map[string]string{"message": "ok"})

@@ -340,8 +340,9 @@ const GameDetails: React.FC = () => {
   const [agentLaunchArgs, setAgentLaunchArgs] = useState<Record<string, string>>({});
   const [agentEnvVars, setAgentEnvVars] = useState<Record<string, string>>({});
   const [agentProtonPath, setAgentProtonPath] = useState<Record<string, string>>({});
+  const [agentUseSLS, setAgentUseSLS] = useState<Record<string, boolean>>({});
   const [agentProtonVersions, setAgentProtonVersions] = useState<Record<string, ProtonVersionInfo[]>>({});
-  const [savedAgentSettings, setSavedAgentSettings] = useState<Record<string, { launchArgs: string; envVars: string; protonPath: string }>>({});
+  const [savedAgentSettings, setSavedAgentSettings] = useState<Record<string, { launchArgs: string; envVars: string; protonPath: string; useSLS: boolean }>>({});
   const [savingLaunchSettings, setSavingLaunchSettings] = useState<Record<string, boolean>>({});
   const [expandedLaunchConfig, setExpandedLaunchConfig] = useState<Record<string, boolean>>({});
   const [requestingScript, setRequestingScript] = useState<Record<string, boolean>>({});
@@ -447,18 +448,21 @@ const GameDetails: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     axios.get(`/api/v3/game/${id}/agent-launch-args`).then(res => {
-      const settings: Record<string, { launchArgs: string; envVars: string; protonPath: string }> = res.data || {};
+      const settings: Record<string, { launchArgs: string; envVars: string; protonPath: string; useSLS: boolean }> = res.data || {};
       const launchArgs: Record<string, string> = {};
       const envVars: Record<string, string> = {};
       const protonPaths: Record<string, string> = {};
+      const slsFlags: Record<string, boolean> = {};
       Object.entries(settings).forEach(([agId, s]) => {
         launchArgs[agId] = s.launchArgs || '';
         envVars[agId] = s.envVars || '';
         protonPaths[agId] = s.protonPath || '';
+        slsFlags[agId] = s.useSLS !== false; // default true
       });
       setAgentLaunchArgs(launchArgs);
       setAgentEnvVars(envVars);
       setAgentProtonPath(protonPaths);
+      setAgentUseSLS(slsFlags);
       setSavedAgentSettings(settings);
     }).catch(() => {});
   }, [id]);
@@ -1141,10 +1145,11 @@ const GameDetails: React.FC = () => {
         launchArgs: agentLaunchArgs[agentId] ?? '',
         envVars: agentEnvVars[agentId] ?? '',
         protonPath: agentProtonPath[agentId] ?? '',
+        useSLS: agentUseSLS[agentId] !== false,
       });
       setSavedAgentSettings(prev => ({
         ...prev,
-        [agentId]: { launchArgs: agentLaunchArgs[agentId] ?? '', envVars: agentEnvVars[agentId] ?? '', protonPath: agentProtonPath[agentId] ?? '' },
+        [agentId]: { launchArgs: agentLaunchArgs[agentId] ?? '', envVars: agentEnvVars[agentId] ?? '', protonPath: agentProtonPath[agentId] ?? '', useSLS: agentUseSLS[agentId] !== false },
       }));
       setNotification({ message: 'Launch settings saved', type: 'success' });
     } catch (err: any) {
@@ -1808,6 +1813,16 @@ const GameDetails: React.FC = () => {
                             </select>
                           </div>
                         )}
+                        <div className="gd-device-launch-field">
+                          <label className="gd-device-launch-label gd-device-launch-label--toggle">
+                            <input
+                              type="checkbox"
+                              checked={agentUseSLS[agent.id] !== false}
+                              onChange={e => setAgentUseSLS(prev => ({ ...prev, [agent.id]: e.target.checked }))}
+                            />
+                            Use SLS
+                          </label>
+                        </div>
                         <div className="gd-device-launch-save">
                           <button
                             className="gd-icon-btn"

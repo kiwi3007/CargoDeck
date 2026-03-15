@@ -49,6 +49,7 @@ type InstallJob struct {
 	EnvVars     string   `json:"envVars,omitempty"`     // KEY=VALUE lines exported before the exe
 	ProtonPath  string   `json:"protonPath,omitempty"`  // explicit proton binary override; empty = auto-select
 	SteamID     int      `json:"steamId,omitempty"`     // Steam App ID for protonfixes; 0 = unknown
+	UseSLS      bool     `json:"useSLS"`                // inject SLSsteam via LD_AUDIT in run.sh
 }
 
 // ProtonVersionInfo describes a single Proton installation on an agent.

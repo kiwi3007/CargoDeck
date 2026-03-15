@@ -462,34 +462,41 @@ type AgentRunSettings struct {
 	LaunchArgs string `json:"launchArgs"`
 	EnvVars    string `json:"envVars"`
 	ProtonPath string `json:"protonPath"`
+	UseSLS     bool   `json:"useSLS"`
 }
 
 // GetAgentRunSettings returns the per-device run settings for an agent+game.
 func (r *GameRepository) GetAgentRunSettings(gameID int, agentID string) (AgentRunSettings, error) {
 	var s AgentRunSettings
+	var useSLS int
 	err := r.db.QueryRow(
-		`SELECT LaunchArgs, COALESCE(EnvVars,''), COALESCE(ProtonPath,'') FROM AgentGameLaunchArgs WHERE GameId = ? AND AgentId = ?`,
+		`SELECT LaunchArgs, COALESCE(EnvVars,''), COALESCE(ProtonPath,''), COALESCE(UseSLS,1) FROM AgentGameLaunchArgs WHERE GameId = ? AND AgentId = ?`,
 		gameID, agentID,
-	).Scan(&s.LaunchArgs, &s.EnvVars, &s.ProtonPath)
+	).Scan(&s.LaunchArgs, &s.EnvVars, &s.ProtonPath, &useSLS)
 	if err == sql.ErrNoRows {
-		return AgentRunSettings{}, nil
+		return AgentRunSettings{UseSLS: true}, nil
 	}
+	s.UseSLS = useSLS != 0
 	return s, err
 }
 
-// SetAgentRunSettings upserts run settings for an agent+game. Deletes the row if all fields are empty.
+// SetAgentRunSettings upserts run settings for an agent+game. Deletes the row if all fields are at defaults.
 func (r *GameRepository) SetAgentRunSettings(gameID int, agentID string, s AgentRunSettings) error {
-	if s.LaunchArgs == "" && s.EnvVars == "" && s.ProtonPath == "" {
+	if s.LaunchArgs == "" && s.EnvVars == "" && s.ProtonPath == "" && s.UseSLS {
 		_, err := r.db.Exec(
 			`DELETE FROM AgentGameLaunchArgs WHERE GameId = ? AND AgentId = ?`,
 			gameID, agentID,
 		)
 		return err
 	}
+	useSLS := 0
+	if s.UseSLS {
+		useSLS = 1
+	}
 	_, err := r.db.Exec(
-		`INSERT INTO AgentGameLaunchArgs(GameId, AgentId, LaunchArgs, EnvVars, ProtonPath) VALUES(?,?,?,?,?)
-		 ON CONFLICT(GameId, AgentId) DO UPDATE SET LaunchArgs = excluded.LaunchArgs, EnvVars = excluded.EnvVars, ProtonPath = excluded.ProtonPath`,
-		gameID, agentID, s.LaunchArgs, s.EnvVars, s.ProtonPath,
+		`INSERT INTO AgentGameLaunchArgs(GameId, AgentId, LaunchArgs, EnvVars, ProtonPath, UseSLS) VALUES(?,?,?,?,?,?)
+		 ON CONFLICT(GameId, AgentId) DO UPDATE SET LaunchArgs = excluded.LaunchArgs, EnvVars = excluded.EnvVars, ProtonPath = excluded.ProtonPath, UseSLS = excluded.UseSLS`,
+		gameID, agentID, s.LaunchArgs, s.EnvVars, s.ProtonPath, useSLS,
 	)
 	return err
 }
@@ -497,7 +504,7 @@ func (r *GameRepository) SetAgentRunSettings(gameID int, agentID string, s Agent
 // GetAllAgentRunSettings returns all per-device run settings for a game (agentId → settings).
 func (r *GameRepository) GetAllAgentRunSettings(gameID int) (map[string]AgentRunSettings, error) {
 	rows, err := r.db.Query(
-		`SELECT AgentId, LaunchArgs, COALESCE(EnvVars,''), COALESCE(ProtonPath,'') FROM AgentGameLaunchArgs WHERE GameId = ?`,
+		`SELECT AgentId, LaunchArgs, COALESCE(EnvVars,''), COALESCE(ProtonPath,''), COALESCE(UseSLS,1) FROM AgentGameLaunchArgs WHERE GameId = ?`,
 		gameID,
 	)
 	if err != nil {
@@ -508,7 +515,9 @@ func (r *GameRepository) GetAllAgentRunSettings(gameID int) (map[string]AgentRun
 	for rows.Next() {
 		var agentID string
 		var s AgentRunSettings
-		if err := rows.Scan(&agentID, &s.LaunchArgs, &s.EnvVars, &s.ProtonPath); err == nil {
+		var useSLS int
+		if err := rows.Scan(&agentID, &s.LaunchArgs, &s.EnvVars, &s.ProtonPath, &useSLS); err == nil {
+			s.UseSLS = useSLS != 0
 			result[agentID] = s
 		}
 	}

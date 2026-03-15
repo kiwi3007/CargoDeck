@@ -40,6 +40,7 @@ func Open(dbPath string) (*sql.DB, error) {
 	}
 	addColumnIfMissing(db, "AgentGameLaunchArgs", "EnvVars", "TEXT NOT NULL DEFAULT ''")
 	addColumnIfMissing(db, "AgentGameLaunchArgs", "ProtonPath", "TEXT NOT NULL DEFAULT ''")
+	addColumnIfMissing(db, "AgentGameLaunchArgs", "UseSLS", "INTEGER NOT NULL DEFAULT 1")
 	return db, nil
 }
 
