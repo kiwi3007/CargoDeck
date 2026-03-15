@@ -584,6 +584,11 @@ shortcut:
 		log.Printf("[Agent] No game exe found, skipping shortcut")
 	}
 
+	// Write Steam library ACF so SLSsteam's PlayNotOwnedGames can see the game.
+	if job.SteamID != 0 {
+		writeSteamLibraryACF(job.SteamID, job.GameTitle, downloadDir)
+	}
+
 	doneMsg := "Install complete. Files in: " + downloadDir
 	if gameExe != "" {
 		doneMsg += ". Restart Steam to see the shortcut."
@@ -2501,6 +2506,47 @@ func (c *Client) downloadSLSSteamSO(installDir, soPath string) bool {
 	os.WriteFile(filepath.Join(installDir, ".version"), []byte(release.TagName), 0o644)
 	log.Printf("[Agent] SETUP_SLSSTEAM: installed SLSsteam %s at %s", release.TagName, soPath)
 	return true
+}
+
+// writeSteamLibraryACF adds a game to the Steam library so SLSsteam's
+// PlayNotOwnedGames can see and unlock it. Creates a symlink at
+// {steamapps}/common/{name} → gameDir so Steam finds files at the canonical
+// path without moving anything, then writes appmanifest_{steamId}.acf.
+func writeSteamLibraryACF(steamID int, gameTitle, gameDir string) {
+	steamRoot := launcher.FindSteamRoot()
+	if steamRoot == "" {
+		log.Printf("[Agent] SteamACF: Steam not found, skipping")
+		return
+	}
+	steamapps := filepath.Join(steamRoot, "steamapps")
+	commonDir := filepath.Join(steamapps, "common")
+	if err := os.MkdirAll(commonDir, 0o755); err != nil {
+		log.Printf("[Agent] SteamACF: mkdir common: %v", err)
+		return
+	}
+
+	// Symlink steamapps/common/{name} → actual game directory.
+	symlinkPath := filepath.Join(commonDir, safeName(gameTitle))
+	if fi, err := os.Lstat(symlinkPath); os.IsNotExist(err) {
+		if err := os.Symlink(gameDir, symlinkPath); err != nil {
+			log.Printf("[Agent] SteamACF: symlink: %v", err)
+		}
+	} else if err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		// Update symlink if it points elsewhere (e.g. game was moved).
+		if target, _ := os.Readlink(symlinkPath); target != gameDir {
+			os.Remove(symlinkPath)
+			os.Symlink(gameDir, symlinkPath)
+		}
+	}
+
+	acfPath := filepath.Join(steamapps, fmt.Sprintf("appmanifest_%d.acf", steamID))
+	content := fmt.Sprintf("\"AppState\"\n{\n\t\"appid\"\t\t\"%d\"\n\t\"Universe\"\t\"1\"\n\t\"name\"\t\t\"%s\"\n\t\"StateFlags\"\t\"4\"\n\t\"installdir\"\t\"%s\"\n\t\"LastUpdated\"\t\"%d\"\n\t\"SizeOnDisk\"\t\"0\"\n\t\"buildid\"\t\"0\"\n\t\"InstalledDepots\"\n\t{\n\t}\n}\n",
+		steamID, gameTitle, safeName(gameTitle), time.Now().Unix())
+	if err := os.WriteFile(acfPath, []byte(content), 0o644); err != nil {
+		log.Printf("[Agent] SteamACF: write %s: %v", acfPath, err)
+		return
+	}
+	log.Printf("[Agent] SteamACF: wrote %s (symlink → %s)", acfPath, gameDir)
 }
 
 // slsWriteSteamCfg writes ~/.steam/steam/steam.cfg to prevent Steam from auto-updating
