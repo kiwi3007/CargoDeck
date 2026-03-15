@@ -94,6 +94,7 @@ func (e *Executor) ActiveJob(gameID int) (string, bool) {
 // Download starts an async DepotDownloaderMod download for the given game.
 // outputDir is where game files are written (e.g. the configured download path).
 // manifestDir is the steam-manifests/{gameID} directory containing manifests.zip.
+// onComplete is called with the downloaded game directory path on success (may be nil).
 // Returns the jobID immediately; progress events are emitted via SSE.
 func (e *Executor) Download(
 	gameID int,
@@ -102,6 +103,7 @@ func (e *Executor) Download(
 	outputDir string,
 	manifestDir string,
 	depots []DepotEntry,
+	onComplete func(gameDir string),
 ) (string, error) {
 	e.mu.Lock()
 	if existing, running := e.activeJobs[gameID]; running {
@@ -112,7 +114,7 @@ func (e *Executor) Download(
 	e.activeJobs[gameID] = jobID
 	e.mu.Unlock()
 
-	go e.run(gameID, jobID, appID, gameTitle, outputDir, manifestDir, depots)
+	go e.run(gameID, jobID, appID, gameTitle, outputDir, manifestDir, depots, onComplete)
 	return jobID, nil
 }
 
@@ -124,6 +126,7 @@ func (e *Executor) run(
 	outputDir string,
 	manifestDir string,
 	depots []DepotEntry,
+	onComplete func(gameDir string),
 ) {
 	defer func() {
 		e.mu.Lock()
@@ -233,6 +236,9 @@ func (e *Executor) run(
 		return
 	}
 
+	if onComplete != nil {
+		onComplete(gameDir)
+	}
 	publish(JobDone, "Download complete", 100)
 }
 

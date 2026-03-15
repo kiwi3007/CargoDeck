@@ -384,8 +384,6 @@ func (c *Client) listenSSE() error {
 						go c.renamePrefix(job)
 					}
 				}
-			case "SETUP_ACCELA":
-				go c.setupAccela()
 			case "SETUP_SLSSTEAM":
 				go c.setupSLSSteam()
 			}
@@ -2358,197 +2356,12 @@ func (c *Client) checkAndUpdate() {
 	os.Exit(1) // systemd Restart=on-failure will restart with the new binary
 }
 
-// setupAccela installs ACCELA on the agent machine.
-// All steps are user-space only — no sudo or pacman required.
-//
-//  1. Install .NET SDK 9 via the official installer (to ~/.dotnet)
-//  2. Download the latest ACCELA AppImage from GitHub releases
-//  3. Extract to ~/.local/share/ACCELA
-//  4. Write the ACCELA config file
-//  5. Install SLSsteam alongside ACCELA (non-fatal)
-func (c *Client) setupAccela() {
-	log.Printf("[Agent] SETUP_ACCELA: starting")
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Printf("[Agent] SETUP_ACCELA: cannot determine home dir: %v", err)
-		return
-	}
-
-	if err := accelaInstallDotnet(c, home); err != nil {
-		log.Printf("[Agent] SETUP_ACCELA: .NET install failed: %v", err)
-		return
-	}
-
-	if err := accelaInstallAppImage(c, home); err != nil {
-		log.Printf("[Agent] SETUP_ACCELA: ACCELA install failed: %v", err)
-		return
-	}
-
-	if err := accelaWriteConfig(home); err != nil {
-		log.Printf("[Agent] SETUP_ACCELA: config write failed: %v", err)
-		return
-	}
-
-	// Install SLSsteam alongside ACCELA. Non-fatal — ACCELA still works without it.
-	c.setupSLSSteam()
-
-	log.Printf("[Agent] SETUP_ACCELA: done — ACCELA installed at %s/.local/share/ACCELA", home)
-}
-
-// accelaInstallDotnet downloads and runs the official .NET 9 install script.
-// Installs to ~/.dotnet with no sudo required.
-func accelaInstallDotnet(c *Client, home string) error {
-	dotnetBin := filepath.Join(home, ".dotnet", "dotnet")
-	if _, err := os.Stat(dotnetBin); err == nil {
-		log.Printf("[Agent] SETUP_ACCELA: .NET already installed at %s", dotnetBin)
-		return nil
-	}
-
-	log.Printf("[Agent] SETUP_ACCELA: downloading .NET 9 installer...")
-	resp, err := c.http.Get("https://dot.net/v1/dotnet-install.sh")
-	if err != nil {
-		return fmt.Errorf("download dotnet-install.sh: %w", err)
-	}
-	defer resp.Body.Close()
-	script, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read dotnet-install.sh: %w", err)
-	}
-
-	tmp, err := os.CreateTemp("", "dotnet-install-*.sh")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	tmp.Write(script)
-	tmp.Close()
-	os.Chmod(tmp.Name(), 0o755)
-
-	log.Printf("[Agent] SETUP_ACCELA: installing .NET 9 SDK...")
-	cmd := exec.Command("bash", tmp.Name(), "--channel", "9.0", "--install-dir", filepath.Join(home, ".dotnet"))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("dotnet-install.sh: %w", err)
-	}
-	log.Printf("[Agent] SETUP_ACCELA: .NET 9 installed")
-	return nil
-}
-
-// accelaInstallAppImage fetches the latest ACCELA AppImage from GitHub releases
-// and extracts it to ~/.local/share/ACCELA.
-func accelaInstallAppImage(c *Client, home string) error {
-	installDir := filepath.Join(home, ".local", "share", "ACCELA")
-
-	// Check if already installed
-	if data, err := os.ReadFile(filepath.Join(installDir, ".version")); err == nil {
-		log.Printf("[Agent] SETUP_ACCELA: ACCELA already installed (version %s)", strings.TrimSpace(string(data)))
-		return nil
-	}
-
-	log.Printf("[Agent] SETUP_ACCELA: fetching latest ACCELA release info...")
-	resp, err := c.http.Get("https://api.github.com/repos/ciscosweater/enter-the-wired/releases/latest")
-	if err != nil {
-		return fmt.Errorf("github API: %w", err)
-	}
-	defer resp.Body.Close()
-
-	var release struct {
-		TagName string `json:"tag_name"`
-		Assets  []struct {
-			Name               string `json:"name"`
-			BrowserDownloadURL string `json:"browser_download_url"`
-		} `json:"assets"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return fmt.Errorf("decode release: %w", err)
-	}
-
-	var assetURL string
-	for _, a := range release.Assets {
-		if strings.HasSuffix(a.Name, "-linux-appimage.tar.gz") {
-			assetURL = a.BrowserDownloadURL
-			break
-		}
-	}
-	if assetURL == "" {
-		return fmt.Errorf("no AppImage asset found in release %s", release.TagName)
-	}
-
-	log.Printf("[Agent] SETUP_ACCELA: downloading ACCELA %s...", release.TagName)
-	dlResp, err := c.http.Get(assetURL)
-	if err != nil {
-		return fmt.Errorf("download AppImage: %w", err)
-	}
-	defer dlResp.Body.Close()
-
-	tmp, err := os.CreateTemp("", "accela-*.tar.gz")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := io.Copy(tmp, dlResp.Body); err != nil {
-		tmp.Close()
-		return fmt.Errorf("save AppImage archive: %w", err)
-	}
-	tmp.Close()
-
-	if err := os.MkdirAll(installDir, 0o755); err != nil {
-		return err
-	}
-
-	log.Printf("[Agent] SETUP_ACCELA: extracting to %s...", installDir)
-	cmd := exec.Command("tar", "-xzf", tmp.Name(), "-C", installDir, "--strip-components=1")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("extract: %w", err)
-	}
-
-	// Mark installed version
-	os.WriteFile(filepath.Join(installDir, ".version"), []byte(release.TagName), 0o644)
-	log.Printf("[Agent] SETUP_ACCELA: ACCELA %s extracted", release.TagName)
-	return nil
-}
-
-// accelaWriteConfig writes the ACCELA config file with CargoDeck-appropriate defaults.
-// Existing keys are preserved; only missing keys are added.
-func accelaWriteConfig(home string) error {
-	cfgDir := filepath.Join(home, ".config", "Tachibana Labs")
-	cfgPath := filepath.Join(cfgDir, "ACCELA.conf")
-
-	defaults := [][2]string{
-		{"auto_skip_single_choice", "true"},
-		{"library_mode", "true"},
-		{"max_downloads", "16"},
-		{"sls_config_management", "true"},
-		{"slssteam_mode", "true"},
-		{"use_steamless", "true"},
-	}
-
-	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
-		return err
-	}
-
-	existing, _ := os.ReadFile(cfgPath)
-	content := string(existing)
-	if !strings.Contains(content, "[General]") {
-		content = "[General]\n" + content
-	}
-	for _, kv := range defaults {
-		if !strings.Contains(content, kv[0]+"=") {
-			content += kv[0] + "=" + kv[1] + "\n"
-		}
-	}
-
-	return os.WriteFile(cfgPath, []byte(content), 0o644)
-}
-
 // setupSLSSteam installs SLSsteam on the agent machine.
 // Downloads the latest SLSsteam-Any.7z from GitHub and extracts SLSsteam.so to
 // ~/.local/share/SLSsteam/. Requires 7z or 7za to be available.
 // SLSsteam is activated at game launch via LD_AUDIT in run.sh.
+// Also writes steam.cfg to block Steam auto-updates (compatibility protection)
+// and sets SafeMode + PlayNotOwnedGames in ~/.config/SLSsteam/config.yaml.
 func (c *Client) setupSLSSteam() {
 	log.Printf("[Agent] SETUP_SLSSTEAM: starting")
 
@@ -2561,17 +2374,26 @@ func (c *Client) setupSLSSteam() {
 	installDir := filepath.Join(home, ".local", "share", "SLSsteam")
 	soPath := filepath.Join(installDir, "SLSsteam.so")
 
-	// Check installed version
 	if data, err := os.ReadFile(filepath.Join(installDir, ".version")); err == nil {
 		log.Printf("[Agent] SETUP_SLSSTEAM: already installed (version %s)", strings.TrimSpace(string(data)))
-		return
+	} else if !c.downloadSLSSteamSO(installDir, soPath) {
+		return // install failed; don't configure for a broken installation
 	}
 
+	// Always apply compatibility protections.
+	slsWriteSteamCfg(home)
+	slsWriteConfig(home)
+	log.Printf("[Agent] SETUP_SLSSTEAM: done")
+}
+
+// downloadSLSSteamSO fetches the latest SLSsteam release and installs SLSsteam.so.
+// Returns true on success.
+func (c *Client) downloadSLSSteamSO(installDir, soPath string) bool {
 	log.Printf("[Agent] SETUP_SLSSTEAM: fetching latest release info...")
 	resp, err := c.http.Get("https://api.github.com/repos/AceSLS/SLSsteam/releases/latest")
 	if err != nil {
 		log.Printf("[Agent] SETUP_SLSSTEAM: github API error: %v", err)
-		return
+		return false
 	}
 	defer resp.Body.Close()
 
@@ -2584,7 +2406,7 @@ func (c *Client) setupSLSSteam() {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
 		log.Printf("[Agent] SETUP_SLSSTEAM: decode release: %v", err)
-		return
+		return false
 	}
 
 	var assetURL string
@@ -2596,35 +2418,34 @@ func (c *Client) setupSLSSteam() {
 	}
 	if assetURL == "" {
 		log.Printf("[Agent] SETUP_SLSSTEAM: no SLSsteam-Any.7z in release %s", release.TagName)
-		return
+		return false
 	}
 
 	log.Printf("[Agent] SETUP_SLSSTEAM: downloading SLSsteam %s...", release.TagName)
 	dlResp, err := c.http.Get(assetURL)
 	if err != nil {
 		log.Printf("[Agent] SETUP_SLSSTEAM: download error: %v", err)
-		return
+		return false
 	}
 	defer dlResp.Body.Close()
 
 	tmp, err := os.CreateTemp("", "slssteam-*.7z")
 	if err != nil {
 		log.Printf("[Agent] SETUP_SLSSTEAM: temp file: %v", err)
-		return
+		return false
 	}
 	defer os.Remove(tmp.Name())
 	if _, err := io.Copy(tmp, dlResp.Body); err != nil {
 		tmp.Close()
 		log.Printf("[Agent] SETUP_SLSSTEAM: save archive: %v", err)
-		return
+		return false
 	}
 	tmp.Close()
 
-	// Extract to a temporary directory, then locate SLSsteam.so inside.
 	tmpExtract, err := os.MkdirTemp("", "slssteam-extract-*")
 	if err != nil {
 		log.Printf("[Agent] SETUP_SLSSTEAM: tempdir: %v", err)
-		return
+		return false
 	}
 	defer os.RemoveAll(tmpExtract)
 
@@ -2644,10 +2465,9 @@ func (c *Client) setupSLSSteam() {
 	}
 	if !extracted {
 		log.Printf("[Agent] SETUP_SLSSTEAM: extraction failed — is 7z installed?")
-		return
+		return false
 	}
 
-	// Walk the extracted tree to find SLSsteam.so.
 	var soSrc string
 	_ = filepath.Walk(tmpExtract, func(path string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() && strings.EqualFold(filepath.Base(path), "SLSsteam.so") {
@@ -2658,28 +2478,85 @@ func (c *Client) setupSLSSteam() {
 	})
 	if soSrc == "" {
 		log.Printf("[Agent] SETUP_SLSSTEAM: SLSsteam.so not found in archive")
-		return
+		return false
 	}
 
 	if err := os.MkdirAll(installDir, 0o755); err != nil {
 		log.Printf("[Agent] SETUP_SLSSTEAM: mkdir: %v", err)
-		return
+		return false
 	}
 
-	// Move .so to install dir; fall back to copy if cross-device.
 	if err := os.Rename(soSrc, soPath); err != nil {
 		srcData, readErr := os.ReadFile(soSrc)
 		if readErr != nil {
 			log.Printf("[Agent] SETUP_SLSSTEAM: copy .so: %v", readErr)
-			return
+			return false
 		}
 		if writeErr := os.WriteFile(soPath, srcData, 0o755); writeErr != nil {
 			log.Printf("[Agent] SETUP_SLSSTEAM: write .so: %v", writeErr)
-			return
+			return false
 		}
 	}
 
 	os.WriteFile(filepath.Join(installDir, ".version"), []byte(release.TagName), 0o644)
 	log.Printf("[Agent] SETUP_SLSSTEAM: installed SLSsteam %s at %s", release.TagName, soPath)
+	return true
+}
+
+// slsWriteSteamCfg writes ~/.steam/steam/steam.cfg to prevent Steam from auto-updating
+// past the client version known to be compatible with SLSsteam.
+// BootStrapperInhibitAll + BootStrapperForceSelfUpdate=disable mirrors what Headcrab does.
+func slsWriteSteamCfg(home string) {
+	steamDir := filepath.Join(home, ".steam", "steam")
+	if _, err := os.Stat(steamDir); err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: Steam dir not found at %s, skipping steam.cfg", steamDir)
+		return
+	}
+	cfgPath := filepath.Join(steamDir, "steam.cfg")
+	content := "BootStrapperInhibitAll=enable\nBootStrapperForceSelfUpdate=disable\n"
+	if err := os.WriteFile(cfgPath, []byte(content), 0o644); err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: write steam.cfg: %v", err)
+		return
+	}
+	log.Printf("[Agent] SETUP_SLSSTEAM: wrote %s", cfgPath)
+}
+
+// slsWriteConfig writes (or updates) ~/.config/SLSsteam/config.yaml.
+// Ensures SafeMode and PlayNotOwnedGames are enabled.
+// SafeMode makes SLSsteam self-disable if the Steam client version is incompatible,
+// preventing crashes rather than a soft-bricked state on SteamOS.
+func slsWriteConfig(home string) {
+	cfgDir := filepath.Join(home, ".config", "SLSsteam")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: mkdir SLSsteam config: %v", err)
+		return
+	}
+	cfgPath := filepath.Join(cfgDir, "config.yaml")
+
+	existing, _ := os.ReadFile(cfgPath)
+	content := string(existing)
+
+	content = slsSetYAMLKey(content, "SafeMode", "yes")
+	content = slsSetYAMLKey(content, "PlayNotOwnedGames", "yes")
+
+	if err := os.WriteFile(cfgPath, []byte(content), 0o644); err != nil {
+		log.Printf("[Agent] SETUP_SLSSTEAM: write config.yaml: %v", err)
+		return
+	}
+	log.Printf("[Agent] SETUP_SLSSTEAM: wrote %s", cfgPath)
+}
+
+// slsSetYAMLKey sets or updates a simple "Key: value" line in a YAML string.
+func slsSetYAMLKey(content, key, value string) string {
+	line := key + ": " + value
+	for _, existing := range strings.Split(content, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(existing), key+":") {
+			return strings.ReplaceAll(content, existing, line)
+		}
+	}
+	if len(content) > 0 && !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	return content + line + "\n"
 }
 

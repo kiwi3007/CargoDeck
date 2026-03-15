@@ -535,12 +535,6 @@ func (h *Handler) DispatchRestartSteam(w http.ResponseWriter, r *http.Request) {
 	h.dispatchSimpleJob(w, r, "RESTART_STEAM", "Steam restart requested")
 }
 
-// ---- Dispatch ACCELA setup ----
-
-func (h *Handler) DispatchSetupAccela(w http.ResponseWriter, r *http.Request) {
-	h.dispatchSimpleJob(w, r, "SETUP_ACCELA", "ACCELA setup requested")
-}
-
 // ---- Dispatch SLSsteam setup ----
 
 func (h *Handler) DispatchSetupSLSSteam(w http.ResponseWriter, r *http.Request) {

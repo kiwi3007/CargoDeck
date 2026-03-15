@@ -282,7 +282,6 @@ func (h *Handler) NewRouter() http.Handler {
 		r.Post("/{agentId}/regen-scripts", h.DispatchRegenScripts)
 		r.Post("/{agentId}/change-exe", h.DispatchChangeExe)
 		r.Post("/{agentId}/restart-steam", h.DispatchRestartSteam)
-		r.Post("/{agentId}/setup-accela", h.DispatchSetupAccela)
 		r.Post("/{agentId}/setup-slssteam", h.DispatchSetupSLSSteam)
 		r.Post("/{agentId}/restore-save", h.DispatchRestoreSave)
 		r.Post("/{agentId}/uninstall", h.DispatchUninstallAgent)

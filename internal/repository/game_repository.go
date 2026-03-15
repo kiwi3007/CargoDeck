@@ -530,6 +530,12 @@ func (r *GameRepository) GetAgentLaunchArgs(gameID int, agentID string) (string,
 	return s.LaunchArgs, err
 }
 
+// UpdateGamePath sets the Path field for a game (used after a completed Steam depot download).
+func (r *GameRepository) UpdateGamePath(id int, path string) error {
+	_, err := r.db.Exec(`UPDATE Games SET Path = ? WHERE Id = ?`, path, id)
+	return err
+}
+
 // UpdateGameVersion sets the current_version field (called when agent reports installed version).
 func (r *GameRepository) UpdateGameVersion(id int, version string) error {
 	_, err := r.db.Exec(`UPDATE Games SET current_version = ? WHERE Id = ?`, version, id)

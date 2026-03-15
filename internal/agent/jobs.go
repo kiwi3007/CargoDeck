@@ -58,11 +58,6 @@ type ProtonVersionInfo struct {
 	BinPath string `json:"binPath"`
 }
 
-// SetupAccelaJob is pushed to the agent to install ACCELA + SLSsteam via enter-the-wired.
-type SetupAccelaJob struct {
-	JobID string `json:"jobId"`
-}
-
 // ManifestEntry describes one depot included in a steamtoolz manifest ZIP.
 type ManifestEntry struct {
 	DepotID     int    `json:"depotId"`

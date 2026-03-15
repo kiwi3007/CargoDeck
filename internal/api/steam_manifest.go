@@ -440,6 +440,17 @@ func (h *Handler) SteamDownload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// After the download completes, set the game's Path so it appears in the library.
+	onComplete := func(gameDir string) {
+		if err := h.repo.UpdateGamePath(gameID, gameDir); err != nil {
+			log.Printf("[DDM] UpdateGamePath game=%d dir=%s: %v", gameID, gameDir, err)
+			return
+		}
+		log.Printf("[DDM] Set game %d path → %s", gameID, gameDir)
+		// Notify the browser so the library updates without a manual refresh.
+		h.broker.Publish("LIBRARY_UPDATED", fmt.Sprintf(`{"gameId":%d}`, gameID))
+	}
+
 	jobID, err := h.ddm.Download(
 		gameID,
 		info.AppID,
@@ -447,6 +458,7 @@ func (h *Handler) SteamDownload(w http.ResponseWriter, r *http.Request) {
 		media.DownloadPath,
 		h.steamManifestDir(gameID),
 		depots,
+		onComplete,
 	)
 	if err != nil {
 		jsonErr(w, 409, err.Error()) // 409 = already running
